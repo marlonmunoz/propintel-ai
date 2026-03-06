@@ -143,7 +143,7 @@ At the end of Day 1 the project now includes:
 
 ---
 
-## 🔜 Next Steps
+<!-- ## 🔜 Next Steps
 
 Day 2 will focus on the **data pipeline**, including:
 
@@ -151,4 +151,259 @@ Day 2 will focus on the **data pipeline**, including:
 - cleaning and preparing features
 - building an ML-ready dataset for property price prediction
 
-This dataset will be used to train the **property valuation model** that powers the PropIntel AI analysis engine.
+This dataset will be used to train the **property valuation model** that powers the PropIntel AI analysis engine. -->
+
+---
+
+## 🗄️ Database Integration (Supabase + SQLAlchemy)
+
+After the FastAPI server was initialized, the next step was connecting the backend to a **cloud PostgreSQL database** using Supabase.
+
+Supabase provides a managed PostgreSQL instance that integrates well with Python applications and supports scalable production deployments.
+
+---
+
+## 🔗 Database Connection
+
+A `.env` file was created to store the database connection string securely.
+
+```
+.env
+```
+
+Example:
+
+```
+DATABASE_URL=postgresql+psycopg://postgres:<PASSWORD>@db.<project>.supabase.co:5432/postgres
+```
+
+Environment variables are loaded using:
+
+```
+python-dotenv
+```
+
+This keeps sensitive credentials out of the Git repository.
+
+The `.env` file is ignored in `.gitignore`.
+
+---
+
+## 🧠 SQLAlchemy Database Setup
+
+Database connectivity and session management were implemented in:
+
+```
+backend/app/db/database.py
+```
+
+Example:
+
+```python
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+Base = declarative_base()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+This module provides:
+
+- database engine configuration
+- session creation
+- dependency injection for API routes
+
+---
+
+## 🏠 Property Model
+
+A SQLAlchemy ORM model was created to represent real estate listings.
+
+```
+backend/app/models/property.py
+```
+
+Example:
+
+```python
+from sqlalchemy import Column, Integer, String, Float
+from backend.app.db.database import Base
+
+
+class Property(Base):
+    __tablename__ = "properties"
+
+    id = Column(Integer, primary_key=True, index=True)
+    address = Column(String, index=True)
+    zipcode = Column(String, index=True)
+    bedrooms = Column(Integer)
+    bathrooms = Column(Integer)
+    sqft = Column(Integer)
+    listing_price = Column(Float)
+```
+
+---
+
+## 🛠 Database Initialization
+
+Database tables are created using a small initialization script:
+
+```
+backend/app/db/init_db.py
+```
+
+Run with:
+
+```
+python -m backend.app.db.init_db
+```
+
+This automatically generates the required tables inside Supabase.
+
+---
+
+## 🌐 Property API Endpoints
+
+REST API routes were implemented to interact with the database.
+
+```
+backend/app/api/properties.py
+```
+
+### Create Property
+
+```
+POST /properties
+```
+
+Example request:
+
+```json
+{
+  "address": "45 W 34th St",
+  "zipcode": "10001",
+  "bedrooms": 2,
+  "bathrooms": 1,
+  "sqft": 950,
+  "listing_price": 750000
+}
+```
+
+The API stores the record in PostgreSQL and returns the saved object.
+
+---
+
+### Retrieve Properties
+
+```
+GET /properties
+```
+
+Returns all stored properties.
+
+---
+
+### Retrieve Property by ID
+
+```
+GET /properties/{property_id}
+```
+
+Returns a specific property record.
+
+---
+
+## 🔍 API Testing
+
+The endpoints can be tested directly using FastAPI's automatic documentation:
+
+```
+http://127.0.0.1:8000/docs
+```
+
+Swagger UI allows sending requests and viewing responses without additional tools.
+
+---
+
+## 🧱 Current System Architecture
+
+The backend now follows a typical production architecture:
+
+```
+Client Request
+      │
+FastAPI REST API
+      │
+Pydantic Validation
+      │
+SQLAlchemy ORM
+      │
+Supabase PostgreSQL
+```
+
+This architecture supports scalable backend services and future AI-powered endpoints.
+
+---
+
+## ✅ Current Progress
+
+So far the project includes:
+
+- FastAPI backend server
+- modular backend architecture
+- Supabase PostgreSQL integration
+- SQLAlchemy ORM models
+- property database table
+- REST API endpoints
+- interactive API documentation
+- Git version control workflow
+
+---
+
+## 🔜 Next Steps (AI Layer)
+
+The next stage of development focuses on the **machine learning pipeline**:
+
+- ingesting real estate datasets
+- feature engineering for property valuation
+- training a machine learning model
+- exposing the model via a prediction API
+
+Future endpoint:
+
+```
+POST /analyze-property
+```
+
+Example response:
+
+```json
+{
+  "predicted_price": 812000,
+  "investment_score": 84,
+  "roi_estimate": 10.7
+}
+```
+
+This will power the **PropIntel AI real estate investment analysis engine**.
