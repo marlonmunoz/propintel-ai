@@ -1,3 +1,8 @@
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
+![Machine Learning](https://img.shields.io/badge/ML-XGBoost-orange)
+
 # PropIntel AI
 
 AI-powered real estate investment analysis platform using machine learning, FastAPI, PostgreSQL, and data pipelines.
