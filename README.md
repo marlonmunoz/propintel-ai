@@ -1,15 +1,118 @@
+# PropIntel AI
+
+PropIntel AI is an end-to-end AI engineering system for real estate investment analysis, combining data pipelines, machine learning models, and scalable backend APIs.
+### Core Stack:
+![License](https://img.shields.io/badge/license-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
-![Supabase](https://img.shields.io/badge/Supabase-Backend-green)
-![Machine Learning](https://img.shields.io/badge/ML-XGBoost-orange)
+![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E)
+
+### Data/ AI Stack:
+![Data Engineering](https://img.shields.io/badge/Data-Engineering-darkblue)
+![Machine Learning](https://img.shields.io/badge/Machine-Learning-orange)
+![XGBoost](https://img.shields.io/badge/XGBoost-Model-red)
 ![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
 
-# PropIntel AI
 
-AI-powered real estate investment analysis platform using machine learning, FastAPI, PostgreSQL, and data pipelines.
+AI-powered real estate investment analysis platform built with data pipelines, machine learning models, FastAPI backend services, and PostgreSQL infrastructure.
+
+---
+## Tech Highlights
+
+- Modular AI system architecture  
+- Production-style FastAPI backend  
+- PostgreSQL data layer with Supabase  
+- End-to-end ML pipeline (ingestion → training → inference)  
+- Scalable feature engineering workflow  
+- Model deployment via API endpoints
+
+--- 
+
+## Project Status
+🧪 Experimental AI System
+
+---
+
+## Key Features
+
+- FastAPI backend for scalable REST APIs
+- PostgreSQL database integration (Supabase)
+- Data engineering pipelines for housing datasets
+- Machine learning models for property price prediction
+- Feature engineering for market analysis
+- ML inference endpoints for investment scoring
 
 PropIntel AI is designed to simulate a production-style AI engineering system for real estate analysis. The platform combines backend APIs, database integration, data pipelines, and machine learning workflows to evaluate property investment opportunities and generate data-driven insights.
+
+---
+## 🧠 System Architecture
+```
+        Client / User
+              │
+              ▼
+        FastAPI REST API
+              │
+        ┌───────────────┐
+        │ Business Logic │
+        └───────────────┘
+              │
+              ▼
+        PostgreSQL Database
+           (Supabase)
+              │
+              ▼
+        Data Pipelines
+              │
+              ▼
+        Feature Engineering
+              │
+              ▼
+        Machine Learning Models
+              │
+              ▼
+        Prediction API
+```
+---
+## Data & ML Pipeline
+```
+Real Estate Dataset
+        │
+        ▼
+Data Ingestion
+        │
+        ▼
+Data Cleaning & Validation
+        │
+        ▼
+Feature Engineering
+        │
+        ▼
+Machine Learning Model
+    (XGBoost)
+        │
+        ▼
+Model Serialization
+        │
+        ▼
+FastAPI Inference Endpoint
+        │
+        ▼
+Investment Analysis Response
+```
+
+---
+## Example Workflow
+
+A typical workflow for PropIntel AI:
+
+1. A user submits property information through the API.
+2. The backend validates the request using Pydantic schemas.
+3. Property data is stored in the PostgreSQL database (Supabase).
+4. Data pipelines extract and transform property features.
+5. Machine learning models analyze the property characteristics.
+6. The system generates investment metrics including predicted price and ROI.
+7. The API returns an investment analysis response.
 
 ---
 
@@ -32,32 +135,6 @@ The system is structured like a modern production application, separating:
 - API delivery
 
 ---
-
-## 🧠 System Architecture
-
-```text
-Client / Frontend
-        │
-        ▼
-FastAPI REST API
-        │
-Pydantic Validation
-        │
-Business Logic (Services)
-        │
-SQLAlchemy ORM
-        │
-Supabase PostgreSQL
-        │
-Data Pipelines
-        │
-Feature Engineering
-        │
-Machine Learning Models
-        │
-Prediction / Analysis API
-- AI-generated investment reports
-``` 
 
 
 ## 📁 Project Structure
