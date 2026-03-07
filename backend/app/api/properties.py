@@ -81,6 +81,7 @@ def delete_property(
     property_id = int,
     db: Session = Depends(get_db)
 ):
+    property_id = int(property_id)
     property_obj = db.query(Property).filter(Property.id == property_id).first()
     
     if not property_obj:
@@ -89,7 +90,7 @@ def delete_property(
             detail="Property not found",
         )
         
-    db.delete(property_id)
+    db.delete(property_obj)
     db.commit()
     
     return {"message": "Property deleted successfully"}
