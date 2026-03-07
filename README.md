@@ -1,5 +1,6 @@
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
+![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
 ![Machine Learning](https://img.shields.io/badge/ML-XGBoost-orange)
 
