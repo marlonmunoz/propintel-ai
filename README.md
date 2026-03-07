@@ -638,27 +638,6 @@ So far the project includes:
 
 ---
 
-## 🎯 Why This Project Matters
-
-PropIntel AI demonstrates skills across multiple disciplines relevant to modern AI engineering roles:
-- backend development
-- API integration
-- PostgreSQL database design
-- system architecture
-- machine learning pipeline design
-- model evaluation preparation
-- scalable systems thinking
-- production environment patterns
-
-This makes the project a strong portfolio example for roles in:
-
-- AI Engineering
-- ML Engineering
-- Data Engineering
-- Backend Python Development
-
----
-
 ## 🔜 Next Steps
 
 The next stage of development focuses on the AI layer and production-readiness of the platform:
