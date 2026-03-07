@@ -1,8 +1,9 @@
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
-![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
+![Supabase](https://img.shields.io/badge/Supabase-Backend-green)
 ![Machine Learning](https://img.shields.io/badge/ML-XGBoost-orange)
+![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
 
 # PropIntel AI
 
