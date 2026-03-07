@@ -1,21 +1,59 @@
-# propintel-ai
-AI-powered real estate investment analysis platform using machine learning, FastAPI, and data pipelines.
+# PropIntel AI
 
-## 🚀 Day 1 — Backend Setup (FastAPI)
+AI-powered real estate investment analysis platform using machine learning, FastAPI, PostgreSQL, and data pipelines.
 
-The first step in building **PropIntel AI** was setting up the backend architecture and API server.
-
-The goal of this stage was to create a **clean, scalable backend structure** that will support:
-
-- data pipelines
-- machine learning services
-- real estate analysis endpoints
-- AI-generated investment reports
+PropIntel AI is designed to simulate a production-style AI engineering system for real estate analysis. The platform combines backend APIs, database integration, data pipelines, and machine learning workflows to evaluate property investment opportunities and generate data-driven insights.
 
 ---
 
-## 📁 Project Structure
+## 🚀 Overview
 
+The goal of PropIntel AI is to build a scalable AI-powered platform capable of supporting:
+
+- automated property valuation
+- real estate investment scoring
+- data-driven market analysis
+- ML-powered property insights
+- backend APIs for prediction and analysis
+
+The system is structured like a modern production application, separating:
+
+- backend services
+- database architecture
+- machine learning modules
+- inference pipelines
+- API delivery
+
+---
+
+## 🧠 System Architecture
+
+```text
+Client / Frontend
+        │
+        ▼
+FastAPI REST API
+        │
+Pydantic Validation
+        │
+Business Logic (Services)
+        │
+SQLAlchemy ORM
+        │
+Supabase PostgreSQL
+        │
+Data Pipelines
+        │
+Feature Engineering
+        │
+Machine Learning Models
+        │
+Prediction / Analysis API
+- AI-generated investment reports
+``` 
+
+
+## 📁 Project Structure
 The repository was organized using a modular backend architecture.
 
 ```
@@ -151,19 +189,6 @@ At the end of Day 1 the project now includes:
 - dependency management with `requirements.txt`
 - automatic API documentation
 - repository ready for data engineering and ML development
-
----
-
-<!-- ## 🔜 Next Steps
-
-Day 2 will focus on the **data pipeline**, including:
-
-- loading housing datasets
-- cleaning and preparing features
-- building an ML-ready dataset for property price prediction
-
-This dataset will be used to train the **property valuation model** that powers the PropIntel AI analysis engine. -->
-
 ---
 
 ## 🗄️ Database Integration (Supabase + SQLAlchemy)
@@ -171,6 +196,12 @@ This dataset will be used to train the **property valuation model** that powers 
 After the FastAPI server was initialized, the next step was connecting the backend to a **cloud PostgreSQL database** using Supabase.
 
 Supabase provides a managed PostgreSQL instance that integrates well with Python applications and supports scalable production deployments.
+
+This layer enables the platform to store:
+- property listings
+- pricing data
+- structured housing features
+- records used for machine learning workflows
 
 ---
 
@@ -368,6 +399,8 @@ FastAPI REST API
       │
 Pydantic Validation
       │
+Service Layer
+      │
 SQLAlchemy ORM
       │
 Supabase PostgreSQL
@@ -375,9 +408,9 @@ Supabase PostgreSQL
 
 This architecture supports scalable backend services and future AI-powered endpoints.
 
----
+<!-- --- -->
 
-## ✅ Current Progress
+<!-- ## ✅ Current Progress
 
 So far the project includes:
 
@@ -388,7 +421,7 @@ So far the project includes:
 - property database table
 - REST API endpoints
 - interactive API documentation
-- Git version control workflow
+- Git version control workflow -->
 
 ---
 
@@ -443,18 +476,51 @@ ml/
 This modular structure keeps each stage of the ML lifecycle isolated and independently testable.
 
 ---
+## 🔬 ML Pipeline
+The machine learning workflow follows a standard production pattern:
 
-## 🔜 Next Steps (AI Layer)
+```
+Dataset Ingestion
+        │
+Data Cleaning
+        │
+Feature Engineering
+        │
+Model Training
+        │
+Model Evaluation
+        │
+Model Serialization
+        │
+API Inference
+```
+This pipeline is intended to support:
+- property price prediction
+- investment scoring
+- ROI estimation
+- future market analysis features
 
-The next stage of development focuses on the **machine learning pipeline**:
+---
 
-- ingesting real estate datasets
-- feature engineering for property valuation
-- training a machine learning model
-- exposing the model via a prediction API
+## 📊 Preparing Data for Machine Learning
 
-Future endpoint:
+Once data is stored in PostgreSQL, it can be extracted and transformed for training machine learning models.
 
+Examples of features that can be used for investment analysis include:
+- price per square foot
+- bedroom and bathroom ratios
+- geographic pricing patterns
+- neighborhood trends
+- historical price comparisons
+- market-based valuation signals
+
+These features will later feed the PropIntel AI valuation and investment models.
+
+---
+
+## 📈 Example AI Output
+
+A future prediction endpoint will expose machine learning outputs through the API:
 ```
 POST /analyze-property
 ```
@@ -468,5 +534,82 @@ Example response:
   "roi_estimate": 10.7
 }
 ```
+This endpoint will power the PropIntel AI real estate investment analysis engine.
 
-This will power the **PropIntel AI real estate investment analysis engine**.
+---
+
+## ✅ Current Progress
+
+So far the project includes:
+- FastAPI backend server
+- modular backend architecture
+- Supabase PostgreSQL integration
+- SQLAlchemy ORM models
+- property database table
+- REST API endpoints
+- interactive API documentation
+- machine learning module structure
+- prediction pipeline design
+- Git version control workflow
+
+---
+
+## 🎯 Why This Project Matters
+
+PropIntel AI demonstrates skills across multiple disciplines relevant to modern AI engineering roles:
+- backend development
+- API integration
+- PostgreSQL database design
+- system architecture
+- machine learning pipeline design
+- model evaluation preparation
+- scalable systems thinking
+- production environment patterns
+
+This makes the project a strong portfolio example for roles in:
+
+- AI Engineering
+- ML Engineering
+- Data Engineering
+- Backend Python Development
+
+---
+
+## 🔜 Next Steps
+
+The next stage of development focuses on the AI layer and production-readiness of the platform:
+
+- ingesting real estate datasets
+- cleaning and validating housing data
+- feature engineering for valuation models
+- training machine learning models
+- evaluating model performance
+- exposing predictions through API endpoints
+- adding deployment and inference workflows
+
+As development continues, PropIntel AI will evolve from a backend + database foundation into a complete end-to-end AI-powered real estate analytics platform.
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
