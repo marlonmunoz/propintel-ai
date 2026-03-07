@@ -33,6 +33,12 @@ propintel-ai
 │
 ├── data
 ├── ml
+│   ├── artifacts
+│   ├── data
+│   ├── features
+│   ├── inference
+│   ├── models
+│   └── pipelines
 ├── notebooks
 ├── tests
 │
@@ -51,8 +57,13 @@ This structure separates responsibilities across different modules:
 | `models/` | database models |
 | `schemas/` | request/response validation |
 | `services/` | business logic |
-| `ml/` | machine learning pipelines |
-| `data/` | dataset ingestion and processing |
+| `ml/artifacts/` | saved model files and serialized objects |
+| `ml/data/` | dataset ingestion and processing |
+| `ml/features/` | feature engineering logic |
+| `ml/inference/` | prediction and scoring logic |
+| `ml/models/` | model training and evaluation |
+| `ml/pipelines/` | end-to-end ML pipeline orchestration |
+| `data/` | raw and processed data storage |
 
 ---
 
@@ -95,7 +106,7 @@ from fastapi import FastAPI
 app = FastAPI(
     title="PropIntel AI",
     description="AI-powered real estate investment analysis platform",
-    version="0.1.0"
+    version="1.0.0"
 )
 
 @app.get("/")
@@ -135,7 +146,7 @@ http://127.0.0.1:8000/docs
 
 At the end of Day 1 the project now includes:
 
-- production-style backend architecture
+- production-grade backend architecture
 - FastAPI server running locally
 - dependency management with `requirements.txt`
 - automatic API documentation
@@ -378,6 +389,58 @@ So far the project includes:
 - REST API endpoints
 - interactive API documentation
 - Git version control workflow
+
+---
+
+## 🧠 Machine Learning Stack
+
+The PropIntel AI platform integrates a machine learning layer designed to estimate property values and analyze investment potential.
+
+The ML environment includes:
+
+- **pandas** — data manipulation and preprocessing
+- **numpy** — numerical computing
+- **scikit-learn** — feature engineering and baseline models
+- **XGBoost** — gradient boosting model for price prediction
+- **joblib** — model serialization for production inference
+
+All dependencies (backend + ML) are consolidated in the root:
+
+```
+requirements.txt
+```
+
+```
+fastapi
+uvicorn
+sqlalchemy
+python-dotenv
+psycopg[binary]
+
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+```
+
+---
+
+## 📂 ML Module Structure
+
+The machine learning layer is organized into focused submodules:
+
+```
+ml/
+├── artifacts/     # saved models, scalers, and serialized objects
+├── data/          # data loading, ingestion, and raw dataset helpers
+├── features/      # feature engineering and transformation logic
+├── inference/     # prediction pipeline and scoring utilities
+├── models/        # model training, evaluation, and selection
+└── pipelines/     # end-to-end orchestrated ML workflows
+```
+
+This modular structure keeps each stage of the ML lifecycle isolated and independently testable.
 
 ---
 
