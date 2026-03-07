@@ -53,22 +53,33 @@ PropIntel AI is designed to simulate a production-style AI engineering system fo
               ▼
         FastAPI REST API
               │
-        ┌───────────────┐
-        │ Business Logic │
-        └───────────────┘
+              ▼
+     Request Validation Layer
+        (Pydantic Schemas)
               │
               ▼
-        PostgreSQL Database
-           (Supabase)
+          API Routing Layer
+         (FastAPI Endpoints)
+              │
+      ┌────────────────────┐
+      │   Business Logic   │
+      └────────────────────┘
               │
               ▼
-        Data Pipelines
+        SQLAlchemy ORM
               │
               ▼
-        Feature Engineering
+      PostgreSQL Database
+         (Supabase)
               │
               ▼
-        Machine Learning Models
+         Data Pipelines
+              │
+              ▼
+       Feature Engineering
+              │
+              ▼
+     Machine Learning Models
               │
               ▼
         Prediction API
@@ -416,12 +427,14 @@ REST API routes were implemented to interact with the database.
 ```
 backend/app/api/properties.py
 ```
+The API now supports a full CRUD workflow for managing property records.
 
 ### Create Property
 
-```
-POST /properties
-```
+
+`POST /properties`
+
+Stores a new property listing in PostgreSQL.
 
 Example request:
 
@@ -442,24 +455,62 @@ The API stores the record in PostgreSQL and returns the saved object.
 
 ### Retrieve Properties
 
-```
-GET /properties
-```
+`GET /properties`
 
 Returns all stored properties.
 
+The endpoint supports pagination and filtering.
+
+Example queries:
+```
+GET /properties?limit=10
+GET /properties?zipcode=10001
+GET /properties?min_price=500000
+GET /properties?max_price=900000
+```
 ---
 
 ### Retrieve Property by ID
-
-```
-GET /properties/{property_id}
-```
+`GET /properties/{property_id}`
 
 Returns a specific property record.
 
 ---
+### Update Property
+`PATCH /properties/{property_id}`
 
+Allows partial updates to property records using Pydantic validation schemas.
+
+Example request:
+
+```json
+{
+  "listing_price": 820000
+}
+```
+---
+### DELETE Property
+`DELETE /properties/{property_id}`
+
+Removes a property record from the database.
+
+---
+### API Validation & Error Handling
+The API uses Pydantic schemas to validate incoming requests and ensure consistent data structures.
+
+Error handling is implemented to return clear responses when:
+
+- invalid data is submitted
+- a property record does not exist
+- database operations fail
+
+Example error response:
+```json
+{
+  "detail": "Property not found"
+}
+```
+---
 ## 🔍 API Testing
 
 The endpoints can be tested directly using FastAPI's automatic documentation:
@@ -492,9 +543,9 @@ Supabase PostgreSQL
 
 This architecture supports scalable backend services and future AI-powered endpoints.
 
-<!-- --- -->
+---
 
-<!-- ## ✅ Current Progress
+## ✅ Current Progress
 
 So far the project includes:
 
@@ -504,8 +555,14 @@ So far the project includes:
 - SQLAlchemy ORM models
 - property database table
 - REST API endpoints
-- interactive API documentation
-- Git version control workflow -->
+- CRUD API for property management
+- Pydantic validation schemas
+- API pagination and filtering
+- structured error handling
+- interactive API documentation (Swagger)
+- machine learning module structure
+- prediction pipeline design
+- Git version control workflow
 
 ---
 
