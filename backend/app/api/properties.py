@@ -1,33 +1,95 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from typing import List, Optional
 
 from backend.app.db.database import get_db
 from backend.app.models.property import Property
-from backend.app.schemas.property import PropertyCreate
+from backend.app.schemas.property import (
+    PropertyCreate, 
+    PropertyResponse,
+    PropertyUpdate
+)
 
 router = APIRouter()
 
-@router.post("/properties/")
-def create_property(property: PropertyCreate, db: Session = Depends(get_db)):
-    db_property = Property(
-        address=property.address,
-        zipcode=property.zipcode,
-        bedrooms=property.bedrooms,
-        bathrooms=property.bathrooms,
-        sqft=property.sqft,
-        listing_price=property.listing_price
-    )
+# CRUD operations for Property model
+
+# ================ POST /properties/ ================
+@router.post("/properties/", response_model=PropertyResponse)
+def create_property(
+    property: PropertyCreate,
+    db: Session = Depends(get_db),
+):
+    db_property = Property(**property.model_dump()) # automatically maps fields
+
     db.add(db_property)
     db.commit()
     db.refresh(db_property)
+
     return db_property
 
-@router.get("/properties/")
-def get_properties(db: Session = Depends(get_db)):
-    properties = db.query(Property).all()
+# =============== GET /properties/ ================
+@router.get("/properties/", response_model=List[PropertyResponse])
+def get_properties(
+    zipcode: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Property)
+
+    if zipcode:
+        query = query.filter(Property.zipcode == zipcode)
+
+    if min_price:
+        query = query.filter(Property.listing_price >= min_price)
+
+    if max_price:
+        query = query.filter(Property.listing_price <= max_price)
+
+    properties = query.offset(skip).limit(limit).all()
+
     return properties
 
-@router.get("/properties/{property_id}")
-def get_property(property_id: int, db: Session = Depends(get_db)):
-    property = db.query(Property).all()
-    return property 
+# ============== PATCH /properties/{property_id} ================
+@router.patch("/properties/{property_id}", response_model=PropertyResponse)
+def update_property(
+    property_id: int,
+    property_update: PropertyUpdate,
+    db: Session = Depends(get_db)
+):
+    property_obj = db.query(Property).filter(Property.id == property_id).first()
+
+    if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    update_data = property_update.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(property_obj, field, value)
+
+    db.commit()
+    db.refresh(property_obj)
+
+    return property_obj
+
+# ============== DELETE /properties/{property_id} ================
+@ router.delete("/properties/{property_id}")
+def delete_property(
+    property_id = int,
+    db: Session = Depends(get_db)
+):
+    property_obj = db.query(Property).filter(Property.id == property_id).first()
+    
+    if not property_obj:
+        raise HTTPException(
+            status_code=404, 
+            detail="Property not found",
+        )
+        
+    db.delete(property_id)
+    db.commit()
+    
+    return {"message": "Property deleted successfully"}
