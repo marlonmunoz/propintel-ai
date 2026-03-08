@@ -20,12 +20,13 @@ AI-powered real estate investment analysis platform built with data pipelines, m
 ---
 ## Tech Highlights
 
-- Modular AI system architecture  
-- Production-style FastAPI backend  
-- PostgreSQL data layer with Supabase  
-- End-to-end ML pipeline (ingestion → training → inference)  
-- Scalable feature engineering workflow  
+- Modular AI system architecture
+- Production-style FastAPI backend
+- PostgreSQL data layer with Supabase
+- End-to-end ML pipeline (ingestion → feature engineering → training → inference)
+- Scalable feature engineering workflow
 - Model deployment via API endpoints
+- In-memory model caching for faster predictions
 
 --- 
 
@@ -99,14 +100,16 @@ Data Cleaning & Validation
 Feature Engineering
         │
         ▼
-Machine Learning Model
-    (XGBoost)
+Model Training
         │
         ▼
 Model Serialization
         │
         ▼
-FastAPI Inference Endpoint
+Inference Layer
+        │
+        ▼
+FastAPI Prediction Endpoint
         │
         ▼
 Investment Analysis Response
@@ -120,10 +123,10 @@ A typical workflow for PropIntel AI:
 1. A user submits property information through the API.
 2. The backend validates the request using Pydantic schemas.
 3. Property data is stored in the PostgreSQL database (Supabase).
-4. Data pipelines extract and transform property features.
-5. Machine learning models analyze the property characteristics.
-6. The system generates investment metrics including predicted price and ROI.
-7. The API returns an investment analysis response.
+4. Data pipelines ingest and prepare housing data.
+5. Feature engineering transforms the raw dataset into ML-ready inputs.
+6. The machine learning model is trained and serialized for inference.
+7. The FastAPI prediction endpoint loads the trained model from memory and returns a predicted property value.
 
 ---
 
@@ -190,7 +193,7 @@ This structure separates responsibilities across different modules:
 | `models/` | database models |
 | `schemas/` | request/response validation |
 | `services/` | business logic |
-| `ml/artifacts/` | saved model files and serialized objects |
+| `ml/artifacts/` | saved models and serialized ML artifacts |
 | `ml/data/` | dataset ingestion and processing |
 | `ml/features/` | feature engineering logic |
 | `ml/inference/` | prediction and scoring logic |
@@ -212,7 +215,7 @@ source .venv/bin/activate
 Dependencies installed:
 
 ```
-pip install fastapi uvicorn sqlalchemy python-dotenv "psycopg[binary]"
+pip install fastapi uvicorn sqlalchemy python-dotenv "psycopg[binary]" pandas numpy scikit-learn xgboost joblib
 ```
 
 Then dependencies were saved:
@@ -544,6 +547,13 @@ Supabase PostgreSQL
 This architecture supports scalable backend services and future AI-powered endpoints.
 
 ---
+🤖 Machine Learning Implementation
+
+Introduced the machine learning layer of PropIntel AI. The platform now includes a complete data → model → prediction pipeline integrated with the FastAPI backend.
+
+This stage transforms PropIntel AI from a traditional backend system into an AI-powered analytics platform.
+
+---
 
 ## ✅ Current Progress
 
@@ -606,15 +616,169 @@ The machine learning layer is organized into focused submodules:
 
 ```
 ml/
-├── artifacts/     # saved models, scalers, and serialized objects
-├── data/          # data loading, ingestion, and raw dataset helpers
-├── features/      # feature engineering and transformation logic
-├── inference/     # prediction pipeline and scoring utilities
-├── models/        # model training, evaluation, and selection
-└── pipelines/     # end-to-end orchestrated ML workflows
+├── artifacts/     # saved models and serialized ML artifacts
+├── data/          # dataset ingestion and raw data
+├── features/      # feature engineering logic
+├── inference/     # prediction utilities
+├── models/        # model training pipelines
+└── pipelines/     # end-to-end ML orchestration
 ```
 
-This modular structure keeps each stage of the ML lifecycle isolated and independently testable.
+Each module represents a stage in the machine learning lifecycle.
+
+---
+## 📊 Feature Engineering
+Feature engineering transforms raw housing data into structured numerical inputs suitable for machine learning models.
+
+Implemented features include:
+
+- square footage (sqft)
+- number of bedrooms
+- number of bathrooms
+- price per square foot
+- bedroom density
+- bathroom ratio
+
+These engineered features allow the model to capture patterns in real estate valuation.
+
+Example feature vector:
+
+```
+[sqft, bedrooms, bathrooms, price_per_sqft, bedroom_density, bathroom_ratio]
+```
+Example:
+
+```
+[1000, 2, 1, 800, 0.002, 0.5]
+```
+---
+## 🧠 Model Training
+A machine learning training pipeline was implemented in:
+```
+ml/models/train_model.py
+```
+The training pipeline performs the following steps:
+
+1. Load engineered feature dataset
+2. Split dataset into training and testing sets
+3. Train a regression model
+4. Evaluate model performance
+5. Serialize the trained model
+
+Running the training pipeline:
+```
+python -m ml.models.train_model
+```
+Example console output:
+```
+Loading feature data...
+Training model...
+Model R² Score: 0.87
+Model saved to ml/artifacts/price_model.pkl
+```
+---
+
+## 💾 Model Serialization
+
+The trained model is serialized using joblib.
+
+Saved model location:
+```
+ml/artifacts/price_model.pkl
+```
+This allows the backend API to reuse the trained model for real-time predictions without retraining.
+
+---
+## 🚀 ML Inference Layer
+
+The inference layer loads the trained model and generates predictions from property features.
+
+Implemented in:
+```
+ml/inference/predict.py
+```
+
+- Responsibilities:
+- load trained model
+- transform feature inputs
+- generate predictions
+- return results to the API layer
+
+---
+## ⚡ Performance Optimization (Model Caching)
+
+To improve performance, the model is loaded once into memory and reused for all future requests.
+
+Without optimization:
+```
+Request
+   │
+Load model from disk
+   │
+Predict
+```
+
+Optimized approach:
+```
+First Prediction Request
+        │
+Load model once into memory
+        │
+Cache model in RAM
+        │
+Reuse for all future predictions
+```
+Benefits:
+- significantly faster response times
+- reduced disk I/O
+- improved scalability
+
+---
+## 🌐 ML Prediction API
+The trained model is exposed through a FastAPI endpoint.
+```
+POST /predict-price     
+```
+This endpoint allows external clients to send property features and receive predicted property prices.
+
+Example Request
+```
+{
+  "sqft": 1000,
+  "bedrooms": 2,
+  "bathrooms": 1
+}
+```
+
+Example Response
+```
+{
+  "predicted_price": 852682
+}
+```
+The prediction is generated by the trained machine learning model.
+
+---
+
+## 🧠 ML Inference Architecture
+
+The prediction system now operates as follows:
+```
+Client Request
+      │
+FastAPI Endpoint
+      │
+Pydantic Validation
+      │
+Prediction Router
+      │
+Cached ML Model (Memory)
+      │
+Prediction
+      │
+JSON Response
+```
+
 
 ---
 ## 🔬 ML Pipeline
@@ -687,29 +851,21 @@ So far the project includes:
 - Supabase PostgreSQL integration
 - SQLAlchemy ORM models
 - property database table
-- REST API endpoints
-- interactive API documentation
-- machine learning module structure
-- prediction pipeline design
+- CRUD API for property management
+- Pydantic validation schemas
+- API pagination and filtering
+- structured error handling
+- interactive API documentation (Swagger)
+- data ingestion pipeline
+- feature engineering pipeline
+- machine learning training pipeline
+- model serialization
+- ML inference layer
+- prediction API endpoint
+- model caching optimization
 - Git version control workflow
-
 ---
 
-## 🔜 Next Steps
-
-The next stage of development focuses on the AI layer and production-readiness of the platform:
-
-- ingesting real estate datasets
-- cleaning and validating housing data
-- feature engineering for valuation models
-- training machine learning models
-- evaluating model performance
-- exposing predictions through API endpoints
-- adding deployment and inference workflows
-
-As development continues, PropIntel AI will evolve from a backend + database foundation into a complete end-to-end AI-powered real estate analytics platform.
-
----
 
 
 
