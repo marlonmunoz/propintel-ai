@@ -1,8 +1,5 @@
 import pandas as pd
-from pathlib import Path
-
-DATA_DIR = Path("ml/data")
-RAW_DATA_FILE = DATA_DIR / "housing_raw.csv"
+from backend.app.core.config import RAW_DATA_FILE, DATA_DIR
 
 def load_dataset():
     """

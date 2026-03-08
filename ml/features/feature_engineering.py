@@ -1,10 +1,5 @@
 import pandas as pd
-from pathlib import Path
-
-DATA_DIR = Path("ml/data")
-
-RAW_DATA_FILE = DATA_DIR / "housing_raw.csv"
-PROCESSED_DATA_FILE = DATA_DIR / "housing_features.csv"
+from backend.app.core.config import RAW_DATA_FILE, FEATURE_DATA_FILE
 
 def engineer_features():
     
@@ -24,9 +19,9 @@ def engineer_features():
     
     
     # Handle division edge cases
-    df.to_csv(PROCESSED_DATA_FILE, index=False)
+    df.to_csv(FEATURE_DATA_FILE, index=False)
     
-    print(f"Feature dataset saved to {PROCESSED_DATA_FILE}")
+    print(f"Feature dataset saved to {FEATURE_DATA_FILE}")
     
 if __name__ == "__main__":
     engineer_features()
