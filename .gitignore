@@ -27,7 +27,6 @@ share/python-wheels/
 MANIFEST
 
 # Docker
-#  Ignore Dockerfiles and docker-compose files if you have them in your project root, but
 .env.docker
 .env*
 
@@ -219,3 +218,6 @@ __pycache__/
 
 # macOS specific files
 .DS_Store   
+
+test.db
+*.db
