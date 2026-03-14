@@ -26,6 +26,11 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Docker
+#  Ignore Dockerfiles and docker-compose files if you have them in your project root, but
+.env.docker
+.env*
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
