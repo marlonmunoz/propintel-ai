@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    container_name: propintel-db
+    environment:
+      POSTGRES_USER: propintel
+      POSTGRES_PASSWORD: propintel
+      POSTGRES_DB: propintel
+    ports:
+      - "5432:5432"
+    volumes:
+      - propintel_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: propintel-api
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://propintel:propintel@db:5432/propintel
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  propintel_pgdata:
