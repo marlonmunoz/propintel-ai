@@ -226,3 +226,11 @@ __pycache__/
 
 test.db
 *.db
+
+# datasets
+ml/data/nyc_raw/
+ml/data/pluto_raw/
+ml/data/processed/
+
+
+
