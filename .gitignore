@@ -233,4 +233,7 @@ ml/data/pluto_raw/
 ml/data/processed/
 
 
+# generated ML outputs
+ml/data/features/
+ml/artifacts/
 
