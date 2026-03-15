@@ -514,15 +514,107 @@ Example error response:
 }
 ```
 ---
-## 🔍 API Testing
 
-The endpoints can be tested directly using FastAPI's automatic documentation:
+## 🔍 Testing & Reliability (pytest + FastAPI TestClient + GitHub Actions)
+
+Automated tests are stored in:
 
 ```
-http://127.0.0.1:8000/docs
+tests/
+```
+Current coverage includes:
+
+- Prediction API endpoint test (POST /predict-price)
+- Property API endpoint test (POST /properties)
+- Test database initialization to create required tables before DB-dependent tests run
+
+Run tests locally from the project root:
+
+```
+pytest 
+```
+Example successful output:
+
+```
+2 passed in 2.23s
 ```
 
-Swagger UI allows sending requests and viewing responses without additional tools.
+### FastAPI TestClient
+
+The test suite uses FastAPI’s built-in `TestClient` to validate endpoints without running a live server.
+
+Example pattern:
+```
+from fastapi.testclient import TestClient
+from backend.app.main import app
+
+client = TestClient(app)
+
+def test_predict_price_endpoint():
+    payload = {"sqft": 1000, "bedrooms": 2, "bathrooms": 1}
+    response = client.post("/predict-price", json=payload)
+    assert response.status_code == 200
+    assert "predicted_price" in response.json()
+```
+
+### CI Pipeline (GitHub Actions)
+
+A GitHub Actions workflow runs tests automatically on:
+- push to `main`
+- pull requests targeting `main`
+
+Workflow location:
+```
+.github/workflows/tests.yml
+```
+The CI pipeline performs:
+1. checkout repo
+2. setup Python 3.11
+3. install dependencies
+4. run `pytest`
+---
+
+## 🐳 Docker & Docker Compose
+
+The project is containerized to run in a production-style environment.
+
+### Build the API image
+
+From the project root:
+```
+docker build -t propintel-api .
+```
+
+### Run the container (Supabase mode)
+
+Using an env file:
+```
+docker run --rm -p 8000:8000 --env-file .env.docker propintel-api
+```
+Then open:
+- Swagger UI: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+
+### Docker environment files
+Local Docker environment variables live in:
+```
+.env.docker
+```
+This file is ignored by Git for security. Use the example file as a template:
+```
+.env.docker.example
+```
+### Run with Docker Compose
+The repo includes docker-compose.yml for running the API using Docker Compose.
+
+Build and run:
+```
+docker compose up --build
+```
+Stop:
+```
+docker compose down
+```
 
 ---
 
@@ -557,22 +649,31 @@ This stage transforms PropIntel AI from a traditional backend system into an AI-
 
 ## ✅ Current Progress
 
-So far the project includes:
-
+Backend and Database
 - FastAPI backend server
 - modular backend architecture
 - Supabase PostgreSQL integration
 - SQLAlchemy ORM models
-- property database table
-- REST API endpoints
 - CRUD API for property management
 - Pydantic validation schemas
-- API pagination and filtering
 - structured error handling
-- interactive API documentation (Swagger)
-- machine learning module structure
-- prediction pipeline design
-- Git version control workflow
+- Swagger API documentation
+
+Machine Learning
+- data ingestion pipeline
+- feature engineering pipeline
+- machine learning training pipeline
+- model serialization
+- ML inference layer
+- prediction API endpoint (`POST /predict-price`)
+- in memory model caching optimization
+
+Engineering & Reliability
+- automated tests with pytest + FastAPI TestClient
+- GitHub Actions CI workflow running tests on push/PR
+- Dockerfile for containerized API deployment
+- Docker Compose for local container orchestration
+- secure environment management (`.env.docker` ignored, `.env.docker.example` provided)
 
 ---
 
