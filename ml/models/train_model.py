@@ -116,6 +116,24 @@ def evaluate_model(y_test_log, y_pred_log):
     print(f"MAE:  {mae:,.2f}")
     print(f"RMSE: {rmse:,.2f}")
     print(f"R²:   {r2:.4f}")
+    
+    
+def print_feature_importance(model, top_n=15):
+    """Print top feature importances from the trained XGBoost pipeline."""
+    preprocessor = model.named_steps["preprocessor"]
+    regressor = model.named_steps["regressor"]
+    
+    feature_names = preprocessor.get_feature_names_out()
+    importances = regressor.feature_importances_
+    
+    importance_df = pd.DataFrame({
+        "feature": feature_names,
+        "importance": importances
+    }).sort_values("importance", ascending=False)
+    
+    print("\nTop Feature Importances")
+    print("-----------------------")
+    print(importance_df.head(top_n).to_string(index=False))
 
 
 def save_model(model):
@@ -140,8 +158,9 @@ def train():
     model.fit(X_train, y_train)
     
     y_pred = model.predict(X_test)
-    
+
     evaluate_model(y_test, y_pred)
+    print_feature_importance(model)
     save_model(model)
     
 if __name__ == "__main__":

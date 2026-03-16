@@ -53,6 +53,19 @@ def get_properties(
 
     return properties
 
+# =============== GET /properties/{property_id} ================
+
+@router.get("/properties/{property_id}", response_model=PropertyResponse)
+def get_property(property_id: int, db: Session = Depends(get_db)):
+    property_obj = db.query(Property).filter(Property.id == property_id).first()
+
+    if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    return property_obj
+
+
+
 # ============== PATCH /properties/{property_id} ================
 @router.patch("/properties/{property_id}", response_model=PropertyResponse)
 def update_property(
