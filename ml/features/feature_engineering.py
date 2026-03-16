@@ -142,17 +142,19 @@ def engineer_features(df):
 
 
 def clean_rows(df):
-    """Drop invalid or weak-quality rows."""
+    """Drop invalid or weak-quality rows and keep residential-only properties."""
     required_columns = [
         "sale_price",
         "gross_square_feet",
         "borough",
         "pluto_year_built",
+        "building_class_category",
     ]
     
     existing_required = [col for col in required_columns if col in df.columns]
     df = df.dropna(subset=existing_required)
     
+    # Remove invalid target / size values
     df = df[df["sale_price"] > 10000]
     df = df[df["gross_square_feet"] > 0]
     
@@ -160,7 +162,36 @@ def clean_rows(df):
         df = df[df["building_age"] >= 0]
         df = df[df["building_age"] < 300]
         
+    # Keep residential-only categories for MVP
+    
+    residential_keywords = [
+        "ONE FAMILY",
+        "TWO FAMILY",
+        "THREE FAMILY",
+        "CONDO",
+        "COOPS",
+        "APARTMENTS", 
+    ]
+    
+    pattern = "|".join(residential_keywords)
+    df = df[
+        df["building_class_category"]
+        .astype(str)
+        .str.upper()
+        .str.contains(pattern, na=False)
+    ]
+        
     return df 
+
+
+
+
+
+
+
+
+
+
 
 
 def save_features(df):
