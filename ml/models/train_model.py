@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LinearRegression
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -43,6 +43,8 @@ def prepare_features(df):
         "building_age",
         "borough",
         "building_class_category",
+        "neighborhood",
+        "zip_code",
     ]
     
     target_column = "sale_price"
@@ -51,7 +53,7 @@ def prepare_features(df):
     df = df.dropna(subset=[target_column])
     
     X = df[existing_columns].copy()
-    y = df[target_column].copy()
+    y = np.log1p(df[target_column].copy())
     
     return X, y
 
@@ -84,7 +86,15 @@ def build_pipeline(X):
     model = Pipeline(
         steps= [
             ("preprocessor", preprocessor),
-            ("regressor", LinearRegression()),
+            ("regressor", XGBRegressor(
+                n_estimators=300,
+                learning_rate=0.05,
+                max_depth=6,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1,
+            )),
         ]
     )
     
@@ -92,14 +102,17 @@ def build_pipeline(X):
 
 
 
-def evaluate_model(y_test, y_pred):
-    """Print evaluation metrics."""
+def evaluate_model(y_test_log, y_pred_log):
+    """Evaluate on original dollar scale and log scale."""
+    y_test = np.expm1(y_test_log)
+    y_pred = np.expm1(y_pred_log)
+    
     mae = mean_absolute_error(y_test, y_pred)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
     
-    print("\nModel Performance")
-    print("------------------")
+    print("\nModel Performance (original price scale)")
+    print("-----------------------------------------")
     print(f"MAE:  {mae:,.2f}")
     print(f"RMSE: {rmse:,.2f}")
     print(f"R²:   {r2:.4f}")
