@@ -1,15 +1,15 @@
 from fastapi import FastAPI
-from backend.app.api import properties
-from backend.app.api import prediction
+from backend.app.api.prediction import router as prediction_router
+from backend.app.api.properties import router as properties_router
 
 app = FastAPI(
     title="PropIntel AI",
-    description="An AI-powered real state investment analysis platform",
+    description="AI-powered real estate investment analysis platform",
     version="1.0.0"
 )
 
-app.include_router(properties.router)
-app.include_router(prediction.router)
+app.include_router(prediction_router)
+app.include_router(properties_router)
 
 @app.get("/")
 def root():
@@ -18,3 +18,4 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "OK ✅"}
+
