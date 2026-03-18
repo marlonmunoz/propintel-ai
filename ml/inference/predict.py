@@ -81,27 +81,35 @@ def predict_price(payload: dict) -> dict:
     }
 
 def analyze_property(payload: dict) -> dict:
-    market_price = payload.get("market_price")
-    
+    market_price = payload["market_price"]
+
     prediction_payload = payload.copy()
     prediction_payload.pop("market_price", None)
-    
+
     prediction_result = predict_price(prediction_payload)
     predicted_price = prediction_result["predicted_price"]
-    
+
     price_difference = predicted_price - market_price
-    roi_estimate = (price_difference / market_price) * 100 
-    
-    # Simple MVP investment score:
-    # center at 50, scale by ROI, clamp to 0-100
+    roi_estimate = (price_difference / market_price) * 100
+
     investment_score = max(0.0, min(100.0, 50.0 + roi_estimate * 2.5))
-    
+
+    top_drivers = generate_top_drivers(prediction_payload, roi_estimate)
+    analysis_summary = generate_analysis_summary(
+        predicted_price=predicted_price,
+        market_price=market_price,
+        roi_estimate=roi_estimate,
+        top_drivers=top_drivers,
+    )
+
     return {
         "predicted_price": float(predicted_price),
         "market_price": float(market_price),
         "price_difference": float(price_difference),
         "roi_estimate": float(roi_estimate),
         "investment_score": float(investment_score),
+        "top_drivers": top_drivers,
+        "analysis_summary": analysis_summary,
         "model_version": MODEL_VERSION,
     }
     
@@ -117,3 +125,53 @@ def analyze_property_public(payload: dict) -> dict:
     mapped_payload["market_price"] = market_price
     
     return analyze_property(mapped_payload) 
+
+def generate_top_drivers(payload: dict, roi_estimate: float) -> list[str]:
+    drivers = []
+    
+    if payload.get("bldgarea", 0) > 1500:
+        drivers.append("Large building area")
+    
+    if payload.get("gross_square_feet", 0) >= 1400:
+        drivers.append("above-average gross square footage")
+        
+    building_class = str(payload.get("building_class_category", "")).upper()
+    if "ONE FAMILY" in building_class:
+        drivers.append("favorable one-family residential class")
+    elif "TWO FAMILY" in building_class:
+        drivers.append("two-family income potential")
+    elif "RENTALS" in building_class:
+        drivers.append("rental building profile")
+        
+    neighborhood = str(payload.get("neighborhood", "")).upper()
+    if neighborhood:
+        drivers.append(f"neighborhood signal: {neighborhood}")
+        
+    if roi_estimate > 10:
+        drivers.append("strong model upside versus market price")
+    elif roi_estimate > 0:
+        drivers.append("positive valuation spread")
+        
+
+def generate_analysis_summary(
+    predicted_price: float, 
+    market_price: float, 
+    roi_estimate: float,
+    top_drivers: list[str],
+) -> str:
+    if roi_estimate >= 10:
+        outlook = "appears moderately undervalued"
+    elif roi_estimate > 0:
+        outlook = "appears slightly undervalued"
+    elif roi_estimate > - 5:
+        outlook = "appears close to fair value"
+    else:
+        outlook = "appears overpriced relative to the model estimate"
+        
+    driver_text = ", ".join(top_drivers) if top_drivers else "mixed property signals"
+    
+    return (
+        f"The property {outlook}. "
+        f"The model estimate is ${predicted_price:,.0f} versus a market proce of ${market_price:,.0f}. "
+        f"Key drivers include: {driver_text}."
+    )
