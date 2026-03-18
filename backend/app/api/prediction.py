@@ -5,13 +5,15 @@ from backend.app.schemas.prediction import (
     AnalyzerPropertyRequest, 
     AnalyzePropertyResponse,
     PublicPredictionRequest,
-    PublicAnalyzeRequest
+    PublicAnalyzeRequest,
+    FeatureImportanceResponse
 )
 from ml.inference.predict import (
     predict_price, 
     analyze_property,
     predict_price_public,
     analyze_property_public,
+    load_feature_importance
 )
 
 router = APIRouter(tags=["Prediction"])
@@ -37,3 +39,7 @@ def analyze_property_public_endpoint(request: PublicAnalyzeRequest):
     result = analyze_property_public(request.model_dump())
     return result
 
+@router.get("/model/feature-importance", response_model=FeatureImportanceResponse)
+def get_feature_importance(top_n: int = 10):
+    result = load_feature_importance(top_n=top_n)
+    return result

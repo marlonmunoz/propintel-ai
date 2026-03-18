@@ -175,3 +175,24 @@ def generate_analysis_summary(
         f"The model estimate is ${predicted_price:,.0f} versus a market proce of ${market_price:,.0f}. "
         f"Key drivers include: {driver_text}."
     )
+    
+def load_feature_importance(top_n: int = 10) -> dict:
+    feature_importance_file = BASE_DIR / "ml/artifacts/feature_importance.csv"
+    
+    df = pd.read_csv(feature_importance_file)
+    df = df.head(top_n)
+    
+    items = [
+        {
+            "feature": row["feature"],
+            "importance": float(row["importance"]),
+        }
+        for _, row in df.iterrows()
+    ]
+    
+    return {
+        "items": items,
+        "total": len(items)
+    }
+    
+    
