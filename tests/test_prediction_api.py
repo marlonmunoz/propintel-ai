@@ -75,6 +75,17 @@ def test_analyze_property_endpoint(monkeypatch):
             "price_difference": 61081.6875,
             "roi_estimate": 11.105761363636365,
             "investment_score": 77.7644034090909,
+            "top_drivers": [
+                "large building area",
+                "neighborhood signal: BATHGATE",
+                "strong model upside versus market price",
+            ],
+            "analysis_summary": (
+                "The property appears moderately undervalued. "
+                "The model estimate is $611,082 versus a market price of $550,000. "
+                "Key drivers include large building area, neighborhood signal: BATHGATE, "
+                "strong model upside versus market price."
+            ),
             "model_version": "xgboost_residential_nyc_v1",
         }
 
@@ -89,6 +100,11 @@ def test_analyze_property_endpoint(monkeypatch):
     assert "price_difference" in data
     assert "roi_estimate" in data
     assert "investment_score" in data
+    assert "top_drivers" in data
+    assert isinstance(data["top_drivers"], list)
+    assert len(data["top_drivers"]) > 0
+    assert "analysis_summary" in data
+    assert isinstance(data["analysis_summary"], str)
     assert data["model_version"] == "xgboost_residential_nyc_v1"
 
 
@@ -150,6 +166,17 @@ def test_public_analyze_endpoint(monkeypatch):
             "price_difference": 61081.6875,
             "roi_estimate": 11.105761363636365,
             "investment_score": 77.7644034090909,
+            "top_drivers": [
+                "large building area",
+                "neighborhood signal: BATHGATE",
+                "strong model upside versus market price",
+            ],
+            "analysis_summary": (
+                "The property appears moderately undervalued. "
+                "The model estimate is $611,082 versus a market price of $550,000. "
+                "Key drivers include large building area, neighborhood signal: BATHGATE, "
+                "strong model upside versus market price."
+            ),
             "model_version": "xgboost_residential_nyc_v1",
         }
 
@@ -168,4 +195,9 @@ def test_public_analyze_endpoint(monkeypatch):
     assert "price_difference" in data
     assert "roi_estimate" in data
     assert "investment_score" in data
+    assert "top_drivers" in data
+    assert isinstance(data["top_drivers"], list)
+    assert len(data["top_drivers"]) > 0
+    assert "analysis_summary" in data
+    assert isinstance(data["analysis_summary"], str)
     assert data["model_version"] == "xgboost_residential_nyc_v1"

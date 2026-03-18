@@ -3,7 +3,7 @@ from backend.app.schemas.prediction import (
     PredictionRequest, 
     PredictionResponse, 
     AnalyzerPropertyRequest, 
-    AnalyzerPropertyResponse,
+    AnalyzePropertyResponse,
     PublicPredictionRequest,
     PublicAnalyzeRequest
 )
@@ -22,7 +22,7 @@ def predict_property_price(request: PredictionRequest):
     result = predict_price(request.model_dump())
     return result
 
-@router.post("/analyze-property", response_model=AnalyzerPropertyResponse)
+@router.post("/analyze-property", response_model=AnalyzePropertyResponse)
 def analyze_property_investment(request: AnalyzerPropertyRequest):
     result = analyze_property(request.model_dump())
     return result
@@ -32,7 +32,7 @@ def predict_property_price_public(request: PublicPredictionRequest):
     result = predict_price_public(request.model_dump())
     return result
 
-@router.post("/analyze", response_model=AnalyzerPropertyResponse)
+@router.post("/analyze", response_model=AnalyzePropertyResponse)
 def analyze_property_public_endpoint(request: PublicAnalyzeRequest):
     result = analyze_property_public(request.model_dump())
     return result
