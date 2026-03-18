@@ -102,6 +102,10 @@ def analyze_property(payload: dict) -> dict:
         top_drivers=top_drivers,
     )
 
+    top_global_features = get_top_global_features(top_n=10)
+    global_context = build_global_context(prediction_payload, top_global_features)
+    explanation_factors = build_explanation_factors(prediction_payload, top_global_features)
+
     return {
         "predicted_price": float(predicted_price),
         "market_price": float(market_price),
@@ -110,6 +114,8 @@ def analyze_property(payload: dict) -> dict:
         "investment_score": float(investment_score),
         "top_drivers": top_drivers,
         "analysis_summary": analysis_summary,
+        "global_context": global_context,
+        "explanation_factors": explanation_factors,
         "model_version": MODEL_VERSION,
     }
     
@@ -195,4 +201,67 @@ def load_feature_importance(top_n: int = 10) -> dict:
         "total": len(items)
     }
     
+def get_top_global_features(top_n: int = 10) -> list[str]:
+    feature_importance_file = BASE_DIR / "ml/artifacts/feature_importance.csv"
+    df = pd.read_csv(feature_importance_file)
+    return df.head(top_n)["feature"].tolist()
+
+
+def build_global_context(payload: dict, top_global_features: list[str]) -> list[str]:
+    context = []
+
+    if any("neighborhood" in feature for feature in top_global_features):
+        context.append("Neighborhood is one of the strongest global pricing drivers in the current model.")
+
+    if any("bldgarea" in feature for feature in top_global_features):
+        context.append("Building area is one of the strongest global pricing drivers in the current model.")
+
+    if any("borough" in feature for feature in top_global_features):
+        context.append("Borough-level location signal is an important global pricing factor.")
+
+    if any("total_units" in feature for feature in top_global_features):
+        context.append("Total unit count influences valuation in the current model.")
+
+    return context[:3]
+
+
+def build_explanation_factors(payload: dict, top_global_features: list[str]) -> list[dict]:
+    factors = []
+
+    if any("bldgarea" in feature for feature in top_global_features):
+        factors.append({
+            "factor": "bldgarea",
+            "value": payload.get("bldgarea", 0),
+            "reason": "Building area is a strong global driver in the model.",
+        })
+
+    if any("gross_square_feet" in feature for feature in top_global_features):
+        factors.append({
+            "factor": "gross_square_feet",
+            "value": payload.get("gross_square_feet", 0),
+            "reason": "Gross square footage contributes to valuation strength.",
+        })
+
+    if any("neighborhood" in feature for feature in top_global_features):
+        factors.append({
+            "factor": "neighborhood",
+            "value": payload.get("neighborhood", ""),
+            "reason": "Neighborhood-level signal is one of the strongest global pricing drivers.",
+        })
+
+    if any("borough" in feature for feature in top_global_features):
+        factors.append({
+            "factor": "borough",
+            "value": payload.get("borough", ""),
+            "reason": "Borough is an important location signal in the model.",
+        })
+
+    if any("total_units" in feature for feature in top_global_features):
+        factors.append({
+            "factor": "total_units",
+            "value": payload.get("total_units", 0),
+            "reason": "Total unit count affects the valuation model.",
+        })
+
+    return factors[:4]
     

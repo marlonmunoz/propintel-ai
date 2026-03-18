@@ -86,6 +86,22 @@ def test_analyze_property_endpoint(monkeypatch):
                 "Key drivers include large building area, neighborhood signal: BATHGATE, "
                 "strong model upside versus market price."
             ),
+            "global_context": [
+                "Neighborhood is one of the strongest global pricing drivers in the current model.",
+                "Building area is one of the strongest global pricing drivers in the current model.",
+            ],
+            "explanation_factors": [
+                {
+                    "factor": "bldgarea",
+                    "value": 1497,
+                    "reason": "Building area is a strong global driver in the model.",
+                },
+                {
+                    "factor": "neighborhood",
+                    "value": "BATHGATE",
+                    "reason": "Neighborhood-level signal is one of the strongest global pricing drivers.",
+                },
+            ],
             "model_version": "xgboost_residential_nyc_v1",
         }
 
@@ -105,6 +121,11 @@ def test_analyze_property_endpoint(monkeypatch):
     assert len(data["top_drivers"]) > 0
     assert "analysis_summary" in data
     assert isinstance(data["analysis_summary"], str)
+    assert "global_context" in data
+    assert isinstance(data["global_context"], list)
+    assert "explanation_factors" in data
+    assert isinstance(data["explanation_factors"], list)
+    assert len(data["explanation_factors"]) > 0
     assert data["model_version"] == "xgboost_residential_nyc_v1"
 
 
@@ -177,6 +198,22 @@ def test_public_analyze_endpoint(monkeypatch):
                 "Key drivers include large building area, neighborhood signal: BATHGATE, "
                 "strong model upside versus market price."
             ),
+            "global_context": [
+                "Neighborhood is one of the strongest global pricing drivers in the current model.",
+                "Building area is one of the strongest global pricing drivers in the current model.",
+            ],
+            "explanation_factors": [
+                {
+                    "factor": "bldgarea",
+                    "value": 1497,
+                    "reason": "Building area is a strong global driver in the model.",
+                },
+                {
+                    "factor": "neighborhood",
+                    "value": "BATHGATE",
+                    "reason": "Neighborhood-level signal is one of the strongest global pricing drivers.",
+                },
+            ],
             "model_version": "xgboost_residential_nyc_v1",
         }
 
@@ -200,6 +237,11 @@ def test_public_analyze_endpoint(monkeypatch):
     assert len(data["top_drivers"]) > 0
     assert "analysis_summary" in data
     assert isinstance(data["analysis_summary"], str)
+    assert "global_context" in data
+    assert isinstance(data["global_context"], list)
+    assert "explanation_factors" in data
+    assert isinstance(data["explanation_factors"], list)
+    assert len(data["explanation_factors"]) > 0
     assert data["model_version"] == "xgboost_residential_nyc_v1"
     
 def test_feature_importance_endpoint(monkeypatch):

@@ -29,6 +29,11 @@ class PredictionResponse(BaseModel):
 class AnalyzerPropertyRequest(PredictionRequest):
     market_price: float = Field(..., gt=0)
     
+class ExplanationFactor(BaseModel):
+    factor: str
+    value: str | float | int
+    reason: str
+    
 class AnalyzePropertyResponse(BaseModel):
     predicted_price: float
     market_price: float
@@ -37,6 +42,8 @@ class AnalyzePropertyResponse(BaseModel):
     investment_score: float
     top_drivers: list[str]
     analysis_summary: str
+    global_context: list[str]
+    explanation_factors: list[ExplanationFactor]
     model_version: str
     
 class PublicPredictionRequest(BaseModel):
@@ -66,4 +73,5 @@ class FeatureImportanceResponse(BaseModel):
     total: int
     
     
-
+    
+    
