@@ -54,6 +54,16 @@ class PublicPredictionRequest(BaseModel):
     neighborhood: str
     zip_code: int
 
-
 class PublicAnalyzeRequest(PublicPredictionRequest):
     market_price: float = Field(..., gt=0)
+    
+class FeatureImportanceItem(BaseModel):
+    feature: str
+    importance: float
+    
+class FeatureImportanceResponse(BaseModel):
+    items: list[FeatureImportanceItem]
+    total: int
+    
+    
+

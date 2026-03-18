@@ -201,3 +201,35 @@ def test_public_analyze_endpoint(monkeypatch):
     assert "analysis_summary" in data
     assert isinstance(data["analysis_summary"], str)
     assert data["model_version"] == "xgboost_residential_nyc_v1"
+    
+def test_feature_importance_endpoint(monkeypatch):
+    def mock_load_feature_importance(top_n: int = 10):
+        return {
+            "items": [
+                {
+                    "feature": "cat__neighborhood_HIGHBRIDGE/MORRIS HEIGHTS",
+                    "importance": 0.048351333,
+                },
+                {
+                    "feature": "num__bldgarea",
+                    "importance": 0.048019238,
+                },
+            ],
+            "total": 2,
+        }
+
+    monkeypatch.setattr(
+        prediction_api,
+        "load_feature_importance",
+        mock_load_feature_importance,
+    )
+
+    response = client.get("/model/feature-importance?top_n=2")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert data["total"] == 2
+    assert len(data["items"]) == 2
+    assert data["items"][0]["feature"] == "cat__neighborhood_HIGHBRIDGE/MORRIS HEIGHTS"

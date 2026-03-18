@@ -16,6 +16,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 INPUT_FILE = BASE_DIR / "ml/data/features/nyc_features.csv"
 ARTIFACTS_DIR = BASE_DIR / "ml/artifacts"
 MODEL_FILE = ARTIFACTS_DIR / "price_model.pkl"
+FEATURE_IMPORTANCE_FILE = ARTIFACTS_DIR / "feature_importance.csv"
 
 
 def load_data():
@@ -119,21 +120,26 @@ def evaluate_model(y_test_log, y_pred_log):
     
     
 def print_feature_importance(model, top_n=15):
-    """Print top feature importances from the trained XGBoost pipeline."""
+    """Print and save top feature importances from the trained XGBoost pipeline."""
     preprocessor = model.named_steps["preprocessor"]
     regressor = model.named_steps["regressor"]
-    
+
     feature_names = preprocessor.get_feature_names_out()
     importances = regressor.feature_importances_
-    
+
     importance_df = pd.DataFrame({
         "feature": feature_names,
         "importance": importances
     }).sort_values("importance", ascending=False)
-    
+
     print("\nTop Feature Importances")
     print("-----------------------")
     print(importance_df.head(top_n).to_string(index=False))
+
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    importance_df.to_csv(FEATURE_IMPORTANCE_FILE, index=False)
+
+    print(f"\nFeature importance saved to {FEATURE_IMPORTANCE_FILE}")
 
 
 def save_model(model):
