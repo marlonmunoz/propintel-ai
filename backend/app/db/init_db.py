@@ -1,5 +1,5 @@
 from backend.app.db.database import engine, Base
-from backend.app.models.property import Property
+from backend.app.db.models import Property, HousingData
 
 # Create tables
 Base.metadata.create_all(bind=engine)
