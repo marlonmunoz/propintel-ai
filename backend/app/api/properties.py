@@ -23,7 +23,14 @@ def create_property(
     db_property = Property(**property.model_dump()) # automatically maps fields
 
     db.add(db_property)
-    db.commit()
+    
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     db.refresh(db_property)
 
     return db_property
@@ -83,7 +90,11 @@ def update_property(
     for field, value in update_data.items():
         setattr(property_obj, field, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(property_obj)
 
     return property_obj
@@ -104,6 +115,10 @@ def delete_property(
         )
         
     db.delete(property_obj)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     
     return {"message": "Property deleted successfully"}
