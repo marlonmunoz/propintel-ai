@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from backend.app.db.database import get_db
-from backend.app.models.property import Property
+from backend.app.db.models import Property
 from backend.app.schemas.property import (
     PropertyCreate, 
     PropertyResponse,
