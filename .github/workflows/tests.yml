@@ -28,8 +28,16 @@ jobs:
           pip install -r requirements.txt
           pip install pytest httpx
 
+      - name: Initialize database
+        env:
+          DATABASE_URL: "sqlite:///./test.db"
+        run: |
+          python -m backend.app.db.init_db
+
       - name: Run tests
         env:
           DATABASE_URL: "sqlite:///./test.db"
         run: |
           PYTHONPATH=. pytest
+      
+      
