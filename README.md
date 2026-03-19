@@ -28,6 +28,8 @@ AI-powered real estate investment analysis platform built with data pipelines, m
 - Residential-only pricing model for MVP scope
 - XGBoost regression for residential property valuation
 - Feature importance / explainability output after model training
+- Persisted explainability artifact (`ml/artifacts/feature_importance.csv`)
+- Global explainability API endpoint (`GET /model/feature-importance`)
 - Public and internal prediction/analysis API contracts
 - In-memory model caching for faster predictions
 
@@ -58,6 +60,9 @@ Current milestone:
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
 - Feature importance / explainability added to training output
+- Feature importance persisted as an ML artifact (`ml/artifacts/feature_importance.csv`)
+- Global model explainability endpoint implemented:
+  - `GET /model/feature-importance`
 - Internal prediction endpoints implemented:
   - `POST /predict-price`
   - `POST /analyze-property`
@@ -168,15 +173,38 @@ NYC PLUTO (CSV)
       Feature importance / explainability
                     │
                     ▼
-         Serialized model artifact
-      (`ml/artifacts/price_model.pkl`)
+      Serialized ML artifacts
+   (`price_model.pkl`, `feature_importance.csv`)
                     │
                     ▼
       Internal + public FastAPI endpoints
+                    │
+                    ▼
+         Prediction + analysis responses
+       with structured explanation fields
 
 ```
 ---
+## 📊 Data Sources
+
+PropIntel uses real NYC government datasets:
+
+### NYC Rolling Sales Data
+- Historical property sales records
+- Includes sale price, building size, property type
+
+### NYC PLUTO Dataset
+- Property-level geographic and structural data
+- Includes zoning, building class, lot size, coordinates
+
+### Join Strategy
+- Datasets merged using **BBL (Borough-Block-Lot)**
+
+These datasets allow the model to learn real NYC market behavior.
+---
 ## Example Workflow
+
+A typical PropIntel AI workflow:
 
 A typical PropIntel AI workflow:
 
@@ -185,12 +213,13 @@ A typical PropIntel AI workflow:
 3. The merged dataset is transformed through the feature engineering pipeline.
 4. The model is trained on residential-only sales using a log-transformed target.
 5. XGBoost is used to train the residential pricing model.
-6. Feature importances are printed to explain the model’s strongest global drivers.
+6. Feature importances are generated and saved as a reusable explainability artifact.
 7. The trained model is serialized to `ml/artifacts/price_model.pkl`.
 8. A client can call either:
    - internal ML endpoints (`/predict-price`, `/analyze-property`)
    - public simplified endpoints (`/predict`, `/analyze`)
 9. The API loads the cached model artifact and returns a valuation or analysis response.
+10. Analysis responses can include structured explanation fields grounded in both local property signals and global model importance.
 
 ---
 
@@ -211,6 +240,21 @@ The system is structured like a modern production application, separating:
 - machine learning modules
 - inference pipelines
 - API delivery
+
+---
+## 🔥 Why This Project Matters
+
+PropIntel is not just a machine learning project — it is a full AI system built with production patterns.
+
+It demonstrates:
+
+- end-to-end ML lifecycle (data → training → inference)
+- real-world data engineering pipelines
+- scalable backend API design
+- production-style CI/CD workflows
+- explainable AI outputs for decision-making
+
+This mirrors how real AI systems are built in industry.
 
 ---
 
@@ -662,6 +706,23 @@ The CI pipeline performs:
 3. install dependencies
 4. run `pytest`
 ---
+## 🚀 CI/CD Pipeline Status
+
+The project uses GitHub Actions to simulate a production CI workflow.
+
+### Current Workflow
+- install dependencies
+- run pytest test suite
+- validate API behavior
+
+### In Progress Improvements
+- database service container for CI testing
+- automated schema initialization before tests
+- environment variable management for secure deployments
+
+This reflects real-world production pipeline design and debugging.
+
+---
 
 ## 🐳 Docker & Docker Compose
 
@@ -705,25 +766,18 @@ docker compose down
 
 ---
 
-<!-- ## 🧱 Current System Architecture
+## ⚠️ Known Issues (In Progress)
 
-The backend now follows a typical production architecture:
+Current technical challenges being addressed:
 
-```
-Client Request
-      │
-FastAPI REST API
-      │
-Pydantic Validation
-      │
-Service Layer
-      │
-SQLAlchemy ORM
-      │
-Supabase PostgreSQL
-```
+- CI pipeline failing due to missing `DATABASE_URL`
+- Database tables not initialized before running tests
+- Need to automate DB setup (migrations or init step) inside GitHub Actions
 
-This architecture supports scalable backend services and future AI-powered endpoints. -->
+### Planned Fixes
+- Add `DATABASE_URL` as GitHub Actions secret
+- Run DB initialization script before pytest
+- Introduce migration tool (Alembic) for production-ready schema management
 
 ---
 ## 🤖 Machine Learning Implementation
@@ -731,40 +785,6 @@ This architecture supports scalable backend services and future AI-powered endpo
 PropIntel AI now includes a real data → model → prediction pipeline built on NYC government property datasets.
 
 This stage transforms PropIntel AI from a traditional backend system into an AI-powered analytics platform.
-
----
-
-## ✅ Current Progress
-
-**Backend and Database**
-- FastAPI backend server
-- modular backend architecture
-- Supabase PostgreSQL integration
-- SQLAlchemy ORM models
-- CRUD API for property management
-- Pydantic validation schemas
-- structured error handling
-- Swagger API documentation
-
-**Machine Learning**
-- NYC Rolling Sales ingestion pipeline
-- PLUTO dataset ingestion pipeline
-- BBL-based dataset merge
-- feature engineering pipeline
-- residential-only dataset filtering
-- log-transformed target training
-- Linear Regression baseline model
-- XGBoost residential valuation model
-- model serialization
-- ML inference layer structure
-- prediction API architecture
-
-**Engineering & Reliability**
-- automated tests with pytest + FastAPI TestClient
-- GitHub Actions CI workflow running tests on push/PR
-- Dockerfile for containerized API deployment
-- Docker Compose for local container orchestration
-- secure environment management 
 
 ---
 
@@ -890,8 +910,8 @@ Run training from project root:
 ```
 python ml/models/train_model.py
 ```
----
 
+---
 ## 📈 Model Evaluation
 
 Recent residential NYC training results:
@@ -925,6 +945,22 @@ Interpretation:
 - the model is learning plausible NYC-specific drivers like location, building size, and property class
 
 ---
+## ⚠️ Model Limitations
+
+Current constraints of the MVP model:
+
+- trained only on **residential NYC properties**
+- limited feature set (no economic indicators yet)
+- does not include temporal trends (market cycles)
+- sensitive to data quality in source datasets
+
+### Future Improvements
+- incorporate time-series features
+- add macroeconomic indicators
+- improve geospatial modeling
+- expand beyond NYC dataset
+
+---
 
 ## 💾 Model Serialization
 
@@ -952,7 +988,7 @@ Responsibilities include:
 - transforming feature inputs
 - generating predictions
 - converting log-scale predictions back to original dollar values
-- rreturning structured results to the API layer
+- returning structured results to the API layer
 
 Implemented inference surface:
 - internal prediction: `POST /predict-price`
@@ -1074,6 +1110,22 @@ POST /analyze
 - The latest XGBoost model artifact is implemented in the ML pipeline, and full production wiring into all API routes is still being finalized.
 
 > **Note:** endpoint structure exists, but the latest XGBoost model wiring and final request/response contract are still being aligned with the current ML pipeline.
+
+---
+### 🧠 Explainable AI Responses
+
+The analysis endpoints were enhanced to return structured explanation fields, transforming raw predictions into actionable insights.
+
+Each response can include:
+
+- `price_difference` — model value vs market price
+- `roi_estimate` — potential return on investment
+- `investment_score` — normalized deal quality score
+- `explanation` object:
+  - top contributing features (from model importance)
+  - reasoning summary for the prediction
+
+This allows PropIntel to move beyond prediction into decision-support intelligence.
 
 ---
 ## 🧾 Prediction Request Schema
