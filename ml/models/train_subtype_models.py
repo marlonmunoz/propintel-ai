@@ -39,28 +39,78 @@ SUBTYPE_GROUPS = {
     ],
 }
 
+SUBTYPE_FEATURES = {
+    "one_family": {
+        "numeric": [
+            "gross_sqft",
+            "land_sqft",
+            "year_built",
+            "property_age",
+            "latitude",
+            "longitude",
+        ],
+        "categorical": [
+            "borough",
+            "building_class",
+            "neighborhood",
+        ],
+        "require_gross_sqft": True,
+    },
+    "multi_family": {
+        "numeric": [
+            "gross_sqft",
+            "land_sqft",
+            "year_built",
+            "property_age",
+            "latitude",
+            "longitude",
+        ],
+        "categorical": [
+            "borough",
+            "building_class",
+            "neighborhood",
+        ],
+        "require_gross_sqft": True,
+    },
+    "condo_coop": {
+        "numeric": [
+            "year_built",
+            "property_age",
+            "latitude",
+            "longitude",
+        ],
+        "categorical": [
+            "borough",
+            "building_class",
+            "neighborhood",
+        ],
+        "require_gross_sqft": False,
+    },
+    "rental": {
+        "numeric": [
+            "gross_sqft",
+            "land_sqft",
+            "year_built",
+            "property_age",
+            "latitude",
+            "longitude",
+        ],
+        "categorical": [
+            "borough",
+            "building_class",
+            "neighborhood",
+        ],
+        "require_gross_sqft": True,
+    },
+}
+
 
 def load_data():
     print("Loading subtype training dataset...")
     return pd.read_csv(INPUT_FILE, low_memory=False)
 
 
-def build_pipeline():
-    numeric_features = [
-        "gross_sqft",
-        "land_sqft",
-        "year_built",
-        "property_age",
-        "latitude",
-        "longitude",
-    ]
-
-    categorical_features = [
-        "borough",
-        "building_class",
-        "neighborhood",
-    ]
-
+def build_pipeline(numeric_features, categorical_features):
     numeric_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -130,30 +180,26 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
 
     subset = subset.dropna(subset=["sales_price", "year_built", "latitude", "longitude"])
 
-    if subtype_name in {"one_family", "multi_family", "rental"}:
+    feature_config = SUBTYPE_FEATURES[subtype_name]
+
+    if feature_config["require_gross_sqft"]:
         subset = subset[subset["gross_sqft"].notna() & (subset["gross_sqft"] > 0)]
 
-    feature_columns = [
-        "gross_sqft",
-        "land_sqft",
-        "year_built",
-        "property_age",
-        "latitude",
-        "longitude",
-        "borough",
-        "building_class",
-        "neighborhood",
-    ]
+    numeric_features = feature_config["numeric"]
+    categorical_features = feature_config["categorical"]
 
+    feature_columns = numeric_features + categorical_features
     existing_columns = [col for col in feature_columns if col in subset.columns]
 
     X = subset[existing_columns].copy()
-    if "borough" in X.columns:
-        X["borough"] = X["borough"].astype(str)
+
+    for col in categorical_features:
+        if col in X.columns:
+            X[col] = X[col].astype(str)
 
     y = np.log1p(subset["sales_price"].copy())
 
-    return subset, X, y
+    return subset, X, y, numeric_features, categorical_features
 
 
 def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: list[str]):
@@ -162,9 +208,13 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
     print(f"\n=== {subtype_name.upper()} ===")
     print(f"Rows before subtype-specific filtering: {len(subset)}")
 
-    subset, X, y = prepare_subset_for_training(subset, subtype_name)
+    subset, X, y, numeric_features, categorical_features = prepare_subset_for_training(
+        subset, subtype_name
+    )
 
     print(f"Rows after subtype-specific filtering: {len(subset)}")
+    print(f"Numeric features: {numeric_features}")
+    print(f"Categorical features: {categorical_features}")
 
     if len(subset) < 500:
         print("Skipped: not enough rows")
@@ -174,7 +224,7 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
         X, y, test_size=0.2, random_state=42
     )
 
-    model = build_pipeline()
+    model = build_pipeline(numeric_features, categorical_features)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
