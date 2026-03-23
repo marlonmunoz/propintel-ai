@@ -43,6 +43,9 @@ def prepare_features(df):
     df = df.dropna(subset=[target_column])
     
     X = df[existing_columns].copy()
+    if "borough" in X.columns:
+        X["borough"] = X["borough"].astype(str)
+        
     y = np.log1p(df[target_column].copy())
     
     return X, y
@@ -50,8 +53,23 @@ def prepare_features(df):
 
 def build_pipeline(X):
     """Build preprocessing + model pipeline."""
-    numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
-    categorical_features = X.select_dtypes(exclude=["number"]).columns.tolist()
+    # numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
+    # categorical_features = X.select_dtypes(exclude=["number"]).columns.tolist()
+    numeric_features = [
+        "gross_sqft", 
+        "land_sqft", 
+        "year_built", 
+        "property_age"
+    ]
+    
+    categorical_features = [
+        "borough", 
+        "building_class", 
+        "neighborhood"
+    ]
+    
+    numeric_features = [col for col in numeric_features if col in X.columns]
+    categorical_features = [col for col in categorical_features if col in X.columns]
     
     numeric_transformer = Pipeline(
         steps=[
