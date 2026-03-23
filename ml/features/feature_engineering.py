@@ -27,12 +27,15 @@ def convert_numeric_columns(df):
         "year_built",
         "sales_price",
         "gross_sqft",
-        "land_sqft"
+        "land_sqft",
+        "latitude",
+        "longitude",
     ]
     
     for col in numeric_columns:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+            
     return df
 
 
@@ -53,6 +56,8 @@ def clean_rows(df):
         "year_built",
         "sales_price",
         "gross_sqft",
+        "latitude",
+        "longitude",
     ]
 
     df = df.dropna(subset=required_columns)
@@ -69,6 +74,8 @@ def clean_rows(df):
 def save_features(df):
     """Save engineered features dataset."""
     FEATURES_DIR.mkdir(parents=True, exist_ok=True)
+    print(df.columns.tolist())
+    print(df.head())
     df.to_csv(OUTPUT_FILE, index=False)
     print(f"✅ Features saved to: {OUTPUT_FILE}")
     
@@ -82,10 +89,6 @@ def run_feature_pipeline():
     df = convert_numeric_columns(df)
     df = engineer_features(df)
     df = clean_rows(df)
-    
-    print(df.columns.to_list())
-    print(df.head())
-    
     save_features(df)
     
 if __name__ == "__main__":

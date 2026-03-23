@@ -28,4 +28,7 @@ class HousingData(Base):
     gross_sqft = Column(Float, nullable=True)
     land_sqft = Column(Float, nullable=True)
     
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    
     

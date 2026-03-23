@@ -12,6 +12,15 @@ def load_data():
     
     try:
         df = pd.read_csv(DATA_PATH, low_memory=False)
+        print(df.columns.tolist())
+
+        if "latitude" in df.columns and "longitude" in df.columns:
+            print(df[["latitude", "longitude"]].head(10))
+            print("Latitude non-null count:", df["latitude"].notna().sum())
+            print("Longitude non-null count:", df["longitude"].notna().sum())
+        else:
+            print("latitude/longitude columns not found in CSV")
+            
         df.columns = df.columns.str.strip().str.lower()
         
         df = df.rename(columns={
@@ -31,11 +40,20 @@ def load_data():
                 "year_built",
                 "sales_price",
                 "gross_sqft",
-                "land_sqft"
+                "land_sqft",
+                "latitude",
+                "longitude",
             ]
         ].copy()
         
-        for col in ["year_built", "sales_price", "gross_sqft", "land_sqft"]:
+        for col in [
+            "year_built",
+            "sales_price",
+            "gross_sqft",
+            "land_sqft",
+            "latitude",
+            "longitude",
+        ]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
             
         print(f"Loaded {len(df)} rows")
@@ -50,9 +68,11 @@ def load_data():
                 neighborhood=row["neighborhood"],
                 building_class=row["building_class"],
                 year_built=None if pd.isna(row["year_built"]) else int(row["year_built"]),
-                sales_price=None if pd.isna(row["sales_price"]) else int(row["sales_price"]),
-                gross_sqft=None if pd.isna(row["gross_sqft"]) else int(row["gross_sqft"]),
-                land_sqft=None if pd.isna(row["land_sqft"]) else int(row["land_sqft"]),
+                sales_price=None if pd.isna(row["sales_price"]) else float(row["sales_price"]),
+                gross_sqft=None if pd.isna(row["gross_sqft"]) else float(row["gross_sqft"]),
+                land_sqft=None if pd.isna(row["land_sqft"]) else float(row["land_sqft"]),
+                latitude=None if pd.isna(row["latitude"]) else float(row["latitude"]),
+                longitude=None if pd.isna(row["longitude"]) else float(row["longitude"]),
             )
             records.append(record)
         

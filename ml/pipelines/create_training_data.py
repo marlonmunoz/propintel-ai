@@ -21,7 +21,9 @@ SELECT
     year_built,
     sales_price,
     gross_sqft,
-    land_sqft
+    land_sqft,
+    latitude,
+    longitude
 FROM housing_data
 """
 
@@ -53,6 +55,8 @@ def main():
     df["gross_sqft"] = pd.to_numeric(df["gross_sqft"], errors="coerce")
     df["land_sqft"] = pd.to_numeric(df["land_sqft"], errors="coerce")
     df["year_built"] = pd.to_numeric(df["year_built"], errors="coerce")
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
     
     df = df[df["sales_price"] > 1000]
     print(f"After valide sales_price filter: {len(df)}")
@@ -67,6 +71,9 @@ def main():
         & (df["year_built"] <= 2025)
     ]
     print(f"After year_built filter: {len(df)}")
+    
+    df = df[df["latitude"].notna() & df["longitude"].notna()]
+    print(f"After latitude/longitude filter: {len(df)}")
     
     price_cap = df["sales_price"].quantile(0.99)
     print(f"99th percentile sales_price: {price_cap:,.2f}")
