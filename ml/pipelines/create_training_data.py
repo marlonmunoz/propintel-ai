@@ -60,8 +60,19 @@ def main():
     df = df[df["gross_sqft"].notna() & (df["gross_sqft"] > 0)]
     print(f"After valid gross_sqft filter: {len(df)}")
     
-    df = df[df["year_built"].notna() & (df["year_built"] > 1800) & (df["year_built"] <= 2025)]
+    
+    df = df[
+        df["year_built"].notna() 
+        & (df["year_built"] > 1800) 
+        & (df["year_built"] <= 2025)
+    ]
     print(f"After year_built filter: {len(df)}")
+    
+    price_cap = df["sales_price"].quantile(0.99)
+    print(f"99th percentile sales_price: {price_cap:,.2f}")
+    
+    df = df[df["sales_price"] <= price_cap]
+    print(f"After outlier removal: {len(df)}")
     
     df = df.drop_duplicates()
     print(f"After dropping duplicates: {len(df)}")
