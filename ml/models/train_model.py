@@ -32,6 +32,8 @@ def prepare_features(df):
         "land_sqft",
         "year_built",
         "property_age",
+        "latitude",
+        "longitude",
         "borough",
         "building_class",
         "neighborhood",
@@ -59,7 +61,9 @@ def build_pipeline(X):
         "gross_sqft", 
         "land_sqft", 
         "year_built", 
-        "property_age"
+        "property_age",
+        "latitude",
+        "longitude",
     ]
     
     categorical_features = [
