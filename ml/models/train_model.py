@@ -1,15 +1,15 @@
 import joblib
 import numpy as np
 import pandas as pd
-from pathlib import Path
+from pathlib import Path 
 
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
+from xgboost import XGBRegressor
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -28,27 +28,16 @@ def load_data():
 def prepare_features(df):
     """Prepare X and y for training."""
     feature_columns = [
-        "gross_square_feet",
-        "land_square_feet",
-        "residential_units",
-        "commercial_units",
-        "total_units",
-        "numfloors",
-        "unitsres",
-        "unitstotal",
-        "lotarea",
-        "bldgarea",
-        "latitude",
-        "longitude",
-        "pluto_year_built",
-        "building_age",
+        "gross_sqft",
+        "land_sqft",
+        "year_built",
+        "property_age",
         "borough",
-        "building_class_category",
+        "building_class",
         "neighborhood",
-        "zip_code",
     ]
     
-    target_column = "sale_price"
+    target_column = "sales_price"
     
     existing_columns = [col for col in feature_columns if col in df.columns]
     df = df.dropna(subset=[target_column])
@@ -120,8 +109,8 @@ def evaluate_model(y_test_log, y_pred_log):
     
     
 def print_feature_importance(model, top_n=15):
-    """Print and save top feature importances from the trained XGBoost pipeline."""
-    preprocessor = model.named_steps["preprocessor"]
+    """Print and save top feature importances."""
+    preprocessor = model.named_steps["preprocessor"] 
     regressor = model.named_steps["regressor"]
 
     feature_names = preprocessor.get_feature_names_out()
@@ -147,7 +136,6 @@ def save_model(model):
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_FILE)
     print(f"\nModel saved to {MODEL_FILE}")
-    
     
 
 def train():
