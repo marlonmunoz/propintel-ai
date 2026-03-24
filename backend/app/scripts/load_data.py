@@ -30,6 +30,8 @@ def load_data():
             "sale price": "sales_price",
             "gross square feet": "gross_sqft",
             "land square feet": "land_sqft",
+            "residential units": "residential_units",
+            "total units": "total_units",
         })
         
         df = df[
@@ -43,6 +45,9 @@ def load_data():
                 "land_sqft",
                 "latitude",
                 "longitude",
+                "postcode",
+                "residential_units",
+                "total_units",
             ]
         ].copy()
         
@@ -73,6 +78,9 @@ def load_data():
                 land_sqft=None if pd.isna(row["land_sqft"]) else float(row["land_sqft"]),
                 latitude=None if pd.isna(row["latitude"]) else float(row["latitude"]),
                 longitude=None if pd.isna(row["longitude"]) else float(row["longitude"]),
+                postcode=None if pd.isna(row["postcode"]) else str(row["postcode"]),
+                residential_units=None if pd.isna(row["residential_units"]) else float(row["residential_units"]),
+                total_units=None if pd.isna(row["total_units"]) else float(row["total_units"]),
             )
             records.append(record)
         

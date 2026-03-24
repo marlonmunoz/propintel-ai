@@ -6,7 +6,7 @@ from pathlib import Path
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from xgboost import XGBRegressor
@@ -45,7 +45,6 @@ def prepare_features(df):
     df = df.dropna(subset=[target_column])
     
     X = df[existing_columns].copy()
-    
     if "borough" in X.columns:
         X["borough"] = X["borough"].astype(str)
         
@@ -54,7 +53,7 @@ def prepare_features(df):
     return X, y
 
 
-def build_pipeline():
+def build_pipeline(X):
     """Build preprocessing + model pipeline."""
     # numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
     # categorical_features = X.select_dtypes(exclude=["number"]).columns.tolist()
@@ -72,6 +71,9 @@ def build_pipeline():
         "building_class", 
         "neighborhood"
     ]
+    
+    numeric_features = [col for col in numeric_features if col in X.columns]
+    categorical_features = [col for col in categorical_features if col in X.columns]
     
     numeric_transformer = Pipeline(
         steps=[
@@ -97,9 +99,13 @@ def build_pipeline():
         steps= [
             ("preprocessor", preprocessor),
             ("regressor", XGBRegressor(
+                n_estimators=300,
+                learning_rate=0.05,
+                max_depth=6,
+                subsample=0.8,
+                colsample_bytree=0.8,
                 random_state=42,
                 n_jobs=-1,
-                objective="reg:squarederror",
             )),
         ]
     )
@@ -164,39 +170,14 @@ def train():
         X,y, test_size=0.2, random_state=42
     )
     
-    pipeline = build_pipeline()
+    model = build_pipeline(X)
+    model.fit(X_train, y_train)
     
-    param_grid = {
-        "regressor__n_estimators": [200, 300],
-        "regressor__learning_rate": [0.03, 0.05],
-        "regressor__max_depth": [4, 6],
-        "regressor__subsample": [0.8, 1.0],
-        "regressor__colsample_bytree": [0.8, 1.0],
-    }
-    
-    grid_search = GridSearchCV(
-        estimator=pipeline,
-        param_grid=param_grid,
-        scoring="neg_mean_absolute_error",
-        cv=3,
-        verbose=2,
-        n_jobs=-1,
-    )
-    
-    grid_search.fit(X_train, y_train)
-    
-    print("Best Params")
-    print("-----------")
-    print(grid_search.best_params_)
-    
-    best_model = grid_search.best_estimator_
-  
-    
-    y_pred = best_model.predict(X_test)
+    y_pred = model.predict(X_test)
 
     evaluate_model(y_test, y_pred)
-    print_feature_importance(best_model)
-    save_model(best_model)
+    print_feature_importance(model)
+    save_model(model)
     
 if __name__ == "__main__":
     train()

@@ -45,6 +45,20 @@ OUTPUT_PATH = "ml/data/processed/nyc_training_data_clean.csv"
 
 def main():
     df = pd.read_sql(QUERY, engine)
+    df = df.sort_values(
+    by=[
+        "borough",
+        "neighborhood",
+        "building_class",
+        "year_built",
+        "sales_price",
+        "gross_sqft",
+        "land_sqft",
+        "latitude",
+        "longitude",
+    ],
+    kind="mergesort"
+).reset_index(drop=True)
     
     print(f"Raw rows: {len(df)}")
     

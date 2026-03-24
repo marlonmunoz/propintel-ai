@@ -31,4 +31,8 @@ class HousingData(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     
+    postcode = Column(String, nullable=True)
+    residential_units = Column(Float, nullable=True)
+    total_units = Column(Float, nullable=True)
+    
     
