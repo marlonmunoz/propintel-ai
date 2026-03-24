@@ -1,5 +1,4 @@
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, field_validator
 
 class PredictionRequest(BaseModel):
     gross_square_feet: float = Field(..., gt=0)
@@ -72,6 +71,29 @@ class FeatureImportanceResponse(BaseModel):
     items: list[FeatureImportanceItem]
     total: int
     
+class ProductionPredictionRequest(BaseModel):
+    borough: str = Field(..., min_length=1)
+    neighborhood: str = Field(..., min_length=1)
+    building_class: str = Field(..., min_length=1)
+    year_built: int = Field(..., ge=1800, le=2026)
+    gross_sqft: float = Field(..., gt=0)
+    land_sqft: float | None = Field(default=None, ge=0)
+    latitude: float = Field(..., ge=40.0, le=41.5)
+    longitude: float = Field(..., ge=-75.0, le=-73.0)
+    
+    @field_validator("borough", "neighborhood", "building_class")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+    
+    
+class ProductionPredictionResponse(BaseModel):
+    predicted_price: float
+    model_used: str
+    model_version: str
+    segment: str
+    input_summary: dict[str, str]
+    warnings: list[str]
     
     
     

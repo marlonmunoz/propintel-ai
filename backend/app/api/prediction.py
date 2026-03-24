@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from backend.app.schemas.prediction import (
     PredictionRequest, 
     PredictionResponse, 
@@ -6,8 +6,13 @@ from backend.app.schemas.prediction import (
     AnalyzePropertyResponse,
     PublicPredictionRequest,
     PublicAnalyzeRequest,
-    FeatureImportanceResponse
+    FeatureImportanceResponse,
+    ProductionPredictionRequest,
+    ProductionPredictionResponse
 )
+from backend.app.services.model_registry import ModelRegistry
+from backend.app.services.predictor import PredictionService
+
 from ml.inference.predict import (
     predict_price, 
     analyze_property,
@@ -43,3 +48,15 @@ def analyze_property_public_endpoint(request: PublicAnalyzeRequest):
 def get_feature_importance(top_n: int = 10):
     result = load_feature_importance(top_n=top_n)
     return result
+
+def get_prediction_service() -> PredictionService:
+    registry = ModelRegistry()
+    return PredictionService(registry)
+
+@router.post("/predict-price-v2", response_model=ProductionPredictionResponse)
+def predict_property_price_v2(
+    request: ProductionPredictionRequest,
+    service: PredictionService = Depends(get_prediction_service)
+) -> ProductionPredictionResponse:
+    result = service.predict(request)
+    return ProductionPredictionResponse(**result)
