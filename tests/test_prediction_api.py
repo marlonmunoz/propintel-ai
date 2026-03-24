@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from backend.app.main import app
 import backend.app.api.prediction as prediction_api
+from backend.app.api.prediction import get_prediction_service
 
 client = TestClient(app)
 
@@ -275,3 +276,109 @@ def test_feature_importance_endpoint(monkeypatch):
     assert data["total"] == 2
     assert len(data["items"]) == 2
     assert data["items"][0]["feature"] == "cat__neighborhood_HIGHBRIDGE/MORRIS HEIGHTS"
+    
+    
+class MockPredictionServiceOneFamily:
+    def predict(self, payload):
+        return {
+            "predicted_price": 659430.07,
+            "model_used": "one_family",
+            "model_version": "v1",
+            "segment": "one_family",
+            "input_summary": {
+                "borough": payload.borough,
+                "neighborhood": payload.neighborhood,
+                "building_class": payload.building_class,
+            },
+            "warnings": [],
+        }
+        
+class MockPredictionServiceGlobal: 
+    def predict(self, payload):
+        return {
+            "predicted_price": 650980.91,
+            "model_used": "global",
+            "model_version": "v1",
+            "segment": "all_residential",
+            "input_summary": {
+                "borough": payload.borough,
+                "neighborhood": payload.neighborhood,
+                "building_class": payload.building_class,
+            },
+            "warnings": [
+                "Using global residential fallback model for this property type."
+            ],
+        }
+        
+def test_predict_price_v2_one_famliy_route():
+    app.dependency_overrides[get_prediction_service] = lambda: MockPredictionServiceOneFamily()
+    
+    payload = {
+        "borough": "2",
+        "neighborhood": "BATHGATE",
+        "building_class": "01 ONE FAMILY DWELLINGS",
+        "year_built": 1910,
+        "gross_sqft": 1516,
+        "land_sqft": 1173,
+        "latitude": 40.850163,
+        "longitude": -73.895065,
+    }
+    
+    response = client.post("/predict-price-v2", json=payload)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["predicted_price"] == 659430.07
+    assert data["model_used"] == "one_family"
+    assert data["model_version"] == "v1"
+    assert data["segment"] == "one_family"
+    assert data["input_summary"]["building_class"] == "01 ONE FAMILY DWELLINGS"
+    assert data["warnings"] == []
+    
+    app.dependency_overrides.clear()
+    
+
+def test_predict_price_v2_global_fallback_route():
+    app.dependency_overrides[get_prediction_service] = lambda: MockPredictionServiceGlobal()
+    
+    payload = {
+        "borough": "2",
+        "neighborhood": "BATHGATE",
+        "building_class": "02 TWO FAMILY DWELLINGS",
+        "year_built": 1910,
+        "gross_sqft": 1516,
+        "land_sqft": 1173,
+        "latitude": 40.850163,
+        "longitude": -73.895065,
+    }
+    
+    response = client.post("/predict-price-v2", json=payload)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["predicted_price"] == 650980.91
+    assert data["model_used"] == "global"
+    assert data["model_version"] == "v1"
+    assert data["segment"] == "all_residential"
+    assert data["input_summary"]["building_class"] == "02 TWO FAMILY DWELLINGS"
+    assert len(data["warnings"]) == 1
+    assert "fallback model" in data["warnings"][0].lower()
+    
+    app.dependency_overrides.clear()
+    
+
+def test_predict_price_v2_validation_error():
+    payload = {
+        "borough": "2",
+        "neighborhood": "BATHGATE",
+        "building_class": "01 ONE FAMILY DWELLINGS",
+        "year_built": 1700, # invalid
+        "gross_sqft": -100, # invalid
+        "land_sqft": 1173,
+        "latitude": 10.0, # invalid for NYC bounds
+        "longitude": -73.895065,
+    }
+    
+    response = client.post("/predict-price-v2", json=payload)
+    
+    assert response.status_code == 422
