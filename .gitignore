@@ -237,3 +237,5 @@ ml/data/processed/
 ml/data/features/
 ml/artifacts/
 
+# catboost
+catboost_info/
