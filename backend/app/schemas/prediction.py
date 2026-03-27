@@ -98,4 +98,5 @@ class ProductionPredictionResponse(BaseModel):
     model_metrics: Optional[Dict[str, float]] = None
     
     
-    
+class ProductionAnalyzeRequest(ProductionPredictionRequest):
+    market_price: float

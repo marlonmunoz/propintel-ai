@@ -9,7 +9,8 @@ from backend.app.schemas.prediction import (
     PublicAnalyzeRequest,
     FeatureImportanceResponse,
     ProductionPredictionRequest,
-    ProductionPredictionResponse
+    ProductionPredictionResponse,
+    ProductionAnalyzeRequest
 )
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
@@ -50,11 +51,6 @@ def get_feature_importance(top_n: int = 10):
     result = load_feature_importance(top_n=top_n)
     return result
 
-
-
-
-
-
 @lru_cache
 def get_model_registry():
     return ModelRegistry()
@@ -70,3 +66,12 @@ def predict_property_price_v2(
 ) -> ProductionPredictionResponse:
     result = service.predict(request)
     return ProductionPredictionResponse(**result)
+
+
+@router.post ("/analyze-property-v2", response_model=AnalyzePropertyResponse)
+def analyze_property_v2(
+    request: ProductionAnalyzeRequest,
+    service: PredictionService = Depends(get_prediction_service)
+):
+    result = service.analyze(request)
+    return result

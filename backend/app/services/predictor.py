@@ -54,3 +54,73 @@ class PredictionService:
             "warnings": warnings,
             "model_metrics": metadata.metrics,
         }
+        
+    def analyze(self, request):
+        """
+        Combines ML predictions with investment analysis logic.
+        """
+        
+        # 1. Run prediciton 
+        prediction_result = self.predict(request)
+        
+        predicted_price = prediction_result["predicted_price"]
+        market_price = request.market_price
+        
+        # 2. Compute price difference
+        price_difference = predicted_price - market_price
+        
+        # 3. ROI estimated (simple version for now)
+        roi_estimate = (price_difference / market_price) * 100 if market_price > 0 else 0
+        
+        # 4. Investment score (simple heuristic)
+        if roi_estimate < 0:
+            investment_score = 10 
+        elif roi_estimate < 5:
+            investment_score = 40
+        elif roi_estimate < 10:
+            investment_score = 65
+        elif roi_estimate < 20:
+            investment_score = 80
+        else:
+            investment_score = 90
+        
+        # 5. Top drivers (placeholder for now)
+        top_drivers = [
+            "Model predicted higher value than market price",
+            "Property size and location contributed positively"
+        ]
+        
+        # 6. Summary
+        if price_difference > 0:
+            summary = "Property appears undervalue based on model prediction."
+        else:
+            summary = "Property may be overpriced based on model prediction."
+            
+        # 7. Explanation factors (basic version)
+        explanation_factors = [
+            {
+                "factor": "predicted_price",
+                "value": predicted_price,
+                "reason": "Derived from trained ML model using property features",
+            },
+            {
+                "factor": "market_price",
+                "value": market_price,
+                "reason": "User-provided listing price",
+            },
+        ]
+        return {
+            "predicted_price": predicted_price,
+            "market_price": market_price,
+            "price_difference": price_difference,
+            "roi_estimate": roi_estimate,
+            "investment_score": investment_score,
+            "top_drivers": top_drivers,
+            "analysis_summary": summary,
+            "global_context": [
+                "Model is trained on NYC residential sales data",
+                "Neighborhood and square footage are key drivers",
+            ],
+            "explanation_factors": explanation_factors,
+            "model_version": prediction_result.get("model_version", "v1"),
+        }

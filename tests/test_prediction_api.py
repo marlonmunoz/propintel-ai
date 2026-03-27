@@ -309,6 +309,31 @@ class MockPredictionServiceGlobal:
                 "Using global residential fallback model for this property type."
             ],
         }
+    def analyze(self, payload):
+        predicted_price = 650980.91
+        market_price = payload.market_price
+    
+        price_difference = predicted_price - market_price
+        roi_estimate = (price_difference / market_price) * 100
+    
+        return {
+            "predicted_price": predicted_price,
+            "market_price": market_price,
+            "price_difference": price_difference,
+            "roi_estimate": roi_estimate,
+            "investment_score": 80,
+            "top_drivers": ["mock driver"],
+            "analysis_summary": "mock summary",
+            "global_context": ["mock context"],
+            "explanation_factors": [
+                {
+                    "factor": "mock",
+                    "value": 1,
+                    "reason": "mock reason"
+                }
+            ],
+            "model_version": "v1",
+        }
         
 def test_predict_price_v2_one_famliy_route():
     app.dependency_overrides[get_prediction_service] = lambda: MockPredictionServiceOneFamily()
@@ -385,3 +410,34 @@ def test_predict_price_v2_validation_error():
     assert response.status_code == 422
     
     app.dependency_overrides.clear()
+    
+    
+def test_analyze_property_v2():
+    app.dependency_overrides[get_prediction_service] = lambda: MockPredictionServiceGlobal()
+    
+    payload = {
+        "borough": "2",
+        "neighborhood": "BATHGATE",
+        "building_class": "01 ONE FAMILY DWELLINGS",
+        "year_built": 1910,
+        "gross_sqft": 1516,
+        "land_sqft": 1173,
+        "latitude": 40.850163,
+        "longitude": -73.895065,
+        "market_price": 550000,
+    }
+    
+    response = client.post("/analyze-property-v2", json=payload)
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "predicted_price" in data
+    assert "roi_estimate" in data
+    assert "investment_score" in data
+    assert isinstance(data["top_drivers"], list)
+    assert isinstance(data["analysis_summary"], str)
+    
+    app.dependency_overrides.clear()    
+    
+    
