@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Dict
 
 class PredictionRequest(BaseModel):
     gross_square_feet: float = Field(..., gt=0)
@@ -90,11 +91,11 @@ class ProductionPredictionRequest(BaseModel):
 class ProductionPredictionResponse(BaseModel):
     predicted_price: float
     model_used: str
-    model_version: str
-    segment: str
-    input_summary: dict[str, str]
-    warnings: list[str]
-    model_metrics: dict[str, float]
+    model_version: Optional[str] = None
+    segment: Optional[str] = None
+    input_summary: Optional[dict[str, str]] = None
+    warnings: list[str] = []
+    model_metrics: Optional[Dict[str, float]] = None
     
     
     
