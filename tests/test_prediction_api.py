@@ -333,6 +333,7 @@ class MockPredictionServiceGlobal:
                 }
             ],
             "model_version": "v1",
+            "llm_explanation": "mock explanation",
         }
         
 def test_predict_price_v2_one_famliy_route():
