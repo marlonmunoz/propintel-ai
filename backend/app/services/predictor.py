@@ -152,9 +152,17 @@ class PredictionService:
                 "investment_score": investment_score,
                 "top_drivers": top_drivers,
             })
+            if not isinstance(llm_explanation, dict):
+                raise ValueError("Invalid LLM explanation format")
         except Exception as e:
             print("LLM ERROR:", str(e))
-            llm_explanation = "AI explanation currently unavailable — analysis based on statistical model only."
+            llm_explanation = {
+                "summary": "AI explanation unavailable",
+                "opportunity": "N/A",
+                "risks": "N/A",
+                "recommendation": "Hold",
+                "confidence": "Low"
+            }
         
         
         return {

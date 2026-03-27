@@ -108,7 +108,7 @@ class ProductionAnalyzeResponse(BaseModel):
     global_context: list[str]
     explanation_factors: list[ExplanationFactor]
     model_version: Optional[str] = None
-    llm_explanation: str
+    llm_explanation: dict
     
 class ProductionAnalyzeRequest(ProductionPredictionRequest):
     market_price: float
