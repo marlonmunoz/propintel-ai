@@ -1,9 +1,14 @@
 import os
 from openai import OpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not api_key:
+        return None
+    
+    return OpenAI(api_key=api_key)
+
 
 def build_prompt(data: dict) -> str:
     return f"""
@@ -25,12 +30,17 @@ Be clear, insightful, and inverstor-focused.
 
 def generate_explanation(data: dict) -> str:
     prompt = build_prompt(data)
+    client = get_openai_client()
     
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=prompt,
-        max_output_tokens=150,
-        temperature=float(os.getenv("LLM_TEMPERATURE", 0.3)),    
-    )
+    try:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+            max_output_tokens=150,
+            temperature=float(os.getenv("LLM_TEMPERATURE", 0.3)),    
+        )
+        return response.output_text 
+    except Exception as e:
+        print(f"LLM ERROR: {e}")
+        return "AI explanation currently unavailable — analysis based on statistical model only."
     
-    return response.output_text 
