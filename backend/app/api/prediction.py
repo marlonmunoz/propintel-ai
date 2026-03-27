@@ -10,7 +10,8 @@ from backend.app.schemas.prediction import (
     FeatureImportanceResponse,
     ProductionPredictionRequest,
     ProductionPredictionResponse,
-    ProductionAnalyzeRequest
+    ProductionAnalyzeRequest,
+    ProductionAnalyzeResponse,
 )
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
@@ -68,7 +69,7 @@ def predict_property_price_v2(
     return ProductionPredictionResponse(**result)
 
 
-@router.post ("/analyze-property-v2", response_model=AnalyzePropertyResponse)
+@router.post ("/analyze-property-v2", response_model=ProductionAnalyzeResponse)
 def analyze_property_v2(
     request: ProductionAnalyzeRequest,
     service: PredictionService = Depends(get_prediction_service)

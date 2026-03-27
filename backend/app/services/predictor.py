@@ -1,8 +1,13 @@
 import math
 import pandas as pd 
 
+import os 
+from dotenv import load_dotenv
+from backend.app.services.explainer import generate_explanation
 from backend.app.schemas.prediction import ProductionPredictionRequest
 from backend.app.services.model_registry import ModelRegistry
+
+load_dotenv()
 
 def format_feature_name(feature: str) -> str:
     """Convert raw model feauture names into human-readable explanations."""
@@ -138,6 +143,20 @@ class PredictionService:
                 "reason": "User-provided listing price",
             },
         ]
+        
+        try:
+            llm_explanation = generate_explanation({
+                "predicted_price": predicted_price,
+                "market_price": market_price,
+                "roi_estimate": roi_estimate,
+                "investment_score": investment_score,
+                "top_drivers": top_drivers,
+            })
+        except Exception as e:
+            print("LLM ERROR:", str(e))
+            llm_explanation = "AI explanation currently unavailable — analysis based on statistical model only."
+        
+        
         return {
             "predicted_price": predicted_price,
             "market_price": market_price,
@@ -152,4 +171,5 @@ class PredictionService:
             ],
             "explanation_factors": explanation_factors,
             "model_version": prediction_result.get("model_version", "v1"),
+            "llm_explanation": llm_explanation,
         }

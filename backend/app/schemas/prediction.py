@@ -96,7 +96,19 @@ class ProductionPredictionResponse(BaseModel):
     input_summary: Optional[dict[str, str]] = None
     warnings: list[str] = []
     model_metrics: Optional[Dict[str, float]] = None
-    
+
+class ProductionAnalyzeResponse(BaseModel):
+    predicted_price: float
+    market_price: float
+    price_difference: float
+    roi_estimate: float
+    investment_score: int
+    top_drivers: list[str]
+    analysis_summary: str
+    global_context: list[str]
+    explanation_factors: list[ExplanationFactor]
+    model_version: Optional[str] = None
+    llm_explanation: str
     
 class ProductionAnalyzeRequest(ProductionPredictionRequest):
     market_price: float
