@@ -333,7 +333,13 @@ class MockPredictionServiceGlobal:
                 }
             ],
             "model_version": "v1",
-            "llm_explanation": "mock explanation",
+            "llm_explanation": {
+                "summary": "mock summary",
+                "opportunity": "mock opportunity",
+                "risk": "mock risk",
+                "recommendation": "Hold",
+                "confidence": "Medium"
+            }
         }
         
 def test_predict_price_v2_one_famliy_route():
