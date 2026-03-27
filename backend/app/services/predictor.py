@@ -4,6 +4,19 @@ import pandas as pd
 from backend.app.schemas.prediction import ProductionPredictionRequest
 from backend.app.services.model_registry import ModelRegistry
 
+def format_feature_name(feature: str) -> str:
+    """Convert raw model feauture names into human-readable explanations."""
+    if "bldgarea" in feature:
+        return "Building size significantly impacts property value"
+    
+    if "neighborhood" in feature:
+        return "Neighborhood demand strongly influences pricing"
+    
+    if "borough" in feature:
+        return "Location (borough) plays a key role in valuation"
+    
+    if "building_class" in feature:
+        return f"Model identified {feature} as influential"
 
 class PredictionService:
     def __init__(self, registry: ModelRegistry) -> None:
@@ -55,6 +68,10 @@ class PredictionService:
             "model_metrics": metadata.metrics,
         }
         
+        
+        
+        
+        
     def analyze(self, request):
         """
         Combines ML predictions with investment analysis logic.
@@ -65,6 +82,8 @@ class PredictionService:
         
         predicted_price = prediction_result["predicted_price"]
         market_price = request.market_price
+        
+        from ml.inference.predict import load_feature_importance
         
         # 2. Compute price difference
         price_difference = predicted_price - market_price
@@ -84,17 +103,27 @@ class PredictionService:
         else:
             investment_score = 90
         
-        # 5. Top drivers (placeholder for now)
-        top_drivers = [
-            "Model predicted higher value than market price",
-            "Property size and location contributed positively"
+        # 5. Top drivers 
+        feature_data = load_feature_importance(top_n=3)
+        
+        raw_drivers = [
+            format_feature_name(item["feature"])
+            for item in feature_data["items"]
         ]
+        
+        seen = set()
+        top_drivers = []
+        
+        for driver in raw_drivers:
+            if driver not in seen:
+                seen.add(driver)
+                top_drivers.append(driver)
         
         # 6. Summary
         if price_difference > 0:
-            summary = "Property appears undervalue based on model prediction."
+            summary = f"Property appears undervalued by approximately ${price_difference:,.0f} based on model analysis."
         else:
-            summary = "Property may be overpriced based on model prediction."
+            summary = f"Property may be overpriced by approximately ${abs(price_difference):,.0f} based on model analysis."
             
         # 7. Explanation factors (basic version)
         explanation_factors = [
