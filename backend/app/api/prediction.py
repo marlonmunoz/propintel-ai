@@ -1,3 +1,4 @@
+from functools import lru_cache
 from fastapi import APIRouter, Depends
 from backend.app.schemas.prediction import (
     PredictionRequest, 
@@ -49,8 +50,17 @@ def get_feature_importance(top_n: int = 10):
     result = load_feature_importance(top_n=top_n)
     return result
 
+
+
+
+
+
+@lru_cache
+def get_model_registry():
+    return ModelRegistry()
+
 def get_prediction_service() -> PredictionService:
-    registry = ModelRegistry()
+    registry = get_model_registry()
     return PredictionService(registry)
 
 @router.post("/predict-price-v2", response_model=ProductionPredictionResponse)

@@ -368,6 +368,7 @@ def test_predict_price_v2_global_fallback_route():
     
 
 def test_predict_price_v2_validation_error():
+    app.dependency_overrides[get_prediction_service] = lambda: MockPredictionServiceGlobal()
     payload = {
         "borough": "2",
         "neighborhood": "BATHGATE",
@@ -382,3 +383,5 @@ def test_predict_price_v2_validation_error():
     response = client.post("/predict-price-v2", json=payload)
     
     assert response.status_code == 422
+    
+    app.dependency_overrides.clear()
