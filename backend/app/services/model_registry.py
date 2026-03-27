@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from pathlib import Path
+import json
 import joblib
 
 @dataclass
@@ -8,51 +10,32 @@ class RegisteredModel:
     segment: str
     artifact_path: str
     feature_columns: list[str]
+    metrics: dict
     
-GLOBAL_FEATURES = [
-    "gross_sqft",
-    "land_sqft",
-    "year_built",
-    "property_age",
-    "latitude",
-    "longitude",
-    "borough",
-    "building_class",
-    "neighborhood",
-]
-
-ONE_FAMILY_FEATURES = [
-    "gross_sqft",
-    "land_sqft",
-    "year_built",
-    "property_age",
-    "latitude",
-    "longitude",
-    "borough",
-    "building_class",
-    "neighborhood",
-]
 
 class ModelRegistry:
     def __init__(self) -> None:
+        self.metadata_dir = Path("ml/artifacts/metadata")
         self._models = {
-            "global": RegisteredModel(
-                name="global",
-                version="v1",
-                segment="all_residential",
-                artifact_path="ml/artifacts/price_model.pkl",
-                feature_columns=GLOBAL_FEATURES,
-            ),
-            "one_family": RegisteredModel(
-                name="one_family",
-                version="v1",
-                segment="one_family",
-                artifact_path="ml/artifacts/subtype_models/one_family_price_model.pkl",
-                feature_columns=ONE_FAMILY_FEATURES,
-            ),
+            "global": self._load_metadata("global_model.json"),
+            "one_family": self._load_metadata("one_family_model.json"),
         }
         self._loaded_models = {}
+    
+    def _load_metadata(self, filename: str) -> RegisteredModel:
+        metadata_path = self.metadata_dir / filename
         
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        return RegisteredModel(
+            name=data["name"],
+            version=data["version"],
+            segment=data["segment"],
+            artifact_path=data["artifact_path"],
+            feature_columns=data["feature_columns"],
+            metrics=data["metrics"],
+        )
         
     def get_model_key(self, building_class: str) -> str:
         if building_class.strip() == "01 ONE FAMILY DWELLINGS":

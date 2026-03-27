@@ -52,4 +52,5 @@ class PredictionService:
                 "building_class": row["building_class"],
             },
             "warnings": warnings,
+            "model_metrics": metadata.metrics,
         }

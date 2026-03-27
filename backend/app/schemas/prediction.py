@@ -94,6 +94,7 @@ class ProductionPredictionResponse(BaseModel):
     segment: str
     input_summary: dict[str, str]
     warnings: list[str]
+    model_metrics: dict[str, float]
     
     
     
