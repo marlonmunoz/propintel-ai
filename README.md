@@ -89,6 +89,52 @@ Current milestone:
 - Automated tests updated to validate the new grouped response contract
 
 ---
+## ✅ Primary API Contract (v2)
+
+PropIntel currently supports multiple API generations for prediction and analysis, but the **official product-facing contract is now the v2 API layer**.
+
+### Recommended endpoints
+These are the endpoints intended for:
+- frontend integration
+- product demos
+- ongoing feature expansion
+- future response-contract stability
+
+```text
+POST /predict-price-v2
+POST /analyze-property-v2
+```
+
+### Legacy compatibility endpoints
+The following routes remain available for backward compatibility and testing of older request/response contracts:
+
+```text
+POST /predict-price
+POST /analyze-property
+POST /predict
+POST /analyze
+```
+
+### Contract direction
+Going forward:
+- new frontend work should integrate with **v2 only**
+- new product features should be added to **v2 first**
+- legacy routes are maintained as compatibility routes, not the primary contract
+
+### Why v2 is the primary contract
+The v2 API improves the platform by providing:
+- a cleaner standardized request schema
+- production-style response models
+- grouped analysis sections:
+  - `valuation`
+  - `investment_analysis`
+  - `drivers`
+  - `explanation`
+  - `metadata`
+- better frontend-readiness
+- clearer long-term API evolution
+
+---
 
 ## Key Features
 
@@ -232,21 +278,16 @@ A typical PropIntel AI workflow:
 5. XGBoost is used to train the residential pricing model.
 6. Feature importances are generated and saved as a reusable explainability artifact.
 7. The trained model is serialized to `ml/artifacts/price_model.pkl`.
-8. A client can call either:
-   - internal ML endpoints (`/predict-price`, `/analyze-property`)
-   - public simplified endpoints (`/predict`, `/analyze`)
-   - production-style v2 endpoints (`/predict-price-v2`, `/analyze-property-v2`)
-9. The API loads the cached model artifact and returns either:
-   - a valuation response, or
-   - a structured investment analysis response
-10. Investment analysis responses combine:
-   - predicted price
-   - valuation gap
-   - ROI estimate
-   - deterministic investment score
-   - deterministic `deal_label`
-   - human-readable top drivers
-   - LLM-generated investment narrative
+8. A client can interact with the API through multiple route generations:
+   - legacy internal ML endpoints (`/predict-price`, `/analyze-property`)
+   - legacy public simplified endpoints (`/predict`, `/analyze`)
+   - **primary production-style v2 endpoints** (`/predict-price-v2`, `/analyze-property-v2`)
+9. For current product integration, the recommended path is:
+   - `POST /predict-price-v2` for valuation
+   - `POST /analyze-property-v2` for structured investment analysis
+10. The API returns either:
+   - a production valuation response with model metadata, warnings, and metrics, or
+   - a grouped investment analysis response with valuation, scoring, drivers, explanation, and metadata
 
 ---
 
@@ -835,20 +876,6 @@ All dependencies (backend + ML) are consolidated in the root:
 requirements.txt
 ```
 
-<!-- ```
-fastapi
-uvicorn
-sqlalchemy
-python-dotenv
-psycopg[binary]
-
-pandas
-numpy
-scikit-learn
-xgboost
-joblib
-``` -->
-
 ---
 
 ## 📂 ML Module Structure
@@ -1054,87 +1081,69 @@ Benefits:
 ---
 ## 🌐 ML Prediction APIs
 
-PropIntel AI now exposes both internal and public-facing ML endpoints.
+PropIntel exposes multiple generations of ML endpoints.
 
-### Internal endpoints
-These use the full engineered model contract:
+### Primary production contract (recommended)
+These are the official endpoints for current integration and future frontend work:
 
-```
-POST /predict-price  
-POST /analyze-property   
-```
-
-### Public endpoints
-These expose a simpler product-facing request contract:
-
-```
-POST /predict
-POST /analyze
+```text
+POST /predict-price-v2
+POST /analyze-property-v2
 ```
 
-### Example public prediction request
+`POST /predict-price-v2`
+
+Returns a production-style valuation response including:
+- predicted_price
+- model_used
+- model_version
+- segment
+- input_summary
+- warnings
+- model_metrics
+
+_Example response:_
 ```json
 {
- "gross_square_feet": 1497,
-  "land_square_feet": 1668,
-  "residential_units": 1,
-  "commercial_units": 0,
-  "total_units": 1,
-  "numfloors": 2,
-  "latitude": 40.8538937,
-  "longitude": -73.8962879,
-  "year_built": 1899,
-  "borough": 2,
-  "building_class_category": "01 ONE FAMILY DWELLINGS",
-  "neighborhood": "BATHGATE",
-  "zip_code": 10457
+  "predicted_price": 1150013.46,
+  "model_used": "global",
+  "model_version": "v1",
+  "segment": "all_residential",
+  "input_summary": {
+    "borough": "Brooklyn",
+    "neighborhood": "Park Slope",
+    "building_class": "02 TWO FAMILY DWELLINGS"
+  },
+  "warnings": [
+    "Using global residential fallback model for this property type."
+  ],
+  "model_metrics": {
+    "mae": 350456.25,
+    "rmse": 841711.44,
+    "r2": 0.6096
+  }
 }
 ```
 
-### Example public prediction response
-```json
-{
-  "predicted_price": 611081.6875,
-  "model_version": "xgboost_residential_nyc_v1"
-}
-```
+`POST /analyze-property-v2`
 
-### Example public analysis request
-```json
-{
-  "gross_square_feet": 1497,
-  "land_square_feet": 1668,
-  "residential_units": 1,
-  "commercial_units": 0,
-  "total_units": 1,
-  "numfloors": 2,
-  "latitude": 40.8538937,
-  "longitude": -73.8962879,
-  "year_built": 1899,
-  "borough": 2,
-  "building_class_category": "01 ONE FAMILY DWELLINGS",
-  "neighborhood": "BATHGATE",
-  "zip_code": 10457,
-  "market_price": 550000
-}
-```
+Returns a grouped production-style investment analysis response:
 
-### Example public analysis response
 ```json
 {
   "valuation": {
-    "predicted_price": 659430.07,
-    "market_price": 650000.0,
-    "price_difference": 9430.07,
-    "price_difference_pct": 1.45
+    "predicted_price": 1150013.46,
+    "market_price": 1250000.0,
+    "price_difference": -99986.54,
+    "price_difference_pct": -8.0
   },
   "investment_analysis": {
-    "roi_estimate": 1.45,
-    "investment_score": 48,
-    "deal_label": "Hold",
-    "recommendation": "Hold",
-    "confidence": "Medium",
-    "analysis_summary": "Property appears undervalued by approximately $9,430 based on model analysis."
+    "roi_estimate": -8.0,
+    "investment_score": 28,
+    "deal_label": "Avoid",
+    "recommendation": "Avoid",
+    "confidence": "High",
+    "analysis_summary": "Property may be overpriced by approximately $99,987 based on model analysis."
   },
   "drivers": {
     "top_drivers": [
@@ -1148,37 +1157,52 @@ POST /analyze
     "explanation_factors": [
       {
         "factor": "predicted_price",
-        "value": 659430.07,
+        "value": 1150013.46,
         "reason": "Derived from trained ML model using property features"
       },
       {
         "factor": "market_price",
-        "value": 650000.0,
+        "value": 1250000.0,
         "reason": "User-provided listing price"
       }
     ]
   },
   "explanation": {
-    "summary": "This property presents a mixed investment profile: the predicted value is only modestly above the market price, and the ROI suggests limited near-term upside.",
-    "opportunity": "The main upside comes from the small valuation edge implied by the model.",
-    "risks": "The spread is narrow, leaving limited margin after transaction and carrying costs.",
-    "recommendation": "Hold",
-    "confidence": "Medium"
+    "summary": "This property screens as a weak, speculative investment because the estimated value is below the current market price.",
+    "opportunity": "Potential upside would require improved entry pricing or stronger-than-expected local demand.",
+    "risks": "The asking price currently exceeds the model-derived valuation, which weakens downside protection.",
+    "recommendation": "Avoid",
+    "confidence": "High"
   },
   "metadata": {
     "model_version": "v1"
   }
 }
 ```
+### Legacy compatibility endpoints
+
+These routes remain available for backward compatibility and testing of older request/response contracts:
+
+- `POST /predict-price`
+- `POST /analyze-property`
+- `POST /predict`
+- `POST /analyze`
+
+### Legacy route notes
+
+- `/predict-price` and `/analyze-property` use the older internal engineered-style payload.
+- `/predict` and `/analyze` use a simplified public payload.
+- Legacy analysis routes return the older flat analysis response shape.
+- New frontend work should target **v2**, not the legacy routes.
 
 ### Notes
-- The current model is trained only on residential NYC sales for the MVP scope.
-- Predictions are generated from engineered features derived from the NYC Rolling Sales and PLUTO datasets.
-- The latest XGBoost model artifact is implemented in the ML pipeline, and full production wiring into all API routes is still being finalized.
 
-> **Note:** endpoint structure exists, but the latest XGBoost model wiring and final request/response contract are still being aligned with the current ML pipeline.
+- The current model is trained on residential NYC sales for MVP scope.
+- Predictions are generated from engineered features derived from NYC Rolling Sales and PLUTO datasets.
+- The v2 contract is the recommended integration path for current and future product work.
 
 ---
+
 ### 🧠 Explainable AI Responses
 
 The analysis layer was enhanced to return structured explanation fields, transforming raw predictions into actionable investment intelligence.
@@ -1365,12 +1389,6 @@ Example response shape:
 This analysis layer is now implemented and represents a major step forward from raw valuation into structured investment decision support.
 
 ---
-
-## ✅ Current Progress
-
-
----
-
 
 ## ✅ Current Progress
 
