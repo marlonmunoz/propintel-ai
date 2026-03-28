@@ -17,12 +17,17 @@ def load_model():
     return MODEL
 
 def map_public_payload_to_model_features(payload: dict) -> dict:
-    year_built = payload["year_built"]
-    building_age = max(0, pd.Timestamp.now().year - year_built)
+    """
+    Maps older/public API payload shapes into the current model feature contract.
+    The trained model expects:
+    land_sqft, gross_sqft, building_class, property_age, year_built, etc.
+    """
+    year_built = int(payload["year_built"])
+    property_age = max(0, pd.Timestamp.now().year - year_built)
 
     return {
-        "gross_square_feet": payload["gross_square_feet"],
-        "land_square_feet": payload["land_square_feet"],
+        "gross_sqft": payload["gross_square_feet"],
+        "land_sqft": payload["land_square_feet"],
         "residential_units": payload["residential_units"],
         "commercial_units": payload.get("commercial_units", 0),
         "total_units": payload["total_units"],
@@ -33,10 +38,10 @@ def map_public_payload_to_model_features(payload: dict) -> dict:
         "bldgarea": payload["gross_square_feet"],
         "latitude": payload["latitude"],
         "longitude": payload["longitude"],
-        "pluto_year_built": year_built,
-        "building_age": building_age,
+        "year_built": year_built,
+        "property_age": property_age,
         "borough": payload["borough"],
-        "building_class_category": payload["building_class_category"],
+        "building_class": payload["building_class_category"],
         "neighborhood": payload["neighborhood"],
         "zip_code": payload["zip_code"],
     }
@@ -46,9 +51,42 @@ def map_public_payload_to_model_features(payload: dict) -> dict:
 def predict_price(payload: dict) -> dict:
     model = load_model()
 
+    normalized_payload = payload.copy()
+
+    # Support both legacy/internal payloads and the current model contract.
+    if "gross_sqft" not in normalized_payload and "gross_square_feet" in normalized_payload:
+        normalized_payload["gross_sqft"] = normalized_payload["gross_square_feet"]
+
+    if "land_sqft" not in normalized_payload and "land_square_feet" in normalized_payload:
+        normalized_payload["land_sqft"] = normalized_payload["land_square_feet"]
+
+    if "building_class" not in normalized_payload and "building_class_category" in normalized_payload:
+        normalized_payload["building_class"] = normalized_payload["building_class_category"]
+
+    if "year_built" not in normalized_payload and "pluto_year_built" in normalized_payload:
+        normalized_payload["year_built"] = normalized_payload["pluto_year_built"]
+
+    if "property_age" not in normalized_payload:
+        year_built = normalized_payload.get("year_built")
+        if year_built is not None:
+            normalized_payload["property_age"] = max(0, pd.Timestamp.now().year - int(year_built))
+
+    # Keep backward-compatible engineered fields if other helper functions use them.
+    if "bldgarea" not in normalized_payload and "gross_sqft" in normalized_payload:
+        normalized_payload["bldgarea"] = normalized_payload["gross_sqft"]
+
+    if "lotarea" not in normalized_payload and "land_sqft" in normalized_payload:
+        normalized_payload["lotarea"] = normalized_payload["land_sqft"]
+
+    if "unitsres" not in normalized_payload and "residential_units" in normalized_payload:
+        normalized_payload["unitsres"] = normalized_payload["residential_units"]
+
+    if "unitstotal" not in normalized_payload and "total_units" in normalized_payload:
+        normalized_payload["unitstotal"] = normalized_payload["total_units"]
+
     feature_order = [
-        "gross_square_feet",
-        "land_square_feet",
+        "gross_sqft",
+        "land_sqft",
         "residential_units",
         "commercial_units",
         "total_units",
@@ -59,16 +97,16 @@ def predict_price(payload: dict) -> dict:
         "bldgarea",
         "latitude",
         "longitude",
-        "pluto_year_built",
-        "building_age",
+        "year_built",
+        "property_age",
         "borough",
-        "building_class_category",
+        "building_class",
         "neighborhood",
         "zip_code",
     ]
 
     input_df = pd.DataFrame(
-        [[payload[col] for col in feature_order]],
+        [[normalized_payload[col] for col in feature_order]],
         columns=feature_order
     )
 
@@ -132,31 +170,37 @@ def analyze_property_public(payload: dict) -> dict:
     
     return analyze_property(mapped_payload) 
 
+
 def generate_top_drivers(payload: dict, roi_estimate: float) -> list[str]:
     drivers = []
-    
+
     if payload.get("bldgarea", 0) > 1500:
         drivers.append("Large building area")
-    
-    if payload.get("gross_square_feet", 0) >= 1400:
-        drivers.append("above-average gross square footage")
-        
-    building_class = str(payload.get("building_class_category", "")).upper()
+
+    if payload.get("gross_sqft", payload.get("gross_square_feet", 0)) >= 1400:
+        drivers.append("Above-average gross square footage")
+
+    building_class = str(
+        payload.get("building_class", payload.get("building_class_category", ""))
+    ).upper()
+
     if "ONE FAMILY" in building_class:
-        drivers.append("favorable one-family residential class")
+        drivers.append("Favorable one-family residential class")
     elif "TWO FAMILY" in building_class:
-        drivers.append("two-family income potential")
+        drivers.append("Two-family income potential")
     elif "RENTALS" in building_class:
-        drivers.append("rental building profile")
-        
+        drivers.append("Rental building profile")
+
     neighborhood = str(payload.get("neighborhood", "")).upper()
     if neighborhood:
-        drivers.append(f"neighborhood signal: {neighborhood}")
-        
+        drivers.append(f"Neighborhood signal: {neighborhood}")
+
     if roi_estimate > 10:
-        drivers.append("strong model upside versus market price")
+        drivers.append("Strong model upside versus market price")
     elif roi_estimate > 0:
-        drivers.append("positive valuation spread")
+        drivers.append("Positive valuation spread")
+
+    return drivers
         
 
 def generate_analysis_summary(
@@ -178,7 +222,7 @@ def generate_analysis_summary(
     
     return (
         f"The property {outlook}. "
-        f"The model estimate is ${predicted_price:,.0f} versus a market proce of ${market_price:,.0f}. "
+        f"The model estimate is ${predicted_price:,.0f} versus a market price of ${market_price:,.0f}. "
         f"Key drivers include: {driver_text}."
     )
     
