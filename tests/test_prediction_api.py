@@ -317,29 +317,40 @@ class MockPredictionServiceGlobal:
         roi_estimate = (price_difference / market_price) * 100
     
         return {
-            "predicted_price": predicted_price,
-            "market_price": market_price,
-            "price_difference": price_difference,
-            "roi_estimate": roi_estimate,
-            "investment_score": 80,
-            "top_drivers": ["mock driver"],
-            "analysis_summary": "mock summary",
-            "global_context": ["mock context"],
-            "explanation_factors": [
-                {
-                    "factor": "mock",
-                    "value": 1,
-                    "reason": "mock reason"
-                }
-            ],
-            "model_version": "v1",
-            "llm_explanation": {
+            "valuation": {
+                "predicted_price": 650980.91,
+                "market_price": 550000.0,
+                "price_difference": 100980.91000000003,
+                "price_difference_pct": 18.36016545454546,
+            },
+            "investment_analysis": {
+                "roi_estimate": 18.36016545454546,
+                "investment_score": 80,
+                "recommendation": "Hold",
+                "confidence": "Medium",
+                "analysis_summary": "mock summary",
+            },
+            "drivers": {
+                "top_drivers": ["mock driver"],
+                "global_context": ["mock context"],
+                "explanation_factors": [
+                    {
+                        "factor": "mock",
+                        "value": 1,
+                        "reason": "mock reason",
+                    }
+                ],
+            },
+            "explanation": {
                 "summary": "mock summary",
                 "opportunity": "mock opportunity",
-                "risk": "mock risk",
+                "risks": "mock risk",
                 "recommendation": "Hold",
-                "confidence": "Medium"
-            }
+                "confidence": "Medium",
+            },
+            "metadata": {
+                "model_version": "v1",
+            },
         }
         
 def test_predict_price_v2_one_famliy_route():
@@ -438,12 +449,35 @@ def test_analyze_property_v2():
     
     assert response.status_code == 200
     data = response.json()
-    
-    assert "predicted_price" in data
-    assert "roi_estimate" in data
-    assert "investment_score" in data
-    assert isinstance(data["top_drivers"], list)
-    assert isinstance(data["analysis_summary"], str)
+
+    assert "valuation" in data
+    assert "investment_analysis" in data
+    assert "drivers" in data
+    assert "explanation" in data
+    assert "metadata" in data
+
+    assert data["valuation"]["predicted_price"] == 650980.91
+    assert data["valuation"]["market_price"] == 550000.0
+    assert "price_difference" in data["valuation"]
+    assert "price_difference_pct" in data["valuation"]
+
+    assert "roi_estimate" in data["investment_analysis"]
+    assert "investment_score" in data["investment_analysis"]
+    assert "recommendation" in data["investment_analysis"]
+    assert "confidence" in data["investment_analysis"]
+    assert isinstance(data["investment_analysis"]["analysis_summary"], str)
+
+    assert isinstance(data["drivers"]["top_drivers"], list)
+    assert isinstance(data["drivers"]["global_context"], list)
+    assert isinstance(data["drivers"]["explanation_factors"], list)
+
+    assert "summary" in data["explanation"]
+    assert "opportunity" in data["explanation"]
+    assert "risks" in data["explanation"]
+    assert "recommendation" in data["explanation"]
+    assert "confidence" in data["explanation"]
+
+    assert data["metadata"]["model_version"] == "v1"
     
     app.dependency_overrides.clear()    
     
