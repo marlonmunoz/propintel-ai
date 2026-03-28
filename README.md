@@ -1,6 +1,7 @@
 # PropIntel AI
 
-PropIntel AI is an end-to-end AI engineering system for real estate investment analysis, combining data pipelines, machine learning models, and scalable backend APIs.
+PropIntel AI is an end-to-end AI engineering platform for real estate investment analysis, combining data pipelines, machine learning models, and scalable backend APIs to deliver property valuation, investment scoring, and explainable decision support.
+
 ### Core Stack:
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
@@ -8,14 +9,11 @@ PropIntel AI is an end-to-end AI engineering system for real estate investment a
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E)
 
-### Data/ AI Stack:
+### Data / AI Stack:
 ![Data Engineering](https://img.shields.io/badge/Data-Engineering-darkblue)
 ![Machine Learning](https://img.shields.io/badge/Machine-Learning-orange)
 ![XGBoost](https://img.shields.io/badge/XGBoost-Model-red)
 ![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
-
-
-AI-powered real estate investment analysis platform built with data pipelines, machine learning models, FastAPI backend services, and PostgreSQL infrastructure.
 
 ---
 ## Tech Highlights
@@ -32,6 +30,11 @@ AI-powered real estate investment analysis platform built with data pipelines, m
 - Global explainability API endpoint (`GET /model/feature-importance`)
 - Public and internal prediction/analysis API contracts
 - In-memory model caching for faster predictions
+- Structured production analysis response schema
+- Deterministic investment scoring with ROI + valuation gap + risk logic
+- Deterministic `deal_label` classification (`Buy`, `Hold`, `Avoid`)
+- LLM-generated investment narrative with structured JSON output
+- Human-readable top driver formatting for cleaner API responses
 
 ---
 ## 🆕 Recent Milestone
@@ -69,9 +72,21 @@ Current milestone:
 - Public simplified endpoints implemented:
   - `POST /predict`
   - `POST /analyze`
+- Production-oriented v2 endpoints implemented:
+  - `POST /predict-price-v2`
+  - `POST /analyze-property-v2`
+- Analysis responses upgraded to grouped schema sections:
+  - `valuation`
+  - `investment_analysis`
+  - `drivers`
+  - `explanation`
+  - `metadata`
+- Deterministic `deal_label` added to analysis responses
+- LLM explanation layer stabilized with structured JSON output
 - Property CRUD expanded to include:
   - `GET /properties/{property_id}`
 - Model artifact generated for inference (`ml/artifacts/price_model.pkl`)
+- Automated tests updated to validate the new grouped response contract
 
 ---
 
@@ -84,7 +99,11 @@ Current milestone:
 - Feature engineering for market analysis
 - ML inference endpoints for investment scoring
 - Model serialization for inference-ready deployment
-- Planned investment-analysis API outputs
+- Structured investment analysis responses
+- Deterministic investment scoring using ROI, valuation gap, and risk penalty
+- Deterministic `deal_label` output (`Buy`, `Hold`, `Avoid`)
+- LLM-generated investment explanation layer
+- Human-readable explainability drivers for cleaner product-facing responses
 
 PropIntel AI is designed as a production-minded AI engineering system for real estate analysis. The platform combines backend APIs, database integration, data pipelines, and machine learning workflows to evaluate property investment opportunities and generate data-driven insights.
 
@@ -206,8 +225,6 @@ These datasets allow the model to learn real NYC market behavior.
 
 A typical PropIntel AI workflow:
 
-A typical PropIntel AI workflow:
-
 1. NYC Rolling Sales files are ingested from all 5 boroughs.
 2. The PLUTO dataset is loaded and joined using **BBL** as the property key.
 3. The merged dataset is transformed through the feature engineering pipeline.
@@ -218,8 +235,18 @@ A typical PropIntel AI workflow:
 8. A client can call either:
    - internal ML endpoints (`/predict-price`, `/analyze-property`)
    - public simplified endpoints (`/predict`, `/analyze`)
-9. The API loads the cached model artifact and returns a valuation or analysis response.
-10. Analysis responses can include structured explanation fields grounded in both local property signals and global model importance.
+   - production-style v2 endpoints (`/predict-price-v2`, `/analyze-property-v2`)
+9. The API loads the cached model artifact and returns either:
+   - a valuation response, or
+   - a structured investment analysis response
+10. Investment analysis responses combine:
+   - predicted price
+   - valuation gap
+   - ROI estimate
+   - deterministic investment score
+   - deterministic `deal_label`
+   - human-readable top drivers
+   - LLM-generated investment narrative
 
 ---
 
@@ -1095,12 +1122,52 @@ POST /analyze
 ### Example public analysis response
 ```json
 {
-  "predicted_price": 611081.6875,
-  "market_price": 550000.0,
-  "price_difference": 61081.6875,
-  "roi_estimate": 11.105761363636365,
-  "investment_score": 77.7644034090909,
-  "model_version": "xgboost_residential_nyc_v1"
+  "valuation": {
+    "predicted_price": 659430.07,
+    "market_price": 650000.0,
+    "price_difference": 9430.07,
+    "price_difference_pct": 1.45
+  },
+  "investment_analysis": {
+    "roi_estimate": 1.45,
+    "investment_score": 48,
+    "deal_label": "Hold",
+    "recommendation": "Hold",
+    "confidence": "Medium",
+    "analysis_summary": "Property appears undervalued by approximately $9,430 based on model analysis."
+  },
+  "drivers": {
+    "top_drivers": [
+      "Location (borough) plays a key role in valuation",
+      "Building class is an important driver of estimated value"
+    ],
+    "global_context": [
+      "Model is trained on NYC residential sales data",
+      "Location, size, and building characteristics influence estimated value"
+    ],
+    "explanation_factors": [
+      {
+        "factor": "predicted_price",
+        "value": 659430.07,
+        "reason": "Derived from trained ML model using property features"
+      },
+      {
+        "factor": "market_price",
+        "value": 650000.0,
+        "reason": "User-provided listing price"
+      }
+    ]
+  },
+  "explanation": {
+    "summary": "This property presents a mixed investment profile: the predicted value is only modestly above the market price, and the ROI suggests limited near-term upside.",
+    "opportunity": "The main upside comes from the small valuation edge implied by the model.",
+    "risks": "The spread is narrow, leaving limited margin after transaction and carrying costs.",
+    "recommendation": "Hold",
+    "confidence": "Medium"
+  },
+  "metadata": {
+    "model_version": "v1"
+  }
 }
 ```
 
@@ -1114,18 +1181,40 @@ POST /analyze
 ---
 ### 🧠 Explainable AI Responses
 
-The analysis endpoints were enhanced to return structured explanation fields, transforming raw predictions into actionable insights.
+The analysis layer was enhanced to return structured explanation fields, transforming raw predictions into actionable investment intelligence.
 
-Each response can include:
+Current analysis responses can include:
 
-- `price_difference` — model value vs market price
-- `roi_estimate` — potential return on investment
-- `investment_score` — normalized deal quality score
-- `explanation` object:
-  - top contributing features (from model importance)
-  - reasoning summary for the prediction
+- `valuation`
+  - `predicted_price`
+  - `market_price`
+  - `price_difference`
+  - `price_difference_pct`
+- `investment_analysis`
+  - `roi_estimate`
+  - `investment_score`
+  - `deal_label`
+  - `recommendation`
+  - `confidence`
+  - `analysis_summary`
+- `drivers`
+  - `top_drivers`
+  - `global_context`
+  - `explanation_factors`
+- `explanation`
+  - `summary`
+  - `opportunity`
+  - `risks`
+  - `recommendation`
+  - `confidence`
+- `metadata`
+  - `model_version`
 
-This allows PropIntel to move beyond prediction into decision-support intelligence.
+This allows PropIntel to move beyond prediction into decision-support intelligence by separating:
+
+- deterministic backend decision logic
+- structured explainability fields
+- LLM-generated narrative explanation
 
 ---
 ## 🧾 Prediction Request Schema
@@ -1227,24 +1316,61 @@ These features feed the PropIntel AI valuation model.
 
 ---
 
-## 📈 Planned AI Output
 
-A future prediction endpoint will expose investment-analysis outputs through the API:
+## 📈 Investment Analysis Output
+
+PropIntel now exposes structured investment-analysis responses through the API.
+
+Production-style endpoint:
 ```
-POST /analyze-property
+POST /analyze-property-v2
 ```
 
-Example response:
+Example response shape:
 
 ```json
 {
-  "predicted_price": 812000,
-  "investment_score": 84,
-  "roi_estimate": 10.7
+  "valuation": {
+    "predicted_price": 1038740.45,
+    "market_price": 725000.0,
+    "price_difference": 313740.45,
+    "price_difference_pct": 43.27
+  },
+  "investment_analysis": {
+    "roi_estimate": 43.27,
+    "investment_score": 87,
+    "deal_label": "Buy",
+    "recommendation": "Buy",
+    "confidence": "High",
+    "analysis_summary": "Property appears undervalued by approximately $313,740 based on model analysis."
+  },
+  "drivers": {
+    "top_drivers": [
+      "Location (borough) plays a key role in valuation",
+      "Building class is an important driver of estimated value"
+    ]
+  },
+  "explanation": {
+    "summary": "This property screens as an excellent investment opportunity...",
+    "opportunity": "The main upside comes from the significant valuation gap...",
+    "risks": "Returns depend on the model's assumptions being accurate...",
+    "recommendation": "Buy",
+    "confidence": "High"
+  },
+  "metadata": {
+    "model_version": "v1"
+  }
 }
 ```
-This endpoint is part of the planned PropIntel investment analysis layer and is not yet fully implemented.
+This analysis layer is now implemented and represents a major step forward from raw valuation into structured investment decision support.
+
 ---
+
+## ✅ Current Progress
+
+
+---
+
 
 ## ✅ Current Progress
 
@@ -1260,7 +1386,7 @@ This endpoint is part of the planned PropIntel investment analysis layer and is 
   - `PATCH /properties/{property_id}`
   - `DELETE /properties/{property_id}`
 - Pydantic validation schemas
-- structured error handling
+- Structured error handling
 - Swagger API documentation
 
 ### Machine Learning
@@ -1281,10 +1407,19 @@ This endpoint is part of the planned PropIntel investment analysis layer and is 
 - simplified public ML endpoints:
   - `POST /predict`
   - `POST /analyze`
+- production-oriented ML endpoints:
+  - `POST /predict-price-v2`
+  - `POST /analyze-property-v2`
+- grouped investment analysis response schema
+- deterministic investment scoring
+- deterministic `deal_label` classification
+- LLM-based investment narrative generation
+- human-readable explainability drivers
 
 ### Engineering and Reliability
 - automated tests with pytest + FastAPI TestClient
 - GitHub Actions CI workflow running tests on push/PR
+- response contract tests updated for grouped analysis schema
 - Dockerfile for containerized API deployment
 - Docker Compose for local container orchestration
 - secure environment management
