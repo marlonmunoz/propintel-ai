@@ -199,19 +199,38 @@ class PredictionService:
             }
         
         
+        price_difference_pct = (price_difference / market_price) * 100 if market_price > 0 else 0.0
+
         return {
-            "predicted_price": predicted_price,
-            "market_price": market_price,
-            "price_difference": price_difference,
-            "roi_estimate": roi_estimate,
-            "investment_score": investment_score,
-            "top_drivers": top_drivers,
-            "analysis_summary": summary,
-            "global_context": [
-                "Model is trained on NYC residential sales data",
-                "Neighborhood and square footage are key drivers",
-            ],
-            "explanation_factors": explanation_factors,
-            "model_version": prediction_result.get("model_version", "v1"),
-            "llm_explanation": llm_explanation,
+            "valuation": {
+                "predicted_price": predicted_price,
+                "market_price": market_price,
+                "price_difference": price_difference,
+                "price_difference_pct": price_difference_pct,
+            },
+            "investment_analysis": {
+                "roi_estimate": roi_estimate,
+                "investment_score": investment_score,
+                "recommendation": llm_explanation.get("recommendation", "Hold"),
+                "confidence": llm_explanation.get("confidence", "Low"),
+                "analysis_summary": summary,
+            },
+            "drivers": {
+                "top_drivers": top_drivers,
+                "global_context": [
+                    "Model is trained on NYC residential sales data",
+                    "Location, size, and building characteristics influence estimated value",
+                ],
+                "explanation_factors": explanation_factors,
+            },
+            "explanation": {
+                "summary": llm_explanation.get("summary", "AI explanation unavailable"),
+                "opportunity": llm_explanation.get("opportunity", "N/A"),
+                "risks": llm_explanation.get("risks", "N/A"),
+                "recommendation": llm_explanation.get("recommendation", "Hold"),
+                "confidence": llm_explanation.get("confidence", "Low"),
+            },
+            "metadata": {
+                "model_version": prediction_result.get("model_version", "v1"),
+            },
         }

@@ -26,13 +26,16 @@ class PredictionResponse(BaseModel):
     predicted_price: float
     model_version: str
 
+
 class AnalyzerPropertyRequest(PredictionRequest):
     market_price: float = Field(..., gt=0)
+    
     
 class ExplanationFactor(BaseModel):
     factor: str
     value: str | float | int
     reason: str
+    
     
 class AnalyzePropertyResponse(BaseModel):
     predicted_price: float
@@ -45,6 +48,7 @@ class AnalyzePropertyResponse(BaseModel):
     global_context: list[str]
     explanation_factors: list[ExplanationFactor]
     model_version: str
+    
     
 class PublicPredictionRequest(BaseModel):
     gross_square_feet: float = Field(..., gt=0)
@@ -61,16 +65,20 @@ class PublicPredictionRequest(BaseModel):
     neighborhood: str
     zip_code: int
 
+
 class PublicAnalyzeRequest(PublicPredictionRequest):
     market_price: float = Field(..., gt=0)
+    
     
 class FeatureImportanceItem(BaseModel):
     feature: str
     importance: float
     
+    
 class FeatureImportanceResponse(BaseModel):
     items: list[FeatureImportanceItem]
     total: int
+    
     
 class ProductionPredictionRequest(BaseModel):
     borough: str = Field(..., min_length=1)
@@ -97,18 +105,47 @@ class ProductionPredictionResponse(BaseModel):
     warnings: list[str] = []
     model_metrics: Optional[Dict[str, float]] = None
 
-class ProductionAnalyzeResponse(BaseModel):
+
+class LLMExplanation(BaseModel):
+    summary: str
+    opportunity: str
+    risks: str
+    recommendation: str
+    confidence: str
+    
+
+class ValuationBreakdown(BaseModel):
     predicted_price: float
     market_price: float
     price_difference: float
+    price_difference_pct: float
+    
+    
+class InvestmentAnalysis(BaseModel):
     roi_estimate: float
     investment_score: int
-    top_drivers: list[str]
+    recommendation: str
+    confidence: str
     analysis_summary: str
+    
+    
+class DriverAnalysis(BaseModel):
+    top_drivers: list[str]
     global_context: list[str]
     explanation_factors: list[ExplanationFactor]
-    model_version: Optional[str] = None
-    llm_explanation: dict
+    
+    
+class ResponseMetadata(BaseModel):
+    model_version: Optional[str] = None 
+
+
+class ProductionAnalyzeResponse(BaseModel):
+    valuation: ValuationBreakdown
+    investment_analysis: InvestmentAnalysis
+    drivers: DriverAnalysis
+    explanation: LLMExplanation
+    metadata: ResponseMetadata
+    
     
 class ProductionAnalyzeRequest(ProductionPredictionRequest):
     market_price: float
