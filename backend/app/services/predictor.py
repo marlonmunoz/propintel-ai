@@ -10,18 +10,31 @@ from backend.app.services.model_registry import ModelRegistry
 load_dotenv()
 
 def format_feature_name(feature: str) -> str:
-    """Convert raw model feauture names into human-readable explanations."""
-    if "bldgarea" in feature:
+    """Convert raw model feature names into human-readable explanations."""
+    feature_lower = feature.lower()
+
+    if "bldgarea" in feature_lower or "gross_sqft" in feature_lower:
         return "Building size significantly impacts property value"
-    
-    if "neighborhood" in feature:
+
+    if "land_sqft" in feature_lower:
+        return "Land size contributes to overall property valuation"
+
+    if "neighborhood" in feature_lower:
         return "Neighborhood demand strongly influences pricing"
-    
-    if "borough" in feature:
+
+    if "borough" in feature_lower:
         return "Location (borough) plays a key role in valuation"
-    
-    if "building_class" in feature:
-        return f"Model identified {feature} as influential"
+
+    if "building_class" in feature_lower:
+        return "Building class is an important driver of estimated value"
+
+    if "year_built" in feature_lower or "property_age" in feature_lower:
+        return "Property age and build year affect valuation"
+
+    if "latitude" in feature_lower or "longitude" in feature_lower:
+        return "Geographic positioning influences estimated price"
+
+    return "Model identified this feature as influential"
 
 class PredictionService:
     def __init__(self, registry: ModelRegistry) -> None:
@@ -96,17 +109,38 @@ class PredictionService:
         # 3. ROI estimated (simple version for now)
         roi_estimate = (price_difference / market_price) * 100 if market_price > 0 else 0
         
-        # 4. Investment score (simple heuristic)
-        if roi_estimate < 0:
-            investment_score = 10 
-        elif roi_estimate < 5:
-            investment_score = 40
-        elif roi_estimate < 10:
-            investment_score = 65
-        elif roi_estimate < 20:
-            investment_score = 80
-        else:
-            investment_score = 90
+        # 4. Investment score (ROI + valuation gap + risk)
+        # Convert valuation gap into a percentage of market price
+        price_gap_pct = (price_difference / market_price) if market_price > 0 else 0.0
+        
+        # ROI component:
+        # Clamp ROI into a reasonable range so extreme values do not distort the score.
+        # Range used here: -20% to + 20%, then scaled to 0-100.
+        clamped_roi = max(-20.0, min(roi_estimate, 20.0))
+        roi_score = ((clamped_roi + 20) / 40) * 100.0
+        
+        # Valuation component:
+        # Positive gap means undervalued relative to market asl.
+        # Negative gap means overpriced.
+        # Clamp to -30% to +30% and scale to 0-100.
+        clamped_gap = max(-0.30, min(price_gap_pct, 0.30))
+        valuation_score = ((clamped_gap + 0.30) /0.60) * 100.0
+        
+        # Risk Penalty:
+        # Bigger pricing dislocations imply more uncertainty / execution risk.
+        risk_penalty = min(abs(price_gap_pct) * 100.0, 30.0)
+        
+        # Weighted final score:
+        # ROI is the main driver, valuation supports it, risk pulls the score down.
+        raw_score = (
+            (0.60 * roi_score) +
+            (0.30 * valuation_score) -
+            (0.10 * risk_penalty)
+        )
+        
+        # Final normalized score
+        investment_score = max(0, min(100, round(raw_score)))
+        
         
         # 5. Top drivers 
         feature_data = load_feature_importance(top_n=3)

@@ -25,6 +25,13 @@ Market Price: {data['market_price']}
 ROI Estimate: {data['roi_estimate']}%
 Investment Score: {data['investment_score']}
 
+Score Interpretation Guide:
+- 0 to 20 = Very weak investment profile
+- 21 to 40 = Weak / speculative
+- 41 to 60 = Mixed / moderate
+- 61 to 80 = Strong
+- 81 to 100 = Excellent
+
 Key Drivers:
 {drivers_text}
 
@@ -44,12 +51,15 @@ Key Drivers:
 - DO NOT include explanations or commentary outside JSON
 - Be concise, precise, and professional
 - Avoid generic statements - tie reasoning to the provided data
+- Interpret the investment score consistently using the score guide above
+- Scores below 20 should not be described as strong, favorable, or attractive
+- Negative ROI should materially weaken the recommendation
 """
 
 def generate_explanation(data: dict) -> dict:
     prompt = build_prompt(data)
     client = get_openai_client()
-    
+
     if client is None:
         return {
             "summary": "AI explanation unavailable",
@@ -58,33 +68,18 @@ def generate_explanation(data: dict) -> dict:
             "recommendation": "Hold",
             "confidence": "Low"
         }
-    
+
     try:
         response = client.responses.create(
             model="gpt-5.4-mini",
-            input=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            max_output_tokens=200,
-            temperature=float(os.getenv("LLM_TEMPERATURE", 0.3)),
+            input=prompt,
+            text={"format": {"type": "json_object"}},
+            max_output_tokens=300,
         )
-    
-        raw_text = response.output[0].content[0].text
-        
-        try:
-            start = raw_text.find("{")
-            end = raw_text.rfind("}") + 1
-            json_str = raw_text[start:end]
-            
-            return json.loads(json_str)
-        except Exception as parse_error:
-            print(f"JSON PARSER ERROR: {parse_error}")
-            raise ValueError("Failed to parse LLM response as JSON")
-         
-       
+
+        raw_text = response.output_text
+        return json.loads(raw_text)
+
     except Exception as e:
         print(f"LLM ERROR: {e}")
         return {
@@ -94,4 +89,3 @@ def generate_explanation(data: dict) -> dict:
             "recommendation": "Hold",
             "confidence": "Low"
         }
-    
