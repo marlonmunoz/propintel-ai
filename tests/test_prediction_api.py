@@ -325,7 +325,8 @@ class MockPredictionServiceGlobal:
             },
             "investment_analysis": {
                 "roi_estimate": 18.36016545454546,
-                "investment_score": 80,
+                "investment_score": 55,
+                "deal_label": "Hold",
                 "recommendation": "Hold",
                 "confidence": "Medium",
                 "analysis_summary": "mock summary",

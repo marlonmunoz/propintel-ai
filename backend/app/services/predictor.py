@@ -141,6 +141,13 @@ class PredictionService:
         # Final normalized score
         investment_score = max(0, min(100, round(raw_score)))
         
+        # 4b. Deterministic deal label
+        if investment_score >= 70:
+            deal_label = "Buy"
+        elif investment_score >= 40:
+            deal_label = "Hold"
+        else:
+            deal_label = "Avoid"
         
         # 5. Top drivers 
         feature_data = load_feature_importance(top_n=3)
@@ -211,6 +218,7 @@ class PredictionService:
             "investment_analysis": {
                 "roi_estimate": roi_estimate,
                 "investment_score": investment_score,
+                "deal_label": deal_label,
                 "recommendation": llm_explanation.get("recommendation", "Hold"),
                 "confidence": llm_explanation.get("confidence", "Low"),
                 "analysis_summary": summary,

@@ -124,6 +124,7 @@ class ValuationBreakdown(BaseModel):
 class InvestmentAnalysis(BaseModel):
     roi_estimate: float
     investment_score: int
+    deal_label: str
     recommendation: str
     confidence: str
     analysis_summary: str
