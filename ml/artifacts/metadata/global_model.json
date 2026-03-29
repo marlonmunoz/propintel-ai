@@ -1,0 +1,22 @@
+{
+    "name": "global",
+    "version": "v1",
+    "segment": "all_residential",
+    "artifact_path": "ml/artifacts/price_model.pkl",
+    "feature_columns" : [
+        "gross_sqft",
+        "land_sqft",
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics" : {
+        "mae": 350456.25,
+        "rmse": 841711.44,
+        "r2": 0.6096
+    }
+}
