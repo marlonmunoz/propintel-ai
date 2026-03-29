@@ -1,0 +1,22 @@
+{
+    "name": "one_family",
+    "version": "v1",
+    "segment": "one_family",
+    "artifact_path": "ml/artifacts/subtype_models/one_family_price_model.pkl",
+    "feature_columns" : [
+        "gross_sqft",
+        "land_sqft",
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics": {
+        "mae": 221569.15,
+        "rmse": 454385.14,
+        "r2": 0.7457
+    }
+}

@@ -235,7 +235,14 @@ ml/data/processed/
 
 # generated ML outputs
 ml/data/features/
-ml/artifacts/
+# ml/artifacts/
 
 # catboost
 catboost_info/
+
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
