@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { analyzeProperty } from '../services/analysisApi'
 
 const initialForm = {
   borough: '',
@@ -15,6 +16,9 @@ const initialForm = {
 
 export default function Analyze() {
   const [formData, setFormData] = useState(initialForm)
+  const [analysisResult, setAnalysisResult] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -24,10 +28,43 @@ export default function Analyze() {
     }))
   }
 
-  function handleSubmit(event) {
-    event.preventDefault()
-    console.log('Form ready for API connection:', formData)
+  function buildPayload() {
+    return {
+      borough: formData.borough.trim(),
+      neighborhood: formData.neighborhood.trim(),
+      building_class: formData.building_class.trim(),
+      year_built: Number(formData.year_built),
+      gross_sqft: Number(formData.gross_sqft),
+      land_sqft: Number(formData.land_sqft),
+      latitude: Number(formData.latitude),
+      longitude: Number(formData.longitude),
+      market_price: Number(formData.market_price),
+    }
   }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setIsLoading(true)
+    setError('')
+    setAnalysisResult(null)
+
+    try {
+      const payload = buildPayload()
+      const result = await analyzeProperty(payload)
+      console.log('API result:', result)
+      setAnalysisResult(result)
+    } catch (err) {
+      setError(err.message || 'Something went wrong while analyzing.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const hasV2Result =
+    analysisResult?.valuation &&
+    analysisResult?.investment_analysis &&
+    analysisResult?.drivers &&
+    analysisResult?.explanation
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -38,7 +75,7 @@ export default function Analyze() {
               PropIntel AI
             </p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Property Analysis Workspace
+              Property analysis workspace
             </h1>
             <p className="mt-3 max-w-2xl text-slate-300">
               Enter property details below to prepare an analysis request for
@@ -253,24 +290,156 @@ export default function Analyze() {
 
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
+                disabled={isLoading}
+                className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Run Analysis
+                {isLoading ? 'Running Analysis...' : 'Run Analysis'}
               </button>
+
+              {error ? (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  {error}
+                </div>
+              ) : null}
             </form>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
             <h2 className="text-xl font-semibold">Analysis Results</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Next step: connect the form to the backend and render real
-              valuation, investment score, drivers, and AI explanation here.
+              Real backend results will appear here after the analysis request
+              completes.
             </p>
 
-            <div className="mt-6 rounded-xl border border-dashed border-slate-700 p-6 text-sm text-slate-500">
-              Result cards powered by the v2 backend response will appear here
-              after we connect the API.
-            </div>
+            {!analysisResult && !isLoading ? (
+              <div className="mt-6 rounded-xl border border-dashed border-slate-700 p-6 text-sm text-slate-500">
+                Submit the form to fetch valuation, investment score, drivers,
+                and explanation from the v2 backend.
+              </div>
+            ) : null}
+
+            {isLoading ? (
+              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-6 text-sm text-slate-400">
+                Loading analysis...
+              </div>
+            ) : null}
+
+            {analysisResult && !hasV2Result && !isLoading ? (
+              <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+                The API returned a response, but it did not match the expected
+                v2 grouped shape. Open the browser console and inspect
+                <span className="mx-1 font-semibold text-white">
+                  API result:
+                </span>
+                to verify what the backend returned.
+              </div>
+            ) : null}
+
+            {hasV2Result ? (
+              <div className="mt-6 space-y-4">
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                    Valuation
+                  </h3>
+                  <div className="mt-3 space-y-2 text-sm text-slate-300">
+                    <p>
+                      <span className="font-semibold text-white">
+                        Predicted Price:
+                      </span>{' '}
+                      $
+                      {analysisResult.valuation.predicted_price.toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Market Price:
+                      </span>{' '}
+                      ${analysisResult.valuation.market_price.toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Difference:
+                      </span>{' '}
+                      $
+                      {analysisResult.valuation.price_difference.toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Difference %:
+                      </span>{' '}
+                      {analysisResult.valuation.price_difference_pct.toFixed(2)}
+                      %
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                    Investment Analysis
+                  </h3>
+                  <div className="mt-3 space-y-2 text-sm text-slate-300">
+                    <p>
+                      <span className="font-semibold text-white">Score:</span>{' '}
+                      {analysisResult.investment_analysis.investment_score}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Deal Label:
+                      </span>{' '}
+                      {analysisResult.investment_analysis.deal_label}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Recommendation:
+                      </span>{' '}
+                      {analysisResult.investment_analysis.recommendation}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Confidence:
+                      </span>{' '}
+                      {analysisResult.investment_analysis.confidence}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">Summary:</span>{' '}
+                      {analysisResult.investment_analysis.analysis_summary}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                    Top Drivers
+                  </h3>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
+                    {analysisResult.drivers.top_drivers.map((driver) => (
+                      <li key={driver}>{driver}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                    Explanation
+                  </h3>
+                  <div className="mt-3 space-y-3 text-sm text-slate-300">
+                    <p>
+                      <span className="font-semibold text-white">Summary:</span>{' '}
+                      {analysisResult.explanation.summary}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">
+                        Opportunity:
+                      </span>{' '}
+                      {analysisResult.explanation.opportunity}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">Risks:</span>{' '}
+                      {analysisResult.explanation.risks}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
