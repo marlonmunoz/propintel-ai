@@ -362,10 +362,14 @@ export default function Analyze() {
         <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
             <div>
-              <h2 className="text-2xl font-semibold">Analysis Form</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Fill in the property inputs required by the v2 analysis contract.
-              </p>
+                <h2 className="text-2xl font-semibold">Analysis Form</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                    Fill in the property inputs required by the v2 analysis contract.
+                </p>
+                <br />
+                <p className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                    sample presets
+                </p>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {Object.keys(samplePresets).map((presetName) => (
