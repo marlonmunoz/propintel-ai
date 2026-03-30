@@ -170,7 +170,7 @@ export default function Analyze() {
         <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
             <div>
-              <h2 className="text-center text-2xl font-semibold">Analysis Form</h2>
+              <h2 className="text-2xl font-semibold">Analysis Form</h2>
               <p className="mt-2 text-sm text-slate-400">
                 Fill in the property inputs required by the v2 analysis contract.
               </p>
@@ -402,7 +402,7 @@ export default function Analyze() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-center text-2xl font-semibold">Analysis Results</h2>
+                <h2 className="text-2xl font-semibold">Analysis Results</h2>
                 <p className="mt-2 text-center text-sm text-slate-400">
                   Real backend results appear here after the analysis request
                   completes.
