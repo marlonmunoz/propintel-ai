@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 
 const initialForm = {
@@ -123,7 +124,7 @@ export default function Analyze() {
               PropIntel AI
             </p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Property Analysis Workspace
+              Property analysis workspace
             </h1>
             <p className="mt-3 max-w-2xl text-slate-300">
               Enter property details below to prepare an analysis request for
@@ -145,7 +146,7 @@ export default function Analyze() {
 
         <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">Analysis Form</h2>
+            <h2 className="text-2xl font-semibold">Analysis Form</h2>
             <p className="mt-2 text-sm text-slate-400">
               Fill in the property inputs required by the v2 analysis contract.
             </p>
@@ -519,9 +520,12 @@ export default function Analyze() {
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                    AI Explanation
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 animate-pulse text-amber-300 drop-shadow-[0_0_10px_rgba(252,211,77,0.35)]" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                      AI Explanation
+                    </h3>
+                  </div>
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-3">
                     <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
