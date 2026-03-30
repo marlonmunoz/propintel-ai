@@ -3,6 +3,26 @@ import { Link } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 
+const boroughOptions = [
+  'Bronx',
+  'Brooklyn',
+  'Manhattan',
+  'Queens',
+  'Staten Island',
+]
+
+const buildingClassOptions = [
+  '01 ONE FAMILY DWELLINGS',
+  '02 TWO FAMILY DWELLINGS',
+  '03 THREE FAMILY DWELLINGS',
+  '07 RENTALS - WALKUP APARTMENTS',
+  '08 RENTALS - ELEVATOR APARTMENTS',
+  '09 COOPS - WALKUP APARTMENTS',
+  '10 COOPS - ELEVATOR APARTMENTS',
+  '13 CONDOS - ELEVATOR APARTMENTS',
+  '14 CONDOS - WALKUP APARTMENTS',
+]
+
 const initialForm = {
   borough: '',
   neighborhood: '',
@@ -71,27 +91,112 @@ function StatCard({ label, value, tone = 'default' }) {
   )
 }
 
+function FieldError({ message }) {
+  if (!message) return null
+
+  return <p className="mt-2 text-sm text-rose-300">{message}</p>
+}
+
+function getInputClasses(hasError) {
+  return `w-full rounded-xl border bg-slate-950 px-4 py-3 text-white outline-none transition ${
+    hasError
+      ? 'border-rose-400 focus:border-rose-300'
+      : 'border-slate-700 focus:border-cyan-400'
+  }`
+}
+
+function validateForm(formData) {
+  const errors = {}
+
+  if (!formData.borough.trim()) {
+    errors.borough = 'Borough is required.'
+  }
+
+  if (!formData.neighborhood.trim()) {
+    errors.neighborhood = 'Neighborhood is required.'
+  }
+
+  if (!formData.building_class.trim()) {
+    errors.building_class = 'Building class is required.'
+  }
+
+  const yearBuilt = Number(formData.year_built)
+  if (!formData.year_built) {
+    errors.year_built = 'Year built is required.'
+  } else if (Number.isNaN(yearBuilt) || yearBuilt < 1800 || yearBuilt > 2026) {
+    errors.year_built = 'Enter a valid year built between 1800 and 2026.'
+  }
+
+  const grossSqft = Number(formData.gross_sqft)
+  if (!formData.gross_sqft) {
+    errors.gross_sqft = 'Gross square footage is required.'
+  } else if (Number.isNaN(grossSqft) || grossSqft <= 0) {
+    errors.gross_sqft = 'Gross square footage must be greater than 0.'
+  }
+
+  const landSqft = Number(formData.land_sqft)
+  if (!formData.land_sqft) {
+    errors.land_sqft = 'Land square footage is required.'
+  } else if (Number.isNaN(landSqft) || landSqft <= 0) {
+    errors.land_sqft = 'Land square footage must be greater than 0.'
+  }
+
+  const latitude = Number(formData.latitude)
+  if (!formData.latitude) {
+    errors.latitude = 'Latitude is required.'
+  } else if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
+    errors.latitude = 'Latitude must be between -90 and 90.'
+  }
+
+  const longitude = Number(formData.longitude)
+  if (!formData.longitude) {
+    errors.longitude = 'Longitude must be between -180 and 180.'
+  } else if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
+    errors.longitude = 'Longitude must be between -180 and 180.'
+  }
+
+  const marketPrice = Number(formData.market_price)
+  if (!formData.market_price) {
+    errors.market_price = 'Market price is required.'
+  } else if (Number.isNaN(marketPrice) || marketPrice <= 0) {
+    errors.market_price = 'Market price must be greater than 0.'
+  }
+
+  return errors
+}
+
 export default function Analyze() {
   const [formData, setFormData] = useState(initialForm)
+  const [formErrors, setFormErrors] = useState({})
   const [analysisResult, setAnalysisResult] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
   function handleChange(event) {
     const { name, value } = event.target
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }))
+
+    setFormErrors((prev) => {
+      if (!prev[name]) return prev
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
   }
 
   function handleUseSampleData() {
     setFormData(sampleFormData)
+    setFormErrors({})
     setError('')
   }
 
   function handleResetForm() {
     setFormData(initialForm)
+    setFormErrors({})
     setAnalysisResult(null)
     setError('')
   }
@@ -112,9 +217,17 @@ export default function Analyze() {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    setIsLoading(true)
     setError('')
     setAnalysisResult(null)
+
+    const validationErrors = validateForm(formData)
+    if (Object.keys(validationErrors).length > 0) {
+      setFormErrors(validationErrors)
+      return
+    }
+
+    setFormErrors({})
+    setIsLoading(true)
 
     try {
       const payload = buildPayload()
@@ -174,28 +287,27 @@ export default function Analyze() {
               <p className="mt-2 text-sm text-slate-400">
                 Fill in the property inputs required by the v2 analysis contract.
               </p>
-              <div className='flex justify-center'>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleUseSampleData}
-                    className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
-                  >
-                    Use Sample Data
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={handleResetForm}
-                    className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
-                  >
-                    Reset Form
-                  </button>
-                </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleUseSampleData}
+                  className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                >
+                  Use Sample Data
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResetForm}
+                  className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
+                >
+                  Reset Form
+                </button>
               </div>
-             
             </div>
-            <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+
+            <form onSubmit={handleSubmit} className="mt-6 space-y-6" noValidate>
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
                   Property Basics
@@ -208,15 +320,27 @@ export default function Analyze() {
                     >
                       Borough
                     </label>
-                    <input
+                    <select
                       id="borough"
                       name="borough"
-                      type="text"
                       value={formData.borough}
                       onChange={handleChange}
-                      placeholder="Brooklyn"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
-                    />
+                      className={getInputClasses(!!formErrors.borough)}
+                    >
+                      <option value="" className="bg-slate-950 text-slate-400">
+                        Select borough
+                      </option>
+                      {boroughOptions.map((borough) => (
+                        <option
+                          key={borough}
+                          value={borough}
+                          className="bg-slate-950 text-white"
+                        >
+                          {borough}
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError message={formErrors.borough} />
                   </div>
 
                   <div>
@@ -233,8 +357,9 @@ export default function Analyze() {
                       value={formData.neighborhood}
                       onChange={handleChange}
                       placeholder="Park Slope"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.neighborhood)}
                     />
+                    <FieldError message={formErrors.neighborhood} />
                   </div>
 
                   <div className="sm:col-span-2">
@@ -244,15 +369,27 @@ export default function Analyze() {
                     >
                       Building Class
                     </label>
-                    <input
+                    <select
                       id="building_class"
                       name="building_class"
-                      type="text"
                       value={formData.building_class}
                       onChange={handleChange}
-                      placeholder="02 TWO FAMILY DWELLINGS"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
-                    />
+                      className={getInputClasses(!!formErrors.building_class)}
+                    >
+                      <option value="" className="bg-slate-950 text-slate-400">
+                        Select building class
+                      </option>
+                      {buildingClassOptions.map((buildingClass) => (
+                        <option
+                          key={buildingClass}
+                          value={buildingClass}
+                          className="bg-slate-950 text-white"
+                        >
+                          {buildingClass}
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError message={formErrors.building_class} />
                   </div>
 
                   <div>
@@ -269,8 +406,9 @@ export default function Analyze() {
                       value={formData.year_built}
                       onChange={handleChange}
                       placeholder="1925"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.year_built)}
                     />
+                    <FieldError message={formErrors.year_built} />
                   </div>
                 </div>
               </div>
@@ -294,8 +432,9 @@ export default function Analyze() {
                       value={formData.gross_sqft}
                       onChange={handleChange}
                       placeholder="1800"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.gross_sqft)}
                     />
+                    <FieldError message={formErrors.gross_sqft} />
                   </div>
 
                   <div>
@@ -312,8 +451,9 @@ export default function Analyze() {
                       value={formData.land_sqft}
                       onChange={handleChange}
                       placeholder="2000"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.land_sqft)}
                     />
+                    <FieldError message={formErrors.land_sqft} />
                   </div>
 
                   <div>
@@ -331,8 +471,9 @@ export default function Analyze() {
                       value={formData.latitude}
                       onChange={handleChange}
                       placeholder="40.6720"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.latitude)}
                     />
+                    <FieldError message={formErrors.latitude} />
                   </div>
 
                   <div>
@@ -350,8 +491,9 @@ export default function Analyze() {
                       value={formData.longitude}
                       onChange={handleChange}
                       placeholder="-73.9778"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.longitude)}
                     />
+                    <FieldError message={formErrors.longitude} />
                   </div>
                 </div>
               </div>
@@ -375,21 +517,22 @@ export default function Analyze() {
                       value={formData.market_price}
                       onChange={handleChange}
                       placeholder="1250000"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+                      className={getInputClasses(!!formErrors.market_price)}
                     />
+                    <FieldError message={formErrors.market_price} />
                   </div>
                 </div>
               </div>
-              <div className='flex justify-center'>
+
+              <div className="flex justify-center">
                 <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="submit"
+                  disabled={isLoading}
+                  className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                    {isLoading ? 'Running Analysis...' : 'Run Analysis'}
+                  {isLoading ? 'Running Analysis...' : 'Run Analysis'}
                 </button>
               </div>
-
 
               {error ? (
                 <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -403,7 +546,7 @@ export default function Analyze() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-2xl font-semibold">Analysis Results</h2>
-                <p className="mt-2 text-center text-sm text-slate-400">
+                <p className="mt-2 text-sm text-slate-400">
                   Real backend results appear here after the analysis request
                   completes.
                 </p>
