@@ -31,6 +31,14 @@ export default function Home() {
                     >
                         View API Flow
                     </a>
+                    <a  href="http://127.0.0.1:8000/health"
+                        target="_blank"
+                        rel="norferrer"
+                        className="rounded-xl bg-lime-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-green-400"
+
+                    >
+                        Check API Health
+                    </a>
                 </div>
             </section>
         </main>
