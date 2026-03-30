@@ -14,6 +14,50 @@ const initialForm = {
   market_price: '',
 }
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatPercent(value) {
+  return `${value.toFixed(2)}%`
+}
+
+function getDealLabelStyles(label) {
+  const normalized = label?.toLowerCase()
+
+  if (normalized === 'buy') {
+    return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+  }
+
+  if (normalized === 'hold') {
+    return 'border-amber-500/30 bg-amber-500/15 text-amber-300'
+  }
+
+  return 'border-rose-500/30 bg-rose-500/15 text-rose-300'
+}
+
+function StatCard({ label, value, tone = 'default' }) {
+  const toneClasses =
+    tone === 'positive'
+      ? 'border-emerald-500/20 bg-emerald-500/10'
+      : tone === 'negative'
+        ? 'border-rose-500/20 bg-rose-500/10'
+        : 'border-slate-800 bg-slate-950'
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClasses}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+      <p className="mt-2 text-xl font-bold text-white">{value}</p>
+    </div>
+  )
+}
+
 export default function Analyze() {
   const [formData, setFormData] = useState(initialForm)
   const [analysisResult, setAnalysisResult] = useState(null)
@@ -66,16 +110,20 @@ export default function Analyze() {
     analysisResult?.drivers &&
     analysisResult?.explanation
 
+  const dealLabel = analysisResult?.investment_analysis?.deal_label
+  const score = analysisResult?.investment_analysis?.investment_score
+  const difference = analysisResult?.valuation?.price_difference ?? 0
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <section className="mx-auto max-w-6xl px-6 py-12">
+      <section className="mx-auto max-w-7xl px-6 py-12">
         <div className="mb-10 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
               PropIntel AI
             </p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Property analysis workspace
+              Property Analysis Workspace
             </h1>
             <p className="mt-3 max-w-2xl text-slate-300">
               Enter property details below to prepare an analysis request for
@@ -95,7 +143,7 @@ export default function Analyze() {
           </Link>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
             <h2 className="text-xl font-semibold">Analysis Form</h2>
             <p className="mt-2 text-sm text-slate-400">
@@ -305,11 +353,25 @@ export default function Analyze() {
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">Analysis Results</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Real backend results will appear here after the analysis request
-              completes.
-            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Analysis Results</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Real backend results appear here after the analysis request
+                  completes.
+                </p>
+              </div>
+
+              {hasV2Result ? (
+                <span
+                  className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${getDealLabelStyles(
+                    dealLabel
+                  )}`}
+                >
+                  {dealLabel}
+                </span>
+              ) : null}
+            </div>
 
             {!analysisResult && !isLoading ? (
               <div className="mt-6 rounded-xl border border-dashed border-slate-700 p-6 text-sm text-slate-500">
@@ -336,106 +398,158 @@ export default function Analyze() {
             ) : null}
 
             {hasV2Result ? (
-              <div className="mt-6 space-y-4">
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                    Valuation
-                  </h3>
-                  <div className="mt-3 space-y-2 text-sm text-slate-300">
-                    <p>
-                      <span className="font-semibold text-white">
-                        Predicted Price:
-                      </span>{' '}
-                      $
-                      {analysisResult.valuation.predicted_price.toLocaleString()}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-white">
-                        Market Price:
-                      </span>{' '}
-                      ${analysisResult.valuation.market_price.toLocaleString()}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-white">
-                        Difference:
-                      </span>{' '}
-                      $
-                      {analysisResult.valuation.price_difference.toLocaleString()}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-white">
-                        Difference %:
-                      </span>{' '}
-                      {analysisResult.valuation.price_difference_pct.toFixed(2)}
-                      %
-                    </p>
-                  </div>
+              <div className="mt-6 space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatCard
+                    label="Predicted Value"
+                    value={formatCurrency(
+                      analysisResult.valuation.predicted_price
+                    )}
+                  />
+                  <StatCard
+                    label="Market Price"
+                    value={formatCurrency(analysisResult.valuation.market_price)}
+                  />
+                  <StatCard
+                    label="Price Difference"
+                    value={formatCurrency(
+                      analysisResult.valuation.price_difference
+                    )}
+                    tone={difference >= 0 ? 'positive' : 'negative'}
+                  />
+                  <StatCard
+                    label="Difference %"
+                    value={formatPercent(
+                      analysisResult.valuation.price_difference_pct
+                    )}
+                    tone={
+                      analysisResult.valuation.price_difference_pct >= 0
+                        ? 'positive'
+                        : 'negative'
+                    }
+                  />
                 </div>
 
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                    Investment Analysis
-                  </h3>
-                  <div className="mt-3 space-y-2 text-sm text-slate-300">
-                    <p>
-                      <span className="font-semibold text-white">Score:</span>{' '}
-                      {analysisResult.investment_analysis.investment_score}
+                <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Investment Score
                     </p>
-                    <p>
+                    <p className="mt-4 text-5xl font-bold text-white">
+                      {score}
+                    </p>
+                    <p className="mt-3 text-sm text-slate-400">
+                      Confidence:{' '}
                       <span className="font-semibold text-white">
-                        Deal Label:
-                      </span>{' '}
-                      {analysisResult.investment_analysis.deal_label}
+                        {analysisResult.investment_analysis.confidence}
+                      </span>
                     </p>
-                    <p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Recommendation:{' '}
                       <span className="font-semibold text-white">
-                        Recommendation:
-                      </span>{' '}
-                      {analysisResult.investment_analysis.recommendation}
+                        {analysisResult.investment_analysis.recommendation}
+                      </span>
                     </p>
-                    <p>
-                      <span className="font-semibold text-white">
-                        Confidence:
-                      </span>{' '}
-                      {analysisResult.investment_analysis.confidence}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                      Investment Summary
                     </p>
-                    <p>
-                      <span className="font-semibold text-white">Summary:</span>{' '}
+                    <p className="mt-4 text-base leading-7 text-slate-200">
                       {analysisResult.investment_analysis.analysis_summary}
                     </p>
+
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          ROI Estimate
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-white">
+                          {formatPercent(
+                            analysisResult.investment_analysis.roi_estimate
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Model Version
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-white">
+                          {analysisResult.metadata.model_version}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                    Top Drivers
-                  </h3>
-                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
-                    {analysisResult.drivers.top_drivers.map((driver) => (
-                      <li key={driver}>{driver}</li>
-                    ))}
-                  </ul>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                      Top Drivers
+                    </h3>
+                    <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                      {analysisResult.drivers.top_drivers.map((driver) => (
+                        <li
+                          key={driver}
+                          className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3"
+                        >
+                          {driver}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                      Model Context
+                    </h3>
+                    <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                      {analysisResult.drivers.global_context.map((item) => (
+                        <li
+                          key={item}
+                          className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3"
+                        >
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                    Explanation
+                    AI Explanation
                   </h3>
-                  <div className="mt-3 space-y-3 text-sm text-slate-300">
-                    <p>
-                      <span className="font-semibold text-white">Summary:</span>{' '}
-                      {analysisResult.explanation.summary}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-white">
-                        Opportunity:
-                      </span>{' '}
-                      {analysisResult.explanation.opportunity}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-white">Risks:</span>{' '}
-                      {analysisResult.explanation.risks}
-                    </p>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Summary
+                      </p>
+                      <p className="mt-3 text-sm leading-7 text-slate-300">
+                        {analysisResult.explanation.summary}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Opportunity
+                      </p>
+                      <p className="mt-3 text-sm leading-7 text-slate-300">
+                        {analysisResult.explanation.opportunity}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Risks
+                      </p>
+                      <p className="mt-3 text-sm leading-7 text-slate-300">
+                        {analysisResult.explanation.risks}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
