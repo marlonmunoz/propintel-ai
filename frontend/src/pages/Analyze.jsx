@@ -15,6 +15,18 @@ const initialForm = {
   market_price: '',
 }
 
+const sampleFormData = {
+  borough: 'Brooklyn',
+  neighborhood: 'Park Slope',
+  building_class: '02 TWO FAMILY DWELLINGS',
+  year_built: '1925',
+  gross_sqft: '1800',
+  land_sqft: '2000',
+  latitude: '40.6720',
+  longitude: '-73.9778',
+  market_price: '1250000',
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -71,6 +83,17 @@ export default function Analyze() {
       ...prev,
       [name]: value,
     }))
+  }
+
+  function handleUseSampleData() {
+    setFormData(sampleFormData)
+    setError('')
+  }
+
+  function handleResetForm() {
+    setFormData(initialForm)
+    setAnalysisResult(null)
+    setError('')
   }
 
   function buildPayload() {
@@ -146,11 +169,32 @@ export default function Analyze() {
 
         <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
-            <h2 className="text-2xl font-semibold">Analysis Form</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Fill in the property inputs required by the v2 analysis contract.
-            </p>
+            <div>
+              <h2 className="text-center text-2xl font-semibold">Analysis Form</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Fill in the property inputs required by the v2 analysis contract.
+              </p>
+              <div className='flex justify-center'>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUseSampleData}
+                    className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                  >
+                    Use Sample Data
+                  </button>
 
+                  <button
+                    type="button"
+                    onClick={handleResetForm}
+                    className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
+                  >
+                    Reset Form
+                  </button>
+                </div>
+              </div>
+             
+            </div>
             <form onSubmit={handleSubmit} className="mt-6 space-y-6">
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
@@ -336,14 +380,16 @@ export default function Analyze() {
                   </div>
                 </div>
               </div>
+              <div className='flex justify-center'>
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                    {isLoading ? 'Running Analysis...' : 'Run Analysis'}
+                </button>
+              </div>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isLoading ? 'Running Analysis...' : 'Run Analysis'}
-              </button>
 
               {error ? (
                 <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -356,8 +402,8 @@ export default function Analyze() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-2xl font-semibold">Analysis Results</h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <h2 className="text-center text-2xl font-semibold">Analysis Results</h2>
+                <p className="mt-2 text-center text-sm text-slate-400">
                   Real backend results appear here after the analysis request
                   completes.
                 </p>
