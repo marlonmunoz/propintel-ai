@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from backend.app.core.limiter import limiter
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -16,8 +17,10 @@ router = APIRouter()
 # CRUD operations for Property model
 
 # ================ POST /properties/ ================
+@limiter.limit("60/minute")
 @router.post("/properties/", response_model=PropertyResponse)
 def create_property(
+    request: Request,
     property: PropertyCreate,
     db: Session = Depends(get_db),
     _: str = Depends(verify_api_key),
@@ -38,8 +41,10 @@ def create_property(
     return db_property
 
 # =============== GET /properties/ ================
+@limiter.limit("60/minute")
 @router.get("/properties/", response_model=List[PropertyResponse])
 def get_properties(
+    request: Request,
     zipcode: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -64,9 +69,10 @@ def get_properties(
     return properties
 
 # =============== GET /properties/{property_id} ================
-
+@limiter.limit("60/minute")
 @router.get("/properties/{property_id}", response_model=PropertyResponse)
 def get_property(
+    request: Request,
     property_id: int, 
     db: Session = Depends(get_db),
     _: str = Depends(verify_api_key),
@@ -81,8 +87,10 @@ def get_property(
 
 
 # ============== PATCH /properties/{property_id} ================
+@limiter.limit("60/minute")
 @router.patch("/properties/{property_id}", response_model=PropertyResponse)
 def update_property(
+    request: Request,
     property_id: int,
     property_update: PropertyUpdate,
     db: Session = Depends(get_db),
@@ -108,8 +116,10 @@ def update_property(
     return property_obj
 
 # ============== DELETE /properties/{property_id} ================
+@limiter.limit("60/minute")
 @router.delete("/properties/{property_id}")
 def delete_property(
+    request: Request,
     property_id: int,
     db: Session = Depends(get_db),
     _: str = Depends(verify_api_key),

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from backend.app.schemas.prediction import (
     PredictionRequest,
     PredictionResponse,
@@ -15,9 +15,8 @@ from backend.app.schemas.prediction import (
 )
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
-
 from backend.app.core.security import verify_api_key
-
+from backend.app.core.limiter import limiter
 from ml.inference.predict import (
     predict_price,
     analyze_property,
@@ -29,6 +28,7 @@ from ml.inference.predict import (
 router = APIRouter(tags=["Prediction"])
 
 
+@limiter.limit("20/minute")
 @router.post(
     "/predict-price",
     response_model=PredictionResponse,
@@ -41,14 +41,15 @@ router = APIRouter(tags=["Prediction"])
     response_description="Predicted property value and model version."
 )
 def predict_property_price(
-    request: PredictionRequest,
+    request: Request,
+    payload: PredictionRequest,
     _: str = Depends(verify_api_key),
-
 ):
-    result = predict_price(request.model_dump())
+    result = predict_price(payload.model_dump())
     return result
 
 
+@limiter.limit("20/minute")
 @router.post(
     "/analyze-property",
     response_model=AnalyzePropertyResponse,
@@ -61,13 +62,15 @@ def predict_property_price(
     response_description="Legacy investment analysis response."
 )
 def analyze_property_investment(
-    request: AnalyzerPropertyRequest,
+    request: Request,
+    payload: AnalyzerPropertyRequest,
     _: str = Depends(verify_api_key),
 ):
-    result = analyze_property(request.model_dump())
+    result = analyze_property(payload.model_dump())
     return result
 
 
+@limiter.limit("10/minute")
 @router.post(
     "/predict",
     response_model=PredictionResponse,
@@ -79,13 +82,16 @@ def analyze_property_investment(
     response_description="Predicted property value and model version."
 )
 def predict_property_price_public(
-    request: PublicPredictionRequest,
+    request: Request,
+    payload: PublicPredictionRequest,
     _: str = Depends(verify_api_key),
 ):
-    result = predict_price_public(request.model_dump())
+    result = predict_price_public(payload.model_dump())
     return result
 
 
+
+@limiter.limit("10/minute")
 @router.post(
     "/analyze",
     response_model=AnalyzePropertyResponse,
@@ -98,13 +104,15 @@ def predict_property_price_public(
     response_description="Legacy public investment analysis response."
 )
 def analyze_property_public_endpoint(
-    request: PublicAnalyzeRequest,
+    request: Request,
+    payload: PublicAnalyzeRequest,
     _: str = Depends(verify_api_key),
 ):
-    result = analyze_property_public(request.model_dump())
+    result = analyze_property_public(payload.model_dump())
     return result
 
 
+@limiter.limit("60/minute")
 @router.get(
     "/model/feature-importance",
     response_model=FeatureImportanceResponse,
@@ -116,6 +124,7 @@ def analyze_property_public_endpoint(
     response_description="Top feature importance items and total count."
 )
 def get_feature_importance(
+    request: Request,
     top_n: int = 10,
     _: str = Depends(verify_api_key),
 ):
@@ -133,6 +142,7 @@ def get_prediction_service() -> PredictionService:
     return PredictionService(registry)
 
 
+@limiter.limit("20/minute")
 @router.post(
     "/predict-price-v2",
     response_model=ProductionPredictionResponse,
@@ -145,14 +155,16 @@ def get_prediction_service() -> PredictionService:
     response_description="Production prediction response with valuation details and model metadata."
 )
 def predict_property_price_v2(
-    request: ProductionPredictionRequest,
+    request: Request,
+    payload: ProductionPredictionRequest,
     service: PredictionService = Depends(get_prediction_service),
     _: str = Depends(verify_api_key),
 ) -> ProductionPredictionResponse:
-    result = service.predict(request)
+    result = service.predict(payload)
     return ProductionPredictionResponse(**result)
 
 
+@limiter.limit("20/minute")
 @router.post(
     "/analyze-property-v2",
     response_model=ProductionAnalyzeResponse,
@@ -165,9 +177,10 @@ def predict_property_price_v2(
     response_description="Production investment analysis response with grouped explainable sections."
 )
 def analyze_property_v2(
-    request: ProductionAnalyzeRequest,
+    request: Request,
+    payload: ProductionAnalyzeRequest,
     service: PredictionService = Depends(get_prediction_service),
     _: str = Depends(verify_api_key),
 ):
-    result = service.analyze(request)
+    result = service.analyze(payload)
     return result
