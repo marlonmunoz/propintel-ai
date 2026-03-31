@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from backend.app.core.security import verify_api_key
 from backend.app.db.database import get_db
 from backend.app.db.models import Property
 from backend.app.schemas.property import (
@@ -19,6 +20,7 @@ router = APIRouter()
 def create_property(
     property: PropertyCreate,
     db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
 ):
     db_property = Property(**property.model_dump()) # automatically maps fields
 
@@ -43,7 +45,8 @@ def get_properties(
     max_price: Optional[float] = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
 ):
     query = db.query(Property)
 
@@ -63,7 +66,11 @@ def get_properties(
 # =============== GET /properties/{property_id} ================
 
 @router.get("/properties/{property_id}", response_model=PropertyResponse)
-def get_property(property_id: int, db: Session = Depends(get_db)):
+def get_property(
+    property_id: int, 
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
+):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
 
     if not property_obj:
@@ -78,7 +85,8 @@ def get_property(property_id: int, db: Session = Depends(get_db)):
 def update_property(
     property_id: int,
     property_update: PropertyUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
 ):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
 
@@ -103,7 +111,8 @@ def update_property(
 @router.delete("/properties/{property_id}")
 def delete_property(
     property_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
 ):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
     

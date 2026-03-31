@@ -4,6 +4,9 @@ os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.db.database import Base, engine
+from backend.app.core.security import verify_api_key
+
+app.dependency_overrides[verify_api_key] = lambda: "test_key"
 
 Base.metadata.create_all(bind=engine)
 
