@@ -100,9 +100,9 @@ def update_property(
     return property_obj
 
 # ============== DELETE /properties/{property_id} ================
-@ router.delete("/properties/{property_id}")
+@router.delete("/properties/{property_id}")
 def delete_property(
-    property_id = int,
+    property_id: int,
     db: Session = Depends(get_db)
 ):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
