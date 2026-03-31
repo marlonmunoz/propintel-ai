@@ -39,6 +39,15 @@ export default function Home() {
                     >
                         Check API Health
                     </a>
+
+                    <a  href="http://127.0.0.1:8000/ready"
+                        target="_blank"
+                        rel="norferrer"
+                        className="rounded-xl bg-red-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-green-400"
+
+                    >
+                        Check API Ready
+                    </a>
                 </div>
             </section>
         </main>
