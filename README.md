@@ -39,6 +39,12 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - Deterministic `deal_label` classification: `Buy`, `Hold`, `Avoid`
 - LLM-generated investment narrative via OpenAI gpt-5.4-mini (Responses API)
 - Per-model-key warning system for low-confidence predictions
+- API key authentication on all endpoints via `X-API-Key` header (timing-safe comparison)
+- Per-IP rate limiting with consistent JSON error envelope (slowapi)
+- CORS locked to explicit allowed origins, methods, and headers via environment variable
+- Unified error response envelope `{ error, status_code, message, detail }` for all error types
+- JSON structured logging with per-request UUID tracing and `X-Request-ID` response header
+- `/health` (liveness) and `/ready` (DB connectivity readiness) endpoints
 - Automated tests with pytest, monkeypatch, and `app.dependency_overrides`
 - GitHub Actions CI pipeline running tests on push and PR to `main`
 - Docker + Docker Compose for containerized local and cloud deployment
@@ -47,9 +53,9 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 
 ## Project Status
 
-🟢 **Active — Production-Style Full-Stack AI Platform**
+🟢 **Active — Production-Hardened Full-Stack AI Platform**
 
-All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated.
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (auth, rate limiting, CORS, error handling, structured logging).
 
 **Current milestone:**
 - Full-stack platform live: React 19 frontend talking to FastAPI backend
@@ -366,6 +372,12 @@ For analysis requests, `PredictionService.analyze()` additionally:
 
 ## 🌐 API Endpoints
 
+### Health & Readiness
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Liveness check — confirms process is alive |
+| `GET` | `/ready` | Readiness check — confirms DB is reachable |
+
 ### Properties
 | Method | Endpoint | Description |
 |---|---|---|
@@ -472,7 +484,10 @@ propintel-ai/
 │       │   ├── prediction.py        # All prediction/analysis endpoints
 │       │   └── properties.py        # Property CRUD endpoints
 │       ├── core/
-│       │   └── config.py            # Path configuration
+│       │   ├── config.py            # Path configuration
+│       │   ├── security.py          # API key auth (timing-safe)
+│       │   ├── limiter.py           # slowapi rate limiter instance
+│       │   └── error_handlers.py    # Unified error response handlers
 │       ├── db/
 │       │   ├── database.py          # SQLAlchemy engine + session
 │       │   ├── init_db.py           # Table creation script
@@ -526,8 +541,8 @@ propintel-ai/
 │
 ├── tests/
 │   ├── conftest.py
-│   ├── test_prediction_api.py       # 8 prediction API tests with mocking
-│   └── test_property_api.py         # Property CRUD test
+│   ├── test_prediction_api.py       # 9 prediction/analysis tests with mocking
+│   └── test_property_api.py         # 7 property CRUD + auth-negative tests
 │
 ├── .github/
 │   └── workflows/
@@ -547,7 +562,7 @@ propintel-ai/
 |---|---|
 | `frontend/` | React 19 UI — property analysis and portfolio dashboard |
 | `api/` | FastAPI route handlers |
-| `core/` | Application configuration and path management |
+| `core/` | Auth, rate limiting, error handlers, path config |
 | `db/` | Database engine, session, and ORM models |
 | `schemas/` | Pydantic v2 request/response validation |
 | `services/` | ML prediction, investment scoring, LLM explanation |
@@ -575,6 +590,9 @@ Create a `.env` file at the project root:
 ```
 DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
 OPENAI_API_KEY=sk-...
+API_KEY=your-secret-api-key-here
+CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174
+LLM_TEMPERATURE=0.3
 ```
 
 ### Frontend
@@ -606,7 +624,8 @@ uvicorn backend.app.main:app --reload
 Available at:
 - API: `http://127.0.0.1:8000`
 - Swagger UI: `http://127.0.0.1:8000/docs`
-- Health check: `http://127.0.0.1:8000/health`
+- Liveness: `http://127.0.0.1:8000/health`
+- Readiness (DB check): `http://127.0.0.1:8000/ready`
 
 ### Frontend
 
@@ -653,16 +672,20 @@ pytest
 
 ### Test coverage
 
-| Test file | Coverage |
-|---|---|
-| `test_property_api.py` | `POST /properties/` create endpoint |
-| `test_prediction_api.py` | All 6 prediction/analysis endpoints (8 test functions) |
+| Test file | Tests | Coverage |
+|---|---|---|
+| `test_property_api.py` | 7 | Full CRUD: create, list, get by ID, 404, update, delete, auth-negative (401) |
+| `test_prediction_api.py` | 9 | All prediction/analysis endpoints, model routing, validation, mock service |
+
+**Total: 16 tests**
 
 ### Patterns used
 - `monkeypatch` for mocking legacy inference functions
-- `app.dependency_overrides` for mocking `PredictionService`
-- SQLite in-memory database for full test isolation
+- `app.dependency_overrides` for mocking `PredictionService` and `verify_api_key`
+- Targeted `dependency_overrides.pop()` to preserve auth bypass across tests
+- SQLite test database for full test isolation
 - Validation error tests for coordinate and year bounds
+- Auth-negative tests (401 when no API key)
 
 ### CI Pipeline
 
@@ -781,12 +804,18 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - LLM-based investment narrative generation
 
 ### Engineering and Reliability
-- Automated tests with pytest + FastAPI TestClient
+- **API key authentication** on all endpoints — `X-API-Key` header, timing-safe `secrets.compare_digest()`
+- **Per-IP rate limiting** — 10–60 req/min per endpoint via slowapi
+- **CORS hardening** — allowed origins from `CORS_ORIGINS` env var, explicit methods and headers
+- **Unified error envelope** — `{ error, status_code, message, detail }` for all error types (401, 422, 429, 500)
+- **JSON structured logging** — every request logged with method, path, status, duration, IP, and request UUID
+- **Request ID tracing** — `X-Request-ID` header returned on every response for log correlation
+- **Liveness + readiness endpoints** — `/health` (instant) and `/ready` (DB connectivity check)
+- **16 automated tests** — full property CRUD, auth-negative, model routing, validation, mock service
 - GitHub Actions CI workflow passing on push/PR to `main`
-- Response contract tests for all 6 prediction/analysis endpoints
-- Test isolation: `DATABASE_URL` set before app import in all test files
+- Test isolation: SQLite `test.db`, `DATABASE_URL` set before app import
 - Dockerfile for containerized API deployment
-- Docker Compose for local container orchestration with PostgreSQL
+- Docker Compose with `env_file` for full environment variable passthrough
 - Secure environment variable management via `.env` files
 
 ---
