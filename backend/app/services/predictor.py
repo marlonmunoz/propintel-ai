@@ -1,9 +1,12 @@
+import logging
 import math
-import pandas as pd 
+import pandas as pd
 from datetime import datetime
 
-import os 
+import os
 from dotenv import load_dotenv
+
+logger = logging.getLogger("propintel")
 from backend.app.services.explainer import generate_explanation
 from backend.app.schemas.prediction import ProductionPredictionRequest
 from backend.app.services.model_registry import ModelRegistry
@@ -202,7 +205,7 @@ class PredictionService:
             if not isinstance(llm_explanation, dict):
                 raise ValueError("Invalid LLM explanation format")
         except Exception as e:
-            print("LLM ERROR:", str(e))
+            logger.exception("LLM explanation failed")
             llm_explanation = {
                 "summary": "AI explanation unavailable",
                 "opportunity": "N/A",

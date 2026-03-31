@@ -68,8 +68,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
 )
 
 app.include_router(prediction_router)
@@ -81,5 +81,19 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "OK ✅"}
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    try:
+        from backend.app.db.database import SessionLocal
+        db = SessionLocal()
+        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db.close()
+        return {"status": "ok", "database": "reachable"}
+    except Exception:
+        logger.exception("Readiness check failed")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Database unreachable")
 
