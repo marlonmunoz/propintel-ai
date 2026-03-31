@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
+import Navbar from '../components/Navbar'
 
 const boroughOptions = [
   'Bronx',
@@ -332,7 +333,8 @@ export default function Analyze() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <section className="mx-auto max-w-7xl px-6 py-12">
+      <Navbar />
+      <section className="mx-auto max-w-7xl px-6 pb-12 pt-24">
         <div className="mb-10 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
