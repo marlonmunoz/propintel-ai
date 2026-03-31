@@ -16,7 +16,7 @@ export async function analyzeProperty(payload) {
 
     try {
       const errorData = await response.json()
-      errorMessage = errorData.detail || errorMessage
+      errorMessage = errorData.message || errorMessage
     } catch {
       // Keep fallback message if response is not valid JSON
     }
