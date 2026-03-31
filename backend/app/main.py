@@ -1,11 +1,12 @@
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from backend.app.core.error_handlers import (
     http_exception_handler,
     validation_exception_handler,
     internal_error_handler,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from backend.app.api.prediction import router as prediction_router
 from backend.app.api.properties import router as properties_router
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,9 +15,19 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from backend.app.core.limiter import limiter
 import os
+import time
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+logger = logging.getLogger("propintel")
 
 app = FastAPI(
     title="PropIntel AI",
@@ -24,12 +35,29 @@ app = FastAPI(
     version="1.0.0"
 )
 
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        duration_ms = int((time.time() - start) * 1000)
+        logger.info(
+            "%s %s | status=%s | duration=%dms | ip=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+            request.client.host if request.client else "unknown",
+        )      
+        return response
+
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, internal_error_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 cors_origins = [
     origin.strip()
