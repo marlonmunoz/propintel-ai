@@ -5,12 +5,12 @@ from backend.app.core.error_handlers import (
     http_exception_handler,
     validation_exception_handler,
     internal_error_handler,
+    rate_limit_exceeded_handler,
 )
 from fastapi import FastAPI, Request
 from backend.app.api.prediction import router as prediction_router
 from backend.app.api.properties import router as properties_router
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from backend.app.core.limiter import limiter
@@ -63,7 +63,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, internal_error_handler)

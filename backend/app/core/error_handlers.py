@@ -41,4 +41,11 @@ async def internal_error_handler(request: Request, exc: Exception):
         status_code=500,
         message="An unexpected error occurred. Please try again later.",
     )
+
+
+async def rate_limit_exceeded_handler(request: Request, exc: Exception):
+    return error_response(
+        status_code=429,
+        message="Too many requests. Please slow down and try again later.",
+    )
     
