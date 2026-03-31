@@ -16,6 +16,8 @@ from backend.app.schemas.prediction import (
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
 
+from backend.app.core.security import verify_api_key
+
 from ml.inference.predict import (
     predict_price,
     analyze_property,
@@ -38,7 +40,11 @@ router = APIRouter(tags=["Prediction"])
     ),
     response_description="Predicted property value and model version."
 )
-def predict_property_price(request: PredictionRequest):
+def predict_property_price(
+    request: PredictionRequest,
+    _: str = Depends(verify_api_key),
+
+):
     result = predict_price(request.model_dump())
     return result
 
@@ -54,7 +60,10 @@ def predict_property_price(request: PredictionRequest):
     ),
     response_description="Legacy investment analysis response."
 )
-def analyze_property_investment(request: AnalyzerPropertyRequest):
+def analyze_property_investment(
+    request: AnalyzerPropertyRequest,
+    _: str = Depends(verify_api_key),
+):
     result = analyze_property(request.model_dump())
     return result
 
@@ -69,7 +78,10 @@ def analyze_property_investment(request: AnalyzerPropertyRequest):
     ),
     response_description="Predicted property value and model version."
 )
-def predict_property_price_public(request: PublicPredictionRequest):
+def predict_property_price_public(
+    request: PublicPredictionRequest,
+    _: str = Depends(verify_api_key),
+):
     result = predict_price_public(request.model_dump())
     return result
 
@@ -85,7 +97,10 @@ def predict_property_price_public(request: PublicPredictionRequest):
     ),
     response_description="Legacy public investment analysis response."
 )
-def analyze_property_public_endpoint(request: PublicAnalyzeRequest):
+def analyze_property_public_endpoint(
+    request: PublicAnalyzeRequest,
+    _: str = Depends(verify_api_key),
+):
     result = analyze_property_public(request.model_dump())
     return result
 
@@ -100,7 +115,10 @@ def analyze_property_public_endpoint(request: PublicAnalyzeRequest):
     ),
     response_description="Top feature importance items and total count."
 )
-def get_feature_importance(top_n: int = 10):
+def get_feature_importance(
+    top_n: int = 10,
+    _: str = Depends(verify_api_key),
+):
     result = load_feature_importance(top_n=top_n)
     return result
 
@@ -128,7 +146,8 @@ def get_prediction_service() -> PredictionService:
 )
 def predict_property_price_v2(
     request: ProductionPredictionRequest,
-    service: PredictionService = Depends(get_prediction_service)
+    service: PredictionService = Depends(get_prediction_service),
+    _: str = Depends(verify_api_key),
 ) -> ProductionPredictionResponse:
     result = service.predict(request)
     return ProductionPredictionResponse(**result)
@@ -147,7 +166,8 @@ def predict_property_price_v2(
 )
 def analyze_property_v2(
     request: ProductionAnalyzeRequest,
-    service: PredictionService = Depends(get_prediction_service)
+    service: PredictionService = Depends(get_prediction_service),
+    _: str = Depends(verify_api_key),
 ):
     result = service.analyze(request)
     return result

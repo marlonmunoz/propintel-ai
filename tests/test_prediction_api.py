@@ -5,6 +5,9 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 import backend.app.api.prediction as prediction_api
 from backend.app.api.prediction import get_prediction_service
+from backend.app.core.security import verify_api_key
+
+app.dependency_overrides[verify_api_key] = lambda: "test_key"
 
 client = TestClient(app)
 
@@ -382,7 +385,7 @@ def test_predict_price_v2_one_famliy_route():
     assert data["input_summary"]["building_class"] == "01 ONE FAMILY DWELLINGS"
     assert data["warnings"] == []
     
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_prediction_service, None)
     
 
 def test_predict_price_v2_global_fallback_route():
@@ -411,7 +414,7 @@ def test_predict_price_v2_global_fallback_route():
     assert len(data["warnings"]) == 1
     assert "fallback model" in data["warnings"][0].lower()
     
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_prediction_service, None)
     
 
 def test_predict_price_v2_validation_error():
@@ -431,7 +434,7 @@ def test_predict_price_v2_validation_error():
     
     assert response.status_code == 422
     
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_prediction_service, None)
     
     
 def test_analyze_property_v2():
@@ -483,6 +486,6 @@ def test_analyze_property_v2():
 
     assert data["metadata"]["model_version"] == "v1"
     
-    app.dependency_overrides.clear()    
+    app.dependency_overrides.pop(get_prediction_service, None)
     
     
