@@ -1,112 +1,90 @@
 # PropIntel AI
 
-PropIntel AI is an end-to-end AI engineering platform for real estate investment analysis, combining data pipelines, machine learning models, and scalable backend APIs to deliver property valuation, investment scoring, and explainable decision support.
+PropIntel AI is an end-to-end AI engineering platform for real estate investment analysis, combining data pipelines, machine learning models, a scalable backend API, and a React frontend to deliver property valuation, investment scoring, and explainable decision support.
 
-### Core Stack:
+### Core Stack
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E)
+![React](https://img.shields.io/badge/React-19-61DAFB)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF)
 
-### Data / AI Stack:
+### Data / AI Stack
 ![Data Engineering](https://img.shields.io/badge/Data-Engineering-darkblue)
 ![Machine Learning](https://img.shields.io/badge/Machine-Learning-orange)
 ![XGBoost](https://img.shields.io/badge/XGBoost-Model-red)
 ![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
 
 ---
+
 ## Tech Highlights
 
-- Modular AI system architecture
-- Production-style FastAPI backend
-- PostgreSQL data layer with Supabase
-- Real NYC government data ingestion pipeline
-- End-to-end ML pipeline (ingestion → feature engineering → training → inference)
-- Residential-only pricing model for MVP scope
-- XGBoost regression for residential property valuation
-- Feature importance / explainability output after model training
-- Persisted explainability artifact (`ml/artifacts/feature_importance.csv`)
-- Global explainability API endpoint (`GET /model/feature-importance`)
-- Public and internal prediction/analysis API contracts
-- In-memory model caching for faster predictions
-- Structured production analysis response schema
-- Deterministic investment scoring with ROI + valuation gap + risk logic
-- Deterministic `deal_label` classification (`Buy`, `Hold`, `Avoid`)
-- LLM-generated investment narrative with structured JSON output
-- Human-readable top driver formatting for cleaner API responses
-
----
-## 🆕 Recent Milestone
-PropIntel AI has now transitioned from placeholder housing data to a real NYC residential valuation pipeline using official NYC government datasets.
-
-Recent work completed:
-- downloaded and organized **NYC Rolling Sales** files for all 5 boroughs
-- downloaded and integrated the **NYC PLUTO** dataset
-- implemented a real ingestion pipeline in `ml/pipelines/data_ingestion.py`
-- merged datasets using **BBL** as the property join key
-- built a feature engineering pipeline in `ml/features/feature_engineering.py`
-- scoped the MVP model to **residential-only** sales
-- retrained the model using a **log-transformed target**
-- upgraded the pricing model from a linear baseline to **XGBoost**
-- generated a serialized pricing model artifact for inference
-
-This milestone turns PropIntel into a real end-to-end AI pricing prototype built on NYC property data.
+- Full-stack platform: React 19 frontend + FastAPI backend, live and integrated
+- Modular AI system architecture with clean layer separation
+- Production-style FastAPI backend with Pydantic v2 validation
+- PostgreSQL data layer via Supabase
+- Real NYC government data ingestion pipeline (Rolling Sales + PLUTO, BBL join)
+- End-to-end ML pipeline: ingestion → feature engineering → training → inference
+- XGBoost regression with log-transformed target for residential property valuation
+- ModelRegistry pattern: metadata-driven, segment-routable, lazy-loading model serving
+- 4 trained subtype models: one_family, multi_family, condo_coop, rental
+- Full building-class routing to dedicated segment models
+- Feature importance / explainability artifact persisted after training
+- Global explainability endpoint: `GET /model/feature-importance`
+- `@lru_cache` on feature importance for zero disk I/O after first request
+- Structured production analysis response schema with 5 grouped sections
+- Deterministic investment scoring with ROI + valuation gap + risk penalty
+- Deterministic `deal_label` classification: `Buy`, `Hold`, `Avoid`
+- LLM-generated investment narrative via OpenAI gpt-5.4-mini (Responses API)
+- Per-model-key warning system for low-confidence predictions
+- Automated tests with pytest, monkeypatch, and `app.dependency_overrides`
+- GitHub Actions CI pipeline running tests on push and PR to `main`
+- Docker + Docker Compose for containerized local and cloud deployment
 
 ---
 
 ## Project Status
-🚧 Active MVP / Production-Style AI Pipeline
 
-Current milestone:
+🟢 **Active — Production-Style Full-Stack AI Platform**
+
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated.
+
+**Current milestone:**
+- Full-stack platform live: React 19 frontend talking to FastAPI backend
 - Real NYC Rolling Sales + PLUTO ingestion pipeline implemented
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
-- Feature importance / explainability added to training output
-- Feature importance persisted as an ML artifact (`ml/artifacts/feature_importance.csv`)
-- Global model explainability endpoint implemented:
-  - `GET /model/feature-importance`
-- Internal prediction endpoints implemented:
-  - `POST /predict-price`
-  - `POST /analyze-property`
-- Public simplified endpoints implemented:
-  - `POST /predict`
-  - `POST /analyze`
-- Production-oriented v2 endpoints implemented:
-  - `POST /predict-price-v2`
-  - `POST /analyze-property-v2`
-- Analysis responses upgraded to grouped schema sections:
-  - `valuation`
-  - `investment_analysis`
-  - `drivers`
-  - `explanation`
-  - `metadata`
-- Deterministic `deal_label` added to analysis responses
-- LLM explanation layer stabilized with structured JSON output
-- Property CRUD expanded to include:
-  - `GET /properties/{property_id}`
-- Model artifact generated for inference (`ml/artifacts/price_model.pkl`)
-- Automated tests updated to validate the new grouped response contract
+- 4 subtype models trained and fully routed via ModelRegistry:
+  - `one_family` — R²=0.75
+  - `multi_family` — R²=0.63
+  - `condo_coop` — R²=0.50
+  - `rental` — R²=0.37 (low-confidence warning served)
+- ModelRegistry + PredictionService + Explainer service layer fully implemented
+- Feature importance persisted as ML artifact and cached at runtime
+- LLM explanation layer live with structured JSON output
+- All prediction endpoints operational with v2 production contract
+- Property CRUD fully implemented and validated
+- CI pipeline passing on GitHub Actions
 
 ---
+
 ## ✅ Primary API Contract (v2)
 
-PropIntel currently supports multiple API generations for prediction and analysis, but the **official product-facing contract is now the v2 API layer**.
+The **official product-facing contract is the v2 API layer**.
 
 ### Recommended endpoints
-These are the endpoints intended for:
-- frontend integration
-- product demos
-- ongoing feature expansion
-- future response-contract stability
+These are the endpoints intended for frontend integration, product demos, and ongoing feature expansion:
 
 ```text
 POST /predict-price-v2
 POST /analyze-property-v2
+GET  /model/feature-importance
 ```
 
 ### Legacy compatibility endpoints
-The following routes remain available for backward compatibility and testing of older request/response contracts:
+These routes remain available for backward compatibility:
 
 ```text
 POST /predict-price
@@ -115,76 +93,41 @@ POST /predict
 POST /analyze
 ```
 
-### Contract direction
-Going forward:
-- new frontend work should integrate with **v2 only**
-- new product features should be added to **v2 first**
-- legacy routes are maintained as compatibility routes, not the primary contract
-
-### Why v2 is the primary contract
-The v2 API improves the platform by providing:
-- a cleaner standardized request schema
-- production-style response models
-- grouped analysis sections:
-  - `valuation`
-  - `investment_analysis`
-  - `drivers`
-  - `explanation`
-  - `metadata`
-- better frontend-readiness
-- clearer long-term API evolution
+New frontend work should target **v2 only**. Legacy routes are not the primary contract.
 
 ---
 
-## Key Features
-
-- FastAPI backend for scalable REST APIs
-- PostgreSQL database integration (Supabase)
-- Data engineering pipelines for housing datasets
-- Machine learning models for property price prediction
-- Feature engineering for market analysis
-- ML inference endpoints for investment scoring
-- Model serialization for inference-ready deployment
-- Structured investment analysis responses
-- Deterministic investment scoring using ROI, valuation gap, and risk penalty
-- Deterministic `deal_label` output (`Buy`, `Hold`, `Avoid`)
-- LLM-generated investment explanation layer
-- Human-readable explainability drivers for cleaner product-facing responses
-
-PropIntel AI is designed as a production-minded AI engineering system for real estate analysis. The platform combines backend APIs, database integration, data pipelines, and machine learning workflows to evaluate property investment opportunities and generate data-driven insights.
-
----
 ## 🧠 System Architecture
 
 ```text
-        Client / User
-              │
-              ▼
-        FastAPI REST API
-              │
-              ▼
-     Request Validation Layer
-        (Pydantic Schemas)
-              │
-              ▼
-          API Routing Layer
-         (FastAPI Endpoints)
-              │
-              ▼
-     ML / DB Integration Layer
-   (route handlers + inference logic)
-              │
-      ┌────────────────────┐
-      │   Planned Service  │
-      │       Layer        │
-      └────────────────────┘
-              │
-              ▼
-        SQLAlchemy ORM
-              │
-              ▼
-      PostgreSQL Database
-         (Supabase)
+        React Frontend (Vite + TailwindCSS)
+                      │
+                      ▼
+              FastAPI REST API
+                      │
+                      ▼
+           Request Validation Layer
+              (Pydantic v2 Schemas)
+                      │
+                      ▼
+               API Routing Layer
+              (FastAPI Endpoints)
+                      │
+                      ▼
+              Service Layer
+    ┌──────────────────────────────┐
+    │  PredictionService           │
+    │  ModelRegistry               │
+    │  Explainer (OpenAI LLM)      │
+    └──────────────────────────────┘
+                      │
+              ┌───────┴────────┐
+              ▼                ▼
+        SQLAlchemy ORM    ML Inference
+              │                │
+              ▼                ▼
+      PostgreSQL DB     Subtype Models
+        (Supabase)      (XGBoost PKLs)
               │
               ▼
          Data Pipelines
@@ -193,10 +136,7 @@ PropIntel AI is designed as a production-minded AI engineering system for real e
        Feature Engineering
               │
               ▼
-     Machine Learning Models
-              │
-              ▼
-   Prediction + Analysis APIs
+      Model Training Pipeline
 ```
 
 ---
@@ -217,7 +157,12 @@ NYC PLUTO (CSV)
                     │
                     ▼
          Processed training dataset
-      (`ml/data/processed/nyc_training_data.csv`)
+  (`ml/data/processed/nyc_training_data.csv`)
+                    │
+                    ▼
+        Training Data Preparation
+    (`ml/pipelines/create_training_data.py`)
+    (`ml/pipelines/create_subtype_training_data.py`)
                     │
                     ▼
          Feature Engineering Pipeline
@@ -228,927 +173,255 @@ NYC PLUTO (CSV)
       (`ml/data/features/nyc_features.csv`)
                     │
                     ▼
-          Model Training Pipeline
-        (`ml/models/train_model.py`)
+       Global + Subtype Training Pipelines
+    (`ml/models/train_model.py`)
+    (`ml/models/train_subtype_models.py`)
                     │
                     ▼
-      XGBoost residential price model
+      XGBoost models serialized to artifacts
+  (`ml/artifacts/price_model.pkl`)
+  (`ml/artifacts/subtype_models/*.pkl`)
                     │
                     ▼
       Feature importance / explainability
+  (`ml/artifacts/feature_importance.csv`)
                     │
                     ▼
-      Serialized ML artifacts
-   (`price_model.pkl`, `feature_importance.csv`)
+    ModelRegistry routes requests to segment models
                     │
                     ▼
-      Internal + public FastAPI endpoints
+         v2 FastAPI prediction endpoints
                     │
                     ▼
-         Prediction + analysis responses
-       with structured explanation fields
-
+        Structured analysis responses
+       with LLM explanation narrative
 ```
+
 ---
+
 ## 📊 Data Sources
 
 PropIntel uses real NYC government datasets:
 
 ### NYC Rolling Sales Data
-- Historical property sales records
-- Includes sale price, building size, property type
+- Historical property sales records for all 5 boroughs
+- Includes sale price, building size, building class, and property type
 
 ### NYC PLUTO Dataset
 - Property-level geographic and structural data
-- Includes zoning, building class, lot size, coordinates
+- Includes zoning, building class, lot size, and geographic coordinates
 
 ### Join Strategy
-- Datasets merged using **BBL (Borough-Block-Lot)**
-
-These datasets allow the model to learn real NYC market behavior.
----
-## Example Workflow
-
-A typical PropIntel AI workflow:
-
-1. NYC Rolling Sales files are ingested from all 5 boroughs.
-2. The PLUTO dataset is loaded and joined using **BBL** as the property key.
-3. The merged dataset is transformed through the feature engineering pipeline.
-4. The model is trained on residential-only sales using a log-transformed target.
-5. XGBoost is used to train the residential pricing model.
-6. Feature importances are generated and saved as a reusable explainability artifact.
-7. The trained model is serialized to `ml/artifacts/price_model.pkl`.
-8. A client can interact with the API through multiple route generations:
-   - legacy internal ML endpoints (`/predict-price`, `/analyze-property`)
-   - legacy public simplified endpoints (`/predict`, `/analyze`)
-   - **primary production-style v2 endpoints** (`/predict-price-v2`, `/analyze-property-v2`)
-9. For current product integration, the recommended path is:
-   - `POST /predict-price-v2` for valuation
-   - `POST /analyze-property-v2` for structured investment analysis
-10. The API returns either:
-   - a production valuation response with model metadata, warnings, and metrics, or
-   - a grouped investment analysis response with valuation, scoring, drivers, explanation, and metadata
+- Datasets merged using **BBL (Borough-Block-Lot)** as the property key
 
 ---
 
-## 🚀 Overview
+## 🔀 Model Registry & Subtype Routing
 
-The goal of PropIntel AI is to build a scalable AI-powered platform capable of supporting:
+PropIntel uses a `ModelRegistry` to route each prediction request to the most appropriate trained model based on building class.
 
-- automated property valuation
-- real estate investment scoring
-- data-driven market analysis
-- ML-powered property insights
-- backend APIs for prediction and analysis
+### Routing table
 
-The system is structured like a modern production application, separating:
+| Building Class | Model Key | Artifact |
+|---|---|---|
+| `01 ONE FAMILY DWELLINGS` | `one_family` | `one_family_price_model.pkl` |
+| `02 TWO FAMILY DWELLINGS`, `03 THREE FAMILY DWELLINGS` | `multi_family` | `multi_family_price_model.pkl` |
+| `09`–`17` COOPS / CONDOS | `condo_coop` | `condo_coop_price_model.pkl` |
+| `07`–`08` RENTALS | `rental` | `rental_price_model.pkl` |
+| All others | `global` | `price_model.pkl` |
 
-- backend services
-- database architecture
-- machine learning modules
-- inference pipelines
-- API delivery
+### Model metadata
+Each model has a JSON metadata file in `ml/artifacts/metadata/` that defines:
+- `name`, `version`, `segment`
+- `artifact_path` — path to the serialized `.pkl`
+- `feature_columns` — exact columns the model expects
+- `metrics` — MAE, RMSE, R² from training evaluation
 
----
-## 🔥 Why This Project Matters
-
-PropIntel is not just a machine learning project — it is a full AI system built with production patterns.
-
-It demonstrates:
-
-- end-to-end ML lifecycle (data → training → inference)
-- real-world data engineering pipelines
-- scalable backend API design
-- production-style CI/CD workflows
-- explainable AI outputs for decision-making
-
-This mirrors how real AI systems are built in industry.
+### Warning system
+The `warnings` field in `ProductionPredictionResponse` is populated based on model key:
+- `rental` → low-confidence warning (R²=0.37)
+- `global` → fallback model warning
 
 ---
 
-
-## 📁 Project Structure
-The repository was organized using a modular backend architecture.
-
-```
-propintel-ai
-│
-├── backend
-│   └── app
-│       ├── api
-│       │   ├── prediction.py
-│       │   └── properties.py
-│       ├── core
-│       ├── db
-│       │   ├── database.py
-│       │   └── init_db.py
-│       ├── main.py
-│       ├── models
-│       │   └── property.py
-│       ├── schemas
-│       │   ├── prediction.py
-│       │   └── property.py
-│       └── services        # planned / currently minimal
-│
-├── ml
-│   ├── artifacts
-│   │   └── price_model.pkl
-│   ├── data
-│   │   ├── nyc_raw         # ignored in git
-│   │   ├── pluto_raw       # ignored in git
-│   │   ├── processed       # ignored in git
-│   │   └── features        # ignored in git
-│   ├── features
-│   │   └── feature_engineering.py
-│   ├── inference
-│   │   └── predict.py
-│   ├── models
-│   │   └── train_model.py
-│   └── pipelines
-│       └── data_ingestion.py
-│
-├── tests
-│   ├── test_prediction_api.py
-│   └── test_property_api.py
-├── requirements.txt
-├── README.md
-└── LICENSE
-```
-
-This structure separates responsibilities across different modules:
-
-| Folder | Purpose |
-|------|------|
-| `api/` | API endpoints |
-| `core/` | application configuration |
-| `db/` | database setup |
-| `models/` | database models |
-| `schemas/` | request/response validation |
-| `services/` | planned business/ service layer |
-| `ml/artifacts/` | saved models and serialized ML artifacts |
-| `ml/data/` | dataset ingestion and processing |
-| `ml/features/` | feature engineering logic |
-| `ml/inference/` | prediction and scoring logic |
-| `ml/models/` | model training and evaluation |
-| `ml/pipelines/` | end-to-end ML pipeline orchestration |
-
----
-
-## ⚙️ Environment Setup
-
-A Python virtual environment was created to isolate project dependencies.
-
-```
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-Dependencies installed:
-
-```
-pip install fastapi uvicorn sqlalchemy python-dotenv "psycopg[binary]" pandas numpy scikit-learn xgboost joblib
-```
-
-Then dependencies were saved:
-
-```
-pip freeze > requirements.txt
-```
-
----
-
-## 🔧 FastAPI Server
-
-A FastAPI application was created in:
-
-```
-backend/app/main.py
-```
-
-Example:
-
-```python
-from fastapi import FastAPI
-
-app = FastAPI(
-    title="PropIntel AI",
-    description="AI-powered real estate investment analysis platform",
-    version="1.0.0"
-)
-
-@app.get("/")
-def root():
-    return {"message": "PropIntel AI running 🚀"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-```
-
----
-
-## ▶️ Running the API
-
-The development server is started with:
-
-```
-uvicorn backend.app.main:app --reload
-```
-
-Once running, the API is available at:
-
-```
-http://127.0.0.1:8000
-```
-
-Interactive API documentation (Swagger UI):
-
-```
-http://127.0.0.1:8000/docs
-```
-
----
-
-## ✅ Outcome
-
-At the end of Day 1 the project now includes:
-
-- production-grade backend architecture
-- FastAPI server running locally
-- dependency management with `requirements.txt`
-- automatic API documentation
-- repository ready for data engineering and ML development
----
-
-## 🗄️ Database Integration (Supabase + SQLAlchemy)
-
-After the FastAPI server was initialized, the next step was connecting the backend to a **cloud PostgreSQL database** using Supabase.
-
-This layer enables the platform to store:
-- property listings
-- pricing data
-- structured housing features
-- records used for machine learning workflows
-
----
-
-## 🔗 Database Connection
-
-A `.env` file was created to store the database connection string securely.
-
-```
-.env
-```
-
-Example:
-
-```
-DATABASE_URL=postgresql+psycopg://postgres:<PASSWORD>@db.<project>.supabase.co:5432/postgres
-```
-
-Environment variables are loaded using:
-
-```
-python-dotenv
-```
-
-This keeps sensitive credentials out of the Git repository.
-
----
-
-## 🧠 SQLAlchemy Database Setup
-
-Database connectivity and session management were implemented in:
-
-```
-backend/app/db/database.py
-```
-
-Example:
-
-```python
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
-
-Base = declarative_base()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-```
-
-This module provides:
-
-- database engine configuration
-- session creation
-- dependency injection for API routes
-
----
-
-## 🏠 Property Model
-
-A SQLAlchemy ORM model was created to represent real estate listings.
-
-```
-backend/app/models/property.py
-```
-
-Example:
-
-```python
-from sqlalchemy import Column, Integer, String, Float
-from backend.app.db.database import Base
-
-
-class Property(Base):
-    __tablename__ = "properties"
-
-    id = Column(Integer, primary_key=True, index=True)
-    address = Column(String, index=True)
-    zipcode = Column(String, index=True)
-    bedrooms = Column(Integer)
-    bathrooms = Column(Integer)
-    sqft = Column(Integer)
-    listing_price = Column(Float)
-```
-
----
-
-## 🛠 Database Initialization
-
-Database tables are created using a small initialization script:
-
-```
-backend/app/db/init_db.py
-```
-
-Run with:
-
-```
-python -m backend.app.db.init_db
-```
-
-This automatically generates the required tables inside Supabase.
-
----
-
-## 🌐 Property API Endpoints
-
-REST API routes were implemented to interact with the database.
-
-```
-backend/app/api/properties.py
-```
-Current CRUD support includes:
-
-### Create Property
-
-
-`POST /properties`
-
-Stores a new property listing in PostgreSQL.
-
-Example request:
-
-```json
-{
-  "address": "45 W 34th St",
-  "zipcode": "10001",
-  "bedrooms": 2,
-  "bathrooms": 1,
-  "sqft": 950,
-  "listing_price": 750000
-}
-```
-
-The API stores the record in PostgreSQL and returns the saved object.
-
----
-
-### Retrieve Properties
-
-`GET /properties`
-
-Returns all stored properties.
-
-The endpoint supports pagination and filtering.
-
-Example queries:
-
-```python
-GET /properties?limit=10
-GET /properties?zipcode=10001
-GET /properties?min_price=500000
-GET /properties?max_price=900000
-```
----
-
-### Retrieve Property by ID
-`GET /properties/{property_id}`
-
----
-### Update Property
-`PATCH /properties/{property_id}`
-
----
-### DELETE Property
-`DELETE /properties/{property_id}`
-
-> **Note:** some README-described routes are still being aligned with the latest codebase implementation.
-
----
-<!-- ### API Validation & Error Handling
-The API uses Pydantic schemas to validate incoming requests and ensure consistent data structures.
-
-Error handling is implemented to return clear responses when:
-
-- invalid data is submitted
-- a property record does not exist
-- database operations fail
-
-Example error response:
-```json
-{
-  "detail": "Property not found"
-}
-``` -->
----
-
-## 🔍 Testing & Reliability (pytest + FastAPI TestClient + GitHub Actions)
-
-Automated tests are stored in:
-
-```
-tests/
-```
-Current coverage includes:
-
-- prediction API endpoint contract test
-- property API endpoint test
-- test database initialization to create required tables before DB-dependent tests run
-
-Run tests locally from the project root:
-
-```
-pytest 
-```
-
-### FastAPI TestClient
-
-The test suite uses FastAPI’s built-in `TestClient` to validate endpoints without running a live server.
-
-Example pattern:
-```python
-from fastapi.testclient import TestClient
-from backend.app.main import app
-import backend.app.api.prediction as prediction_api
-
-client = TestClient(app)
-
-def test_predict_price_endpoint(monkeypatch):
-    payload = {
-        "gross_square_feet": 1497,
-        "land_square_feet": 1668,
-        "residential_units": 1,
-        "commercial_units": 0,
-        "total_units": 1,
-        "numfloors": 2,
-        "unitsres": 1,
-        "unitstotal": 1,
-        "lotarea": 1668,
-        "bldgarea": 1497,
-        "latitude": 40.8538937,
-        "longitude": -73.8962879,
-        "pluto_year_built": 1899,
-        "building_age": 127,
-        "borough": 2,
-        "building_class_category": "01 ONE FAMILY DWELLINGS",
-        "neighborhood": "BATHGATE",
-        "zip_code": 10457,
-    }
-
-    def mock_predict_price(_payload: dict):
-        return {
-            "predicted_price": 611081.6875,
-            "model_version": "xgboost_residential_nyc_v1",
-        }
-
-    monkeypatch.setattr(prediction_api, "predict_price", mock_predict_price)
-
-    response = client.post("/predict-price", json=payload)
-
-    assert response.status_code == 200
-```
-
-### CI Pipeline (GitHub Actions)
-
-A GitHub Actions workflow runs tests automatically on:
-- push to `main`
-- pull requests targeting `main`
-
-Workflow location:
-```
-.github/workflows/tests.yml
-```
-The CI pipeline performs:
-1. checkout repo
-2. setup Python 3.11
-3. install dependencies
-4. run `pytest`
----
-## 🚀 CI/CD Pipeline Status
-
-The project uses GitHub Actions to simulate a production CI workflow.
-
-### Current Workflow
-- install dependencies
-- run pytest test suite
-- validate API behavior
-
-### In Progress Improvements
-- database service container for CI testing
-- automated schema initialization before tests
-- environment variable management for secure deployments
-
-This reflects real-world production pipeline design and debugging.
-
----
-
-## 🐳 Docker & Docker Compose
-
-The project is containerized to run in a production-style environment.
-
-### Build the API image
-
-From the project root:
-```
-docker build -t propintel-api .
-```
-
-### Run the container (Supabase mode)
-
-Using an env file:
-```
-docker run --rm -p 8000:8000 --env-file .env.docker propintel-api
-```
-Then open:
-- Swagger UI: http://localhost:8000/docs
-- Health check: http://localhost:8000/health
-
-### Docker environment files
-Local Docker environment variables live in:
-```
-.env.docker
-```
-This file is ignored by Git for security. Use the example file as a template:
-```
-.env.docker.example
-```
-### Run with Docker Compose
-Build and run:
-```
-docker compose up --build
-```
-Stop:
-```
-docker compose down
-```
-
----
-
-## ⚠️ Known Issues (In Progress)
-
-Current technical challenges being addressed:
-
-- CI pipeline failing due to missing `DATABASE_URL`
-- Database tables not initialized before running tests
-- Need to automate DB setup (migrations or init step) inside GitHub Actions
-
-### Planned Fixes
-- Add `DATABASE_URL` as GitHub Actions secret
-- Run DB initialization script before pytest
-- Introduce migration tool (Alembic) for production-ready schema management
-
----
-## 🤖 Machine Learning Implementation
-
-PropIntel AI now includes a real data → model → prediction pipeline built on NYC government property datasets.
-
-This stage transforms PropIntel AI from a traditional backend system into an AI-powered analytics platform.
-
----
-
-## 🧠 Machine Learning Stack
-
-The PropIntel AI platform integrates a machine learning layer designed to estimate property 
-values and support future investment analysis.
-
-The ML environment includes:
-
-- **pandas** — data manipulation and preprocessing
-- **numpy** — numerical computing
-- **scikit-learn** — feature engineering and baseline models
-- **XGBoost** — gradient boosting model for price prediction
-- **joblib** — model serialization for production inference
-- **openpyxl** — Excel ingestion support for NYC Rolling Sales files
-
-All dependencies (backend + ML) are consolidated in the root:
-
-```
-requirements.txt
-```
-
----
-
-## 📂 ML Module Structure
-
-The machine learning layer is organized into focused submodules:
-
-```
-ml/
-├── artifacts/     # saved models and serialized ML artifacts
-├── data/          # dataset ingestion and raw data
-├── features/      # feature engineering logic
-├── inference/     # prediction utilities
-├── models/        # model training pipelines
-└── pipelines/     # end-to-end ML orchestration
-```
-
-Each module represents a stage in the machine learning lifecycle.
-
----
-## 📊 Feature Engineering
-The feature engineering pipeline transforms the merged NYC Rolling Sales + PLUTO dataset into a model-ready residential valuation dataset.
-
-Implemented transformations include:
-
-- column normalization and renaming to snake_case
-- numeric conversion for square footage, units, coordinates, and year-built fields
-- residential-only filtering for MVP scope
-- invalid sale filtering (`sale_price > 10000`)
-- building age calculation
-- target-aware analysis feature generation (`price_per_sqft`)
-- selection of modeling-ready numeric and categorical features
-
-Current core modeling features include:
-
-- `gross_square_feet`
-- `land_square_feet`
-- `residential_units`
-- `commercial_units`
-- `total_units`
-- `numfloors`
-- `unitsres`
-- `unitstotal`
-- `lotarea`
-- `bldgarea`
-- `latitude`
-- `longitude`
-- `pluto_year_built`
-- `building_age`
-- `borough`
-- `building_class_category`
-- `neighborhood`
-- `zip_code`
-
-Generated datasets:
-- `ml/data/processed/nyc_training_data.csv`
-- `ml/data/features/nyc_features.csv`
-
-> Note: `price_per_sqft` is generated for analysis purposes but excluded from model training inputs to avoid target leakage.
-
----
-## 🧠 Model Training
-Model training is implemented in:
-```
-ml/models/train_model.py
-```
-The training pipeline performs the following steps:
-
-1. Load engineered residential NYC feature dataset
-2. Select numeric and categorical training features
-3. Apply preprocessing:
-- median imputation for numeric columns
-- most-frequent imputation for categorical columns
-- one-hot encoding for categorical features
-4. Train a regression model on a log-transformed target:
-- `log1p(sale_price)`
-5. Evaluate predictions on the original dollar scale
-6. Print top global feature importances for explainability
-7. Serialize the trained model for inference
-
-Current model progression:
-
-- Linear Regression baseline
-- **XGBoost regressor** for improved non-linear residential price prediction
-
-Run training from project root:
-```
-python ml/models/train_model.py
-```
-
----
-## 📈 Model Evaluation
-
-Recent residential NYC training results:
-
-### Linear Regression baseline
-- MAE: `903,670.77`
-- RMSE: `4,338,505.69`
-- R²: `0.1110`
-
-### XGBoost model
-- MAE: `550,494.73`
-- RMSE: `3,004,114.04`
-- R²: `0.5738`
-
-### Explainability milestone
-Top global feature importances now include:
+## 📈 Model Performance
+
+### Subtype model results
+
+| Model | Segment | R² | MAE | RMSE |
+|---|---|---|---|---|
+| `one_family` | One family dwellings | 0.75 | $221,569 | $454,385 |
+| `multi_family` | Two & three family | 0.63 | $304,808 | $503,625 |
+| `condo_coop` | Condos & co-ops | 0.50 | $440,510 | $1,046,345 |
+| `rental` | Rental apartments | 0.37 | $1,250,152 | $2,206,338 |
+| `global` | All residential | 0.61 | $350,456 | $841,711 |
+
+### Explainability
+Top global feature importances from the trained model:
 - neighborhood
-- building area (`bldgarea`)
+- building area (`bldgarea` / `gross_sqft`)
 - borough
 - total units
-- number of floors
-- zip code
 - building class category
-- gross square feet
-- longitude
-
-Interpretation:
-- residential filtering improved modeling consistency
-- log-transforming the target stabilized training across a wide price range
-- XGBoost significantly outperformed the linear baseline
-- the model is learning plausible NYC-specific drivers like location, building size, and property class
-
----
-## ⚠️ Model Limitations
-
-Current constraints of the MVP model:
-
-- trained only on **residential NYC properties**
-- limited feature set (no economic indicators yet)
-- does not include temporal trends (market cycles)
-- sensitive to data quality in source datasets
-
-### Future Improvements
-- incorporate time-series features
-- add macroeconomic indicators
-- improve geospatial modeling
-- expand beyond NYC dataset
+- geographic coordinates
 
 ---
 
-## 💾 Model Serialization
+## 📊 Feature Engineering
 
-The trained model is serialized using joblib.
+The feature engineering pipeline transforms the merged NYC dataset into a model-ready residential valuation dataset.
 
-Saved model location:
-```
-ml/artifacts/price_model.pkl
-```
-This allows the backend API to reuse the trained model for real-time predictions without retraining.
+**Core modeling features (current model contract):**
 
----
-## 🚀 ML Inference Layer
+| Feature | Type | Description |
+|---|---|---|
+| `gross_sqft` | numeric | Gross building square footage |
+| `land_sqft` | numeric | Land square footage |
+| `year_built` | numeric | Year the property was built |
+| `property_age` | numeric | Derived: `current_year - year_built` |
+| `latitude` | numeric | Property latitude |
+| `longitude` | numeric | Property longitude |
+| `borough` | categorical | NYC borough |
+| `building_class` | categorical | NYC building class label |
+| `neighborhood` | categorical | NYC neighborhood name |
 
-The inference layer loads the trained model and generates predictions from property features.
-
-Implemented in:
-```
-ml/inference/predict.py
-```
-
-Responsibilities include:
-- loading the trained model
-- mapping public request payloads into the internal model feature contract
-- transforming feature inputs
-- generating predictions
-- converting log-scale predictions back to original dollar values
-- returning structured results to the API layer
-
-Implemented inference surface:
-- internal prediction: `POST /predict-price`
-- internal analysis: `POST /analyze-property`
-- public prediction: `POST /predict`
-- public analysis: `POST /analyze`
----
-## ⚡ Performance Optimization (Model Caching)
-
-To improve performance, the model is loaded once into memory and reused for all future requests.
-
-Without optimization:
-```
-Request
-   │
-Load model from disk
-   │
-Predict
-```
-
-Optimized approach:
-```
-First Prediction Request
-        │
-Load model once into memory
-        │
-Cache model in RAM
-        │
-Reuse for all future predictions
-```
-Benefits:
-- faster response times
-- reduced disk I/O
-- improved scalability
+> Note: `condo_coop` model is trained without `gross_sqft` and `land_sqft` — those features are not available for all condo/co-op records. The ModelRegistry handles this automatically via per-model `feature_columns`.
 
 ---
-## 🌐 ML Prediction APIs
 
-PropIntel exposes multiple generations of ML endpoints.
+## 🔬 v2 Prediction Request Schema
 
-### Primary production contract (recommended)
-These are the official endpoints for current integration and future frontend work:
+The primary v2 endpoints use the following standardized request schema:
 
-```text
-POST /predict-price-v2
-POST /analyze-property-v2
-```
+### `POST /predict-price-v2`
 
-`POST /predict-price-v2`
-
-Returns a production-style valuation response including:
-- predicted_price
-- model_used
-- model_version
-- segment
-- input_summary
-- warnings
-- model_metrics
-
-_Example response:_
 ```json
 {
-  "predicted_price": 1150013.46,
-  "model_used": "global",
-  "model_version": "v1",
-  "segment": "all_residential",
-  "input_summary": {
-    "borough": "Brooklyn",
-    "neighborhood": "Park Slope",
-    "building_class": "02 TWO FAMILY DWELLINGS"
-  },
-  "warnings": [
-    "Using global residential fallback model for this property type."
-  ],
-  "model_metrics": {
-    "mae": 350456.25,
-    "rmse": 841711.44,
-    "r2": 0.6096
-  }
+  "borough": "Brooklyn",
+  "neighborhood": "Park Slope",
+  "building_class": "01 ONE FAMILY DWELLINGS",
+  "year_built": 1925,
+  "gross_sqft": 1800,
+  "land_sqft": 2000,
+  "latitude": 40.6720,
+  "longitude": -73.9778
 }
 ```
 
-`POST /analyze-property-v2`
+### `POST /analyze-property-v2`
 
-Returns a grouped production-style investment analysis response:
+Same as above plus:
+
+```json
+{
+  "market_price": 1250000.0
+}
+```
+
+---
+
+## 🧠 ML Inference Architecture
+
+```text
+Client Request (v2 schema)
+          │
+    FastAPI Endpoint
+          │
+   Pydantic Validation
+          │
+   PredictionService.predict()
+          │
+    ModelRegistry.get_model_key(building_class)
+          │
+    ┌─────┴──────────────────────────┐
+    │  Route to segment model:       │
+    │  one_family / multi_family /   │
+    │  condo_coop / rental / global  │
+    └─────┬──────────────────────────┘
+          │
+    ModelRegistry.load_model(key)
+    (lazy-loaded, cached in memory)
+          │
+    Build input DataFrame from
+    metadata.feature_columns
+          │
+    model.predict(X) → log-scale
+          │
+    expm1(prediction) → dollar value
+          │
+    Warnings generated by model_key
+          │
+    Return ProductionPredictionResponse
+```
+
+For analysis requests, `PredictionService.analyze()` additionally:
+1. Computes valuation gap and ROI estimate
+2. Scores the investment (0–100) using ROI + valuation gap + risk penalty
+3. Classifies deal label: `Buy`, `Hold`, or `Avoid`
+4. Loads top feature drivers (cached via `@lru_cache`)
+5. Calls OpenAI gpt-5.4-mini for LLM narrative explanation
+6. Returns grouped `ProductionAnalyzeResponse`
+
+---
+
+## 🌐 API Endpoints
+
+### Properties
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/properties/` | Create a property listing |
+| `GET` | `/properties/` | List properties with filtering and pagination |
+| `GET` | `/properties/{id}` | Retrieve a specific property |
+| `PATCH` | `/properties/{id}` | Partially update a property |
+| `DELETE` | `/properties/{id}` | Delete a property |
+
+**Filtering and pagination:**
+```
+GET /properties?limit=10
+GET /properties?zipcode=10001
+GET /properties?min_price=500000&max_price=900000
+```
+
+### Prediction & Analysis (v2 — Primary)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/predict-price-v2` | Property valuation with model metadata |
+| `POST` | `/analyze-property-v2` | Full investment analysis with LLM explanation |
+| `GET` | `/model/feature-importance` | Top global feature importances |
+
+### Legacy Routes (compatibility only)
+| Method | Endpoint |
+|---|---|
+| `POST` | `/predict-price` |
+| `POST` | `/analyze-property` |
+| `POST` | `/predict` |
+| `POST` | `/analyze` |
+
+---
+
+## Example `POST /analyze-property-v2` Response
 
 ```json
 {
   "valuation": {
-    "predicted_price": 1150013.46,
+    "predicted_price": 1185000.0,
     "market_price": 1250000.0,
-    "price_difference": -99986.54,
-    "price_difference_pct": -8.0
+    "price_difference": -65000.0,
+    "price_difference_pct": -5.2
   },
   "investment_analysis": {
-    "roi_estimate": -8.0,
-    "investment_score": 28,
+    "roi_estimate": -5.2,
+    "investment_score": 38,
     "deal_label": "Avoid",
-    "recommendation": "Avoid",
-    "confidence": "High",
-    "analysis_summary": "Property may be overpriced by approximately $99,987 based on model analysis."
+    "recommendation": "Approach cautiously and negotiate closer to model-estimated value.",
+    "confidence": "medium",
+    "analysis_summary": "Property may be overpriced by approximately $65,000 based on model analysis."
   },
   "drivers": {
     "top_drivers": [
-      "Location (borough) plays a key role in valuation",
-      "Building class is an important driver of estimated value"
+      "Neighborhood demand strongly influences pricing",
+      "Building size significantly impacts property value",
+      "Location (borough) plays a key role in valuation"
     ],
     "global_context": [
       "Model is trained on NYC residential sales data",
@@ -1157,7 +430,7 @@ Returns a grouped production-style investment analysis response:
     "explanation_factors": [
       {
         "factor": "predicted_price",
-        "value": 1150013.46,
+        "value": 1185000.0,
         "reason": "Derived from trained ML model using property features"
       },
       {
@@ -1168,280 +441,367 @@ Returns a grouped production-style investment analysis response:
     ]
   },
   "explanation": {
-    "summary": "This property screens as a weak, speculative investment because the estimated value is below the current market price.",
-    "opportunity": "Potential upside would require improved entry pricing or stronger-than-expected local demand.",
-    "risks": "The asking price currently exceeds the model-derived valuation, which weakens downside protection.",
+    "summary": "The property appears slightly overpriced relative to model-estimated value.",
+    "opportunity": "If acquired below asking price, the valuation gap may create a better entry point.",
+    "risks": "Current asking price reduces margin for upside and weakens near-term return potential.",
     "recommendation": "Avoid",
-    "confidence": "High"
+    "confidence": "medium"
   },
   "metadata": {
     "model_version": "v1"
   }
 }
 ```
-### Legacy compatibility endpoints
-
-These routes remain available for backward compatibility and testing of older request/response contracts:
-
-- `POST /predict-price`
-- `POST /analyze-property`
-- `POST /predict`
-- `POST /analyze`
-
-### Legacy route notes
-
-- `/predict-price` and `/analyze-property` use the older internal engineered-style payload.
-- `/predict` and `/analyze` use a simplified public payload.
-- Legacy analysis routes return the older flat analysis response shape.
-- New frontend work should target **v2**, not the legacy routes.
-
-### Notes
-
-- The current model is trained on residential NYC sales for MVP scope.
-- Predictions are generated from engineered features derived from NYC Rolling Sales and PLUTO datasets.
-- The v2 contract is the recommended integration path for current and future product work.
 
 ---
 
-### 🧠 Explainable AI Responses
-
-The analysis layer was enhanced to return structured explanation fields, transforming raw predictions into actionable investment intelligence.
-
-Current analysis responses can include:
-
-- `valuation`
-  - `predicted_price`
-  - `market_price`
-  - `price_difference`
-  - `price_difference_pct`
-- `investment_analysis`
-  - `roi_estimate`
-  - `investment_score`
-  - `deal_label`
-  - `recommendation`
-  - `confidence`
-  - `analysis_summary`
-- `drivers`
-  - `top_drivers`
-  - `global_context`
-  - `explanation_factors`
-- `explanation`
-  - `summary`
-  - `opportunity`
-  - `risks`
-  - `recommendation`
-  - `confidence`
-- `metadata`
-  - `model_version`
-
-This allows PropIntel to move beyond prediction into decision-support intelligence by separating:
-
-- deterministic backend decision logic
-- structured explainability fields
-- LLM-generated narrative explanation
-
----
-## 🧾 Prediction Request Schema
-
-The current MVP prediction model expects a residential NYC property payload with the following fields:
-
-| Field | Type | Description |
-|------|------|------|
-| `gross_square_feet` | number | building square footage from sales data |
-| `land_square_feet` | number | lot square footage from sales data |
-| `residential_units` | number | residential unit count |
-| `commercial_units` | number | commercial unit count |
-| `total_units` | number | total unit count |
-| `numfloors` | number | number of floors |
-| `unitsres` | number | residential units from PLUTO |
-| `unitstotal` | number | total units from PLUTO |
-| `lotarea` | number | lot area from PLUTO |
-| `bldgarea` | number | building area from PLUTO |
-| `latitude` | number | latitude |
-| `longitude` | number | longitude |
-| `pluto_year_built` | number | year built from PLUTO |
-| `building_age` | number | derived feature: current year - year built |
-| `borough` | number | NYC borough code |
-| `building_class_category` | string | building category label |
-| `neighborhood` | string | NYC neighborhood |
-| `zip_code` | number | property ZIP code |
-
----
-## 🧠 ML Inference Architecture
-
-The prediction system now operates as follows:
-```text
-Client Request
-      │
-FastAPI Endpoint
-      │
-Pydantic Validation
-      │
-Public Payload Mapping
-      │
-Internal Model Feature Contract
-      │
-Cached XGBoost Model
-      │
-Prediction / Analysis
-      │
-JSON Response
-```
-
-The inference layer is responsible for:
-- validating incoming residential property features
-- mapping request fields into the model input contract
-- loading the serialized model artifact
-- generating predictions
-- returning a structured API response
-
----
-## 🔬 ML Pipeline
-The machine learning workflow follows a standard production pattern:
+## 📁 Project Structure
 
 ```
-Dataset Ingestion
-        │
-Data Cleaning
-        │
-Feature Engineering
-        │
-Model Training
-        │
-Model Evaluation
-        │
-Model Serialization
-        │
-API Inference
+propintel-ai/
+│
+├── frontend/                        # React 19 + Vite + TailwindCSS 4
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── .env                         # VITE_API_BASE_URL
+│
+├── backend/
+│   └── app/
+│       ├── api/
+│       │   ├── prediction.py        # All prediction/analysis endpoints
+│       │   └── properties.py        # Property CRUD endpoints
+│       ├── core/
+│       │   └── config.py            # Path configuration
+│       ├── db/
+│       │   ├── database.py          # SQLAlchemy engine + session
+│       │   ├── init_db.py           # Table creation script
+│       │   └── models.py            # ORM models (Property, HousingData)
+│       ├── schemas/
+│       │   ├── prediction.py        # All prediction request/response schemas
+│       │   └── property.py          # Property request/response schemas
+│       ├── services/
+│       │   ├── model_registry.py    # Metadata-driven model loader + routing
+│       │   ├── predictor.py         # PredictionService: predict + analyze
+│       │   └── explainer.py         # OpenAI LLM explanation generation
+│       ├── scripts/
+│       │   └── load_data.py         # Bulk load housing CSV into PostgreSQL
+│       └── main.py                  # FastAPI app entry point
+│
+├── ml/
+│   ├── artifacts/
+│   │   ├── price_model.pkl          # Global XGBoost model
+│   │   ├── catboost_model.joblib    # CatBoost experiment artifact
+│   │   ├── feature_importance.csv   # Persisted global feature importances
+│   │   ├── metadata/
+│   │   │   ├── global_model.json
+│   │   │   ├── one_family_model.json
+│   │   │   ├── multi_family_model.json
+│   │   │   ├── condo_coop_model.json
+│   │   │   └── rental_model.json
+│   │   └── subtype_models/
+│   │       ├── one_family_price_model.pkl
+│   │       ├── multi_family_price_model.pkl
+│   │       ├── condo_coop_price_model.pkl
+│   │       ├── rental_price_model.pkl
+│   │       └── subtype_model_metrics.csv
+│   ├── data/
+│   │   ├── nyc_raw/                 # NYC Rolling Sales Excel files (git-ignored)
+│   │   ├── pluto_raw/               # PLUTO CSV (git-ignored)
+│   │   ├── processed/               # Merged + cleaned datasets (git-ignored)
+│   │   └── features/                # Engineered feature datasets (git-ignored)
+│   ├── features/
+│   │   └── feature_engineering.py
+│   ├── inference/
+│   │   └── predict.py               # Legacy inference + feature importance loader
+│   ├── models/
+│   │   ├── train_model.py           # Global XGBoost training pipeline
+│   │   ├── train_subtype_models.py  # Subtype XGBoost training pipeline
+│   │   └── train_catboost_model.py  # CatBoost experiment
+│   └── pipelines/
+│       ├── data_ingestion.py        # NYC Rolling Sales + PLUTO ingestion
+│       ├── create_training_data.py  # Clean + filter training data from DB
+│       ├── create_subtype_training_data.py
+│       └── profile_housing_data.py  # Dataset profiling utility
+│
+├── tests/
+│   ├── conftest.py
+│   ├── test_prediction_api.py       # 8 prediction API tests with mocking
+│   └── test_property_api.py         # Property CRUD test
+│
+├── .github/
+│   └── workflows/
+│       └── tests.yml                # CI: pytest on push/PR to main
+│
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── .env.example
+├── .env.docker.example
+└── README.md
 ```
-This pipeline is intended to support:
-- property price prediction
-- investment scoring
-- ROI estimation
-- future market analysis features
+
+### Module responsibilities
+
+| Folder | Purpose |
+|---|---|
+| `frontend/` | React 19 UI — property analysis and portfolio dashboard |
+| `api/` | FastAPI route handlers |
+| `core/` | Application configuration and path management |
+| `db/` | Database engine, session, and ORM models |
+| `schemas/` | Pydantic v2 request/response validation |
+| `services/` | ML prediction, investment scoring, LLM explanation |
+| `ml/artifacts/` | Serialized model PKLs, metadata JSONs, feature importance |
+| `ml/data/` | Dataset ingestion and processing |
+| `ml/features/` | Feature engineering logic |
+| `ml/inference/` | Legacy prediction utilities and feature importance loader |
+| `ml/models/` | Model training pipelines |
+| `ml/pipelines/` | End-to-end ML pipeline orchestration |
 
 ---
 
-## 📊 Preparing Data for Machine Learning
+## ⚙️ Environment Setup
 
-Once data is stored in PostgreSQL, it can be extracted and transformed for training machine learning models.
+### Backend
 
-Examples of features that can be used for investment analysis include:
-- square footage
-- lot and building area
-- building age
-- neighborhood and borough
-- zip code
-- residential unit counts
-- geographic coordinates
-- building class category
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-These features feed the PropIntel AI valuation model.
+Create a `.env` file at the project root:
+
+```
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+OPENAI_API_KEY=sk-...
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+Create a `frontend/.env` file:
+
+```
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
 
 ---
 
+## ▶️ Running the App
 
-## 📈 Investment Analysis Output
+### Backend
 
-PropIntel now exposes structured investment-analysis responses through the API.
-
-Production-style endpoint:
-```
-POST /analyze-property-v2
+```bash
+uvicorn backend.app.main:app --reload
 ```
 
-Example response shape:
+Available at:
+- API: `http://127.0.0.1:8000`
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
 
-```json
-{
-  "valuation": {
-    "predicted_price": 1038740.45,
-    "market_price": 725000.0,
-    "price_difference": 313740.45,
-    "price_difference_pct": 43.27
-  },
-  "investment_analysis": {
-    "roi_estimate": 43.27,
-    "investment_score": 87,
-    "deal_label": "Buy",
-    "recommendation": "Buy",
-    "confidence": "High",
-    "analysis_summary": "Property appears undervalued by approximately $313,740 based on model analysis."
-  },
-  "drivers": {
-    "top_drivers": [
-      "Location (borough) plays a key role in valuation",
-      "Building class is an important driver of estimated value"
-    ]
-  },
-  "explanation": {
-    "summary": "This property screens as an excellent investment opportunity...",
-    "opportunity": "The main upside comes from the significant valuation gap...",
-    "risks": "Returns depend on the model's assumptions being accurate...",
-    "recommendation": "Buy",
-    "confidence": "High"
-  },
-  "metadata": {
-    "model_version": "v1"
-  }
-}
+### Frontend
+
+```bash
+cd frontend
+npm run dev
 ```
-This analysis layer is now implemented and represents a major step forward from raw valuation into structured investment decision support.
+
+Available at `http://localhost:5174`
+
+### Initialize the database
+
+```bash
+python -m backend.app.db.init_db
+```
+
+---
+
+## 🗄️ Database Integration
+
+### Connection
+
+`backend/app/db/database.py` manages:
+- SQLAlchemy engine with `pool_pre_ping=True` and `pool_recycle=300`
+- Session factory with `autocommit=False`, `autoflush=False`
+- `get_db()` dependency injected into all route handlers via `Depends()`
+
+### Models
+
+| Table | Model | Description |
+|---|---|---|
+| `properties` | `Property` | User-submitted property listings |
+| `housing_data` | `HousingData` | NYC training data loaded from CSV pipeline |
+
+---
+
+## 🔍 Testing
+
+Automated tests live in `tests/`.
+
+```bash
+pytest
+```
+
+### Test coverage
+
+| Test file | Coverage |
+|---|---|
+| `test_property_api.py` | `POST /properties/` create endpoint |
+| `test_prediction_api.py` | All 6 prediction/analysis endpoints (8 test functions) |
+
+### Patterns used
+- `monkeypatch` for mocking legacy inference functions
+- `app.dependency_overrides` for mocking `PredictionService`
+- SQLite in-memory database for full test isolation
+- Validation error tests for coordinate and year bounds
+
+### CI Pipeline
+
+GitHub Actions runs `pytest` automatically on:
+- push to `main`
+- pull requests targeting `main`
+
+Workflow: `.github/workflows/tests.yml`
+
+The CI pipeline:
+1. Checks out the repo
+2. Sets up Python 3.11
+3. Installs dependencies
+4. Initializes the SQLite test database
+5. Runs `pytest` with `DATABASE_URL=sqlite:///./test.db`
+
+---
+
+## 🐳 Docker & Docker Compose
+
+### Build the API image
+
+```bash
+docker build -t propintel-api .
+```
+
+### Run with Supabase (cloud PostgreSQL)
+
+```bash
+docker run --rm -p 8000:8000 --env-file .env.docker propintel-api
+```
+
+### Run with Docker Compose (local PostgreSQL)
+
+```bash
+docker compose up --build
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+### Environment files
+
+| File | Purpose |
+|---|---|
+| `.env` | Local development |
+| `.env.docker` | Docker with Supabase (git-ignored) |
+| `.env.docker.example` | Template for `.env.docker` |
+| `.env.example` | Template for `.env` |
+
+---
+
+## ⚡ Performance Optimizations
+
+### Model caching
+Models are lazy-loaded on first request and cached in memory by the `ModelRegistry`. Subsequent requests for the same model key return the cached pipeline with zero disk I/O.
+
+### Feature importance caching
+`load_feature_importance()` and `get_top_global_features()` in `ml/inference/predict.py` are decorated with `@lru_cache(maxsize=None)`. The feature importance CSV is read from disk once per server process and cached for all subsequent analysis requests.
 
 ---
 
 ## ✅ Current Progress
 
+### Frontend
+- React 19 + Vite 8 + TailwindCSS 4 + React Router 7
+- Live and integrated with FastAPI backend
+- Tested with sample data across prediction and analysis endpoints
+
 ### Backend and Database
-- FastAPI backend server
-- modular backend architecture
+- FastAPI backend with modular architecture
 - Supabase PostgreSQL integration
-- SQLAlchemy ORM models
-- full property CRUD:
+- SQLAlchemy ORM with `Property` and `HousingData` models
+- Full property CRUD:
   - `POST /properties/`
-  - `GET /properties/`
+  - `GET /properties/` (filtering + pagination)
   - `GET /properties/{property_id}`
   - `PATCH /properties/{property_id}`
   - `DELETE /properties/{property_id}`
-- Pydantic validation schemas
-- Structured error handling
-- Swagger API documentation
+- Pydantic v2 validation on all create and update schemas
+- Swagger API documentation auto-generated
+
+### Service Layer
+- `ModelRegistry` — metadata-driven model loader with segment routing
+- `PredictionService` — prediction + investment analysis orchestration
+- `Explainer` — OpenAI gpt-5.4-mini LLM narrative generation
+- Per-model-key warning system for low-confidence predictions
 
 ### Machine Learning
-- NYC Rolling Sales ingestion pipeline
+- NYC Rolling Sales ingestion pipeline (5 boroughs)
 - PLUTO dataset ingestion pipeline
 - BBL-based dataset merge
-- feature engineering pipeline
-- residential-only dataset filtering
-- log-transformed target training
-- Linear Regression baseline model
-- XGBoost residential valuation model
-- feature importance / explainability output
-- model serialization
-- ML inference layer structure
-- internal ML endpoints:
-  - `POST /predict-price`
-  - `POST /analyze-property`
-- simplified public ML endpoints:
-  - `POST /predict`
-  - `POST /analyze`
-- production-oriented ML endpoints:
-  - `POST /predict-price-v2`
-  - `POST /analyze-property-v2`
-- grouped investment analysis response schema
-- deterministic investment scoring
-- deterministic `deal_label` classification
+- Feature engineering pipeline
+- Residential-only dataset filtering
+- Log-transformed target training (`log1p` / `expm1`)
+- Global XGBoost residential valuation model
+- 4 trained subtype XGBoost models:
+  - `one_family` (R²=0.75)
+  - `multi_family` (R²=0.63)
+  - `condo_coop` (R²=0.50)
+  - `rental` (R²=0.37)
+- Full building-class routing via `ModelRegistry.get_model_key()`
+- Feature importance artifact persisted and cached at runtime
+- All 5 models registered with version metadata JSONs
+- ML inference endpoints:
+  - `POST /predict-price-v2` (primary)
+  - `POST /analyze-property-v2` (primary)
+  - `GET /model/feature-importance`
+  - Legacy routes maintained for compatibility
+- Grouped investment analysis response schema
+- Deterministic investment scoring (ROI + valuation gap + risk penalty)
+- Deterministic `deal_label` classification
 - LLM-based investment narrative generation
-- human-readable explainability drivers
 
 ### Engineering and Reliability
-- automated tests with pytest + FastAPI TestClient
-- GitHub Actions CI workflow running tests on push/PR
-- response contract tests updated for grouped analysis schema
+- Automated tests with pytest + FastAPI TestClient
+- GitHub Actions CI workflow passing on push/PR to `main`
+- Response contract tests for all 6 prediction/analysis endpoints
+- Test isolation: `DATABASE_URL` set before app import in all test files
 - Dockerfile for containerized API deployment
-- Docker Compose for local container orchestration
-- secure environment management
+- Docker Compose for local container orchestration with PostgreSQL
+- Secure environment variable management via `.env` files
+
 ---
 
+## ⚠️ Model Limitations
 
+Current constraints of the valuation models:
 
+- Trained only on **NYC residential properties** — not applicable to commercial
+- `rental` model has high uncertainty (R²=0.37) — treat as directional signal only
+- No temporal features — does not capture market cycles or seasonality
+- No macroeconomic indicators
+- Sensitive to data quality in source NYC datasets
+
+### Future improvements
+- Retrain `rental` model with improved features or larger dataset
+- Add time-series features for market trend awareness
+- Add macroeconomic indicators
+- Expand SHAP per-property explainability
+- Prediction confidence intervals (`price_low` / `price_high`)
+- Batch prediction endpoint for portfolio analysis
