@@ -1,3 +1,10 @@
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from backend.app.core.error_handlers import (
+    http_exception_handler,
+    validation_exception_handler,
+    internal_error_handler,
+)
 from fastapi import FastAPI
 from backend.app.api.prediction import router as prediction_router
 from backend.app.api.properties import router as properties_router
@@ -19,6 +26,9 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, internal_error_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 cors_origins = [
