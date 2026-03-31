@@ -1,6 +1,7 @@
 import joblib
 import numpy as np
 import pandas as pd
+from functools import lru_cache
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -226,6 +227,7 @@ def generate_analysis_summary(
         f"Key drivers include: {driver_text}."
     )
     
+@lru_cache(maxsize=None)
 def load_feature_importance(top_n: int = 10) -> dict:
     feature_importance_file = BASE_DIR / "ml/artifacts/feature_importance.csv"
     
@@ -245,6 +247,7 @@ def load_feature_importance(top_n: int = 10) -> dict:
         "total": len(items)
     }
     
+@lru_cache(maxsize=None)
 def get_top_global_features(top_n: int = 10) -> list[str]:
     feature_importance_file = BASE_DIR / "ml/artifacts/feature_importance.csv"
     df = pd.read_csv(feature_importance_file)

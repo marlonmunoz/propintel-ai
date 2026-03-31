@@ -1,5 +1,6 @@
 import math
 import pandas as pd 
+from datetime import datetime
 
 import os 
 from dotenv import load_dotenv
@@ -45,7 +46,7 @@ class PredictionService:
         model = self.registry.load_model(model_key)
         metadata = self.registry.get_metadata(model_key)
         
-        property_age = 2026 - payload.year_built
+        property_age = datetime.now().year - payload.year_built
         
         row = {
             "gross_sqft": payload.gross_sqft,
@@ -68,7 +69,12 @@ class PredictionService:
         predicted_price = float(math.expm1(prediction_log))
         
         warnings = []
-        if payload.building_class.strip() != "01 ONE FAMILY DWELLINGS":
+        if model_key == "rental":
+            warnings.append(
+                "Rental property valuations have higher uncertainty (R²=0.37). "
+                "Use this estimate as a directional signal only."
+            )
+        elif model_key == "global":
             warnings.append(
                 "Using global residential fallback model for this property type."
             )

@@ -1,0 +1,22 @@
+{
+    "name": "rental",
+    "version": "v1",
+    "segment": "rental",
+    "artifact_path": "ml/artifacts/subtype_models/rental_price_model.pkl",
+    "feature_columns": [
+        "gross_sqft",
+        "land_sqft",
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics": {
+        "mae": 1250151.94,
+        "rmse": 2206337.91,
+        "r2": 0.3739
+    }
+}

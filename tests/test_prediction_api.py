@@ -1,3 +1,6 @@
+import os
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+
 from fastapi.testclient import TestClient
 from backend.app.main import app
 import backend.app.api.prediction as prediction_api

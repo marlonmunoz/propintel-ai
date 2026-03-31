@@ -27,12 +27,12 @@ class PropertyCreate(PropertyBase):
 
 
 class PropertyUpdate(BaseModel):
-    address: Optional[str] = None
-    zipcode: Optional[str] = None
-    bedrooms: Optional[int] = None
-    bathrooms: Optional[int] = None
-    sqft: Optional[int] = None
-    listing_price: Optional[float] = None
+    address: Optional[str] = Field(default=None, min_length=3)
+    zipcode: Optional[str] = Field(default=None, min_length=3, max_length=10)
+    bedrooms: Optional[int] = Field(default=None, ge=0)
+    bathrooms: Optional[int] = Field(default=None, ge=0)
+    sqft: Optional[int] = Field(default=None, gt=0)
+    listing_price: Optional[float] = Field(default=None, gt=0)
 
 
 class PropertyResponse(PropertyBase):

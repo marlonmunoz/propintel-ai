@@ -2,6 +2,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
 
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -176,7 +177,7 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         if col in subset.columns:
             subset[col] = pd.to_numeric(subset[col], errors="coerce")
 
-    subset["property_age"] = 2026 - subset["year_built"]
+    subset["property_age"] = datetime.now().year - subset["year_built"]
 
     subset = subset.dropna(subset=["sales_price", "year_built", "latitude", "longitude"])
 

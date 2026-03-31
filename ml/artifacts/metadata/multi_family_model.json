@@ -1,0 +1,22 @@
+{
+    "name": "multi_family",
+    "version": "v1",
+    "segment": "multi_family",
+    "artifact_path": "ml/artifacts/subtype_models/multi_family_price_model.pkl",
+    "feature_columns": [
+        "gross_sqft",
+        "land_sqft",
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics": {
+        "mae": 304808.31,
+        "rmse": 503625.18,
+        "r2": 0.6336
+    }
+}

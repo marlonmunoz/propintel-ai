@@ -13,14 +13,31 @@ class RegisteredModel:
     metrics: dict
     
 
+BASE_DIR = Path(__file__).resolve().parents[3]
+
 class ModelRegistry:
     def __init__(self) -> None:
-        self.metadata_dir = Path("ml/artifacts/metadata")
+        self.base_dir = BASE_DIR
+        self.metadata_dir = BASE_DIR / "ml" / "artifacts" / "metadata"
         self._models = {
-            "global": self._load_metadata("global_model.json"),
-            "one_family": self._load_metadata("one_family_model.json"),
+            "global":       self._load_metadata("global_model.json"),
+            "one_family":   self._load_metadata("one_family_model.json"),
+            "multi_family": self._load_metadata("multi_family_model.json"),
+            "condo_coop":   self._load_metadata("condo_coop_model.json"),
+            "rental":       self._load_metadata("rental_model.json"),
         }
         self._loaded_models = {}
+
+    def load_model(self, key: str):
+        if key not in self._models:
+            raise ValueError(f"Unknown model key: {key}")
+
+        if key not in self._loaded_models:
+            # Resolve artifact_path relative to project root, not CWD
+            artifact_path = BASE_DIR / self._models[key].artifact_path
+            self._loaded_models[key] = joblib.load(artifact_path)
+
+        return self._loaded_models[key]
     
     def _load_metadata(self, filename: str) -> RegisteredModel:
         metadata_path = self.metadata_dir / filename
@@ -38,20 +55,32 @@ class ModelRegistry:
         )
         
     def get_model_key(self, building_class: str) -> str:
-        if building_class.strip() == "01 ONE FAMILY DWELLINGS":
+        bc = building_class.strip()
+
+        ONE_FAMILY = {"01 ONE FAMILY DWELLINGS"}
+        MULTI_FAMILY = {"02 TWO FAMILY DWELLINGS", "03 THREE FAMILY DWELLINGS"}
+        CONDO_COOP = {
+            "09 COOPS - WALKUP APARTMENTS",
+            "10 COOPS - ELEVATOR APARTMENTS",
+            "12 CONDOS - WALKUP APARTMENTS",
+            "13 CONDOS - ELEVATOR APARTMENTS",
+            "15 CONDOS - 2-10 UNIT RESIDENTIAL",
+            "17 CONDO COOPS",
+        }
+        RENTAL = {
+            "07 RENTALS - WALKUP APARTMENTS",
+            "08 RENTALS - ELEVATOR APARTMENTS",
+        }
+
+        if bc in ONE_FAMILY:
             return "one_family"
+        if bc in MULTI_FAMILY:
+            return "multi_family"
+        if bc in CONDO_COOP:
+            return "condo_coop"
+        if bc in RENTAL:
+            return "rental"
         return "global"
-    
-    
-    def load_model(self, key: str):
-        if key not in self._models:
-            raise ValueError(f"Unknown model key: {key}")
-        
-        if key not in self._loaded_models:
-            artifact_path = self._models[key].artifact_path
-            self._loaded_models[key] = joblib.load(artifact_path)
-            
-        return self._loaded_models[key]
     
     
     def get_metadata(self, key: str) -> RegisteredModel:

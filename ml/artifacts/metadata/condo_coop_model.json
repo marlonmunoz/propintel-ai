@@ -1,0 +1,20 @@
+{
+    "name": "condo_coop",
+    "version": "v1",
+    "segment": "condo_coop",
+    "artifact_path": "ml/artifacts/subtype_models/condo_coop_price_model.pkl",
+    "feature_columns": [
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics": {
+        "mae": 440509.95,
+        "rmse": 1046344.60,
+        "r2": 0.5028
+    }
+}

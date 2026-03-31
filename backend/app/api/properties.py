@@ -105,7 +105,6 @@ def delete_property(
     property_id = int,
     db: Session = Depends(get_db)
 ):
-    property_id = int(property_id)
     property_obj = db.query(Property).filter(Property.id == property_id).first()
     
     if not property_obj:
