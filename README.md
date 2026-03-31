@@ -464,7 +464,7 @@ propintel-ai/
 │   ├── src/
 │   ├── public/
 │   ├── package.json
-│   └── .env                         # VITE_API_BASE_URL
+│   └── .env                         # VITE_API_BASE_URL, VITE_API_KEY
 │
 ├── backend/
 │   └── app/
@@ -588,7 +588,10 @@ Create a `frontend/.env` file:
 
 ```
 VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_API_KEY=your-secret-api-key-here
 ```
+
+> `VITE_API_KEY` must match the `API_KEY` value in your backend `.env`.
 
 ---
 
