@@ -17,6 +17,7 @@ from backend.app.core.limiter import limiter
 import json
 import os
 import time
+import uuid
 import logging
 from dotenv import load_dotenv
 
@@ -48,17 +49,21 @@ app = FastAPI(
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
         start = time.time()
         response = await call_next(request)
         duration_ms = int((time.time() - start) * 1000)
         logger.info(
-            "%s %s | status=%s | duration=%dms | ip=%s",
+            "%s %s | status=%s | duration=%dms | ip=%s | request_id=%s",
             request.method,
             request.url.path,
             response.status_code,
             duration_ms,
             request.client.host if request.client else "unknown",
-        )      
+            request_id,
+        )
+        response.headers["X-Request-ID"] = request_id
         return response
 
 
