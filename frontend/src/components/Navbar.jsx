@@ -36,6 +36,16 @@ export default function Navbar() {
           >
             Analyze
           </Link>
+          <Link
+            to="/portfolio"
+            className={`text-sm font-medium transition ${
+              location.pathname === "/portfolio"
+                ? "text-white"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Portfolio
+          </Link>
           <a
             href="http://127.0.0.1:8000/docs"
             target="_blank"
