@@ -1,23 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Pencil, X, Check } from 'lucide-react'
+import { BarChart3, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import {
-  getProperties,
-  createProperty,
-  updateProperty,
-  deleteProperty,
-} from '../services/propertiesApi'
-
-const emptyForm = {
-  address: '',
-  zipcode: '',
-  bedrooms: '',
-  bathrooms: '',
-  sqft: '',
-  listing_price: '',
-}
+import { getProperties, deleteProperty } from '../services/propertiesApi'
 
 function formatCurrency(value) {
+  if (value == null) return '—'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -25,17 +13,32 @@ function formatCurrency(value) {
   }).format(value)
 }
 
+function formatPercent(value) {
+  if (value == null) return '—'
+  const sign = value >= 0 ? '+' : ''
+  return `${sign}${value.toFixed(1)}%`
+}
+
+function ScoreBadge({ score, label }) {
+  let classes = 'border-slate-700 bg-slate-800 text-slate-300'
+  if (score >= 75) classes = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+  else if (score >= 50) classes = 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
+  else if (score >= 25) classes = 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+  else classes = 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${classes}`}>
+      {score}/100 · {label}
+    </span>
+  )
+}
+
 export default function Portfolio() {
   const [properties, setProperties] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState(emptyForm)
-  const [formError, setFormError] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [editData, setEditData] = useState({})
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
     fetchProperties()
@@ -48,32 +51,9 @@ export default function Portfolio() {
       const data = await getProperties({ limit: 50 })
       setProperties(data)
     } catch (err) {
-      setError(err.message || 'Failed to load properties.')
+      setError(err.message || 'Failed to load saved analyses.')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  async function handleCreate(e) {
-    e.preventDefault()
-    setFormError('')
-    setIsSubmitting(true)
-    try {
-      await createProperty({
-        address: formData.address,
-        zipcode: formData.zipcode,
-        bedrooms: Number(formData.bedrooms),
-        bathrooms: Number(formData.bathrooms),
-        sqft: Number(formData.sqft),
-        listing_price: Number(formData.listing_price),
-      })
-      setFormData(emptyForm)
-      setShowForm(false)
-      await fetchProperties()
-    } catch (err) {
-      setFormError(err.message || 'Failed to create property.')
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -83,33 +63,8 @@ export default function Portfolio() {
       setProperties((prev) => prev.filter((p) => p.id !== id))
       setConfirmDeleteId(null)
     } catch (err) {
-      setError(err.message || 'Failed to delete property.')
+      setError(err.message || 'Failed to delete.')
       setConfirmDeleteId(null)
-    }
-  }
-
-  function startEdit(property) {
-    setEditingId(property.id)
-    setEditData({
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      sqft: property.sqft,
-      listing_price: property.listing_price,
-    })
-  }
-
-  async function handleUpdate(id) {
-    try {
-      await updateProperty(id, {
-        bedrooms: Number(editData.bedrooms),
-        bathrooms: Number(editData.bathrooms),
-        sqft: Number(editData.sqft),
-        listing_price: Number(editData.listing_price),
-      })
-      setEditingId(null)
-      await fetchProperties()
-    } catch (err) {
-      setError(err.message || 'Failed to update property.')
     }
   }
 
@@ -120,77 +75,15 @@ export default function Portfolio() {
       <section className="mx-auto max-w-6xl px-6 pb-16 pt-24">
 
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
-              Portfolio
-            </p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">
-              Your Properties
-            </h1>
-          </div>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
-          >
-            <Plus className="h-4 w-4" />
-            Add Property
-          </button>
+        <div className="mb-8">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
+            Portfolio
+          </p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">Saved Analyses</h1>
+          <p className="mt-2 text-sm text-slate-400">
+            Properties you analyzed and saved — no need to re-run the model.
+          </p>
         </div>
-
-        {/* Add Property Form */}
-        {showForm && (
-          <form
-            onSubmit={handleCreate}
-            className="mb-8 rounded-2xl border border-slate-700 bg-slate-900 p-6"
-          >
-            <h2 className="mb-4 font-semibold text-white">New Property</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                { key: 'address', label: 'Address', type: 'text' },
-                { key: 'zipcode', label: 'Zip Code', type: 'text' },
-                { key: 'bedrooms', label: 'Bedrooms', type: 'number' },
-                { key: 'bathrooms', label: 'Bathrooms', type: 'number' },
-                { key: 'sqft', label: 'Sq Ft', type: 'number' },
-                { key: 'listing_price', label: 'Listing Price', type: 'number' },
-              ].map(({ key, label, type }) => (
-                <div key={key}>
-                  <label className="mb-1 block text-xs font-medium text-slate-400">
-                    {label}
-                  </label>
-                  <input
-                    type={type}
-                    value={formData[key]}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                    required
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-white outline-none transition focus:border-cyan-400"
-                  />
-                </div>
-              ))}
-            </div>
-            {formError && (
-              <p className="mt-3 text-sm text-rose-400">{formError}</p>
-            )}
-            <div className="mt-4 flex gap-3">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-xl bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
-              >
-                {isSubmitting ? 'Saving...' : 'Save Property'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setFormData(emptyForm); setFormError('') }}
-                className="rounded-xl border border-slate-700 px-5 py-2 font-semibold text-white transition hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
 
         {/* Error */}
         {error && (
@@ -202,86 +95,103 @@ export default function Portfolio() {
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center justify-center py-20 text-slate-400">
-            Loading properties...
+            Loading…
           </div>
         )}
 
         {/* Empty state */}
         {!isLoading && !error && properties.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-lg font-semibold text-slate-300">No properties yet</p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 py-20 text-center">
+            <BarChart3 className="mb-4 h-10 w-10 text-slate-600" />
+            <p className="text-lg font-semibold text-slate-300">No saved analyses yet</p>
             <p className="mt-1 text-sm text-slate-500">
-              Add your first property using the button above.
+              Run an analysis and click <span className="text-white font-medium">Save to Portfolio</span> to store it here.
             </p>
+            <Link
+              to="/analyze"
+              className="mt-6 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+            >
+              Go to Analyze
+            </Link>
           </div>
         )}
 
-        {/* Property list */}
+        {/* Analysis cards */}
         {!isLoading && properties.length > 0 && (
-          <div className="space-y-3">
-            {properties.map((property) => (
-              <div
-                key={property.id}
-                className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-slate-600"
-              >
-                {editingId === property.id ? (
-                  /* Edit mode */
-                  <div className="flex flex-wrap items-end gap-4">
-                    {[
-                      { key: 'bedrooms', label: 'Beds' },
-                      { key: 'bathrooms', label: 'Baths' },
-                      { key: 'sqft', label: 'Sq Ft' },
-                      { key: 'listing_price', label: 'Price' },
-                    ].map(({ key, label }) => (
-                      <div key={key} className="flex-1 min-w-[100px]">
-                        <label className="mb-1 block text-xs text-slate-400">{label}</label>
-                        <input
-                          type="number"
-                          value={editData[key]}
-                          onChange={(e) =>
-                            setEditData((prev) => ({ ...prev, [key]: e.target.value }))
-                          }
-                          className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400"
-                        />
-                      </div>
-                    ))}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleUpdate(property.id)}
-                        className="flex items-center gap-1 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-                      >
-                        <Check className="h-4 w-4" /> Save
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="flex items-center gap-1 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                      >
-                        <X className="h-4 w-4" /> Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* View mode */
-                  <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-4">
+            {properties.map((property) => {
+              const a = property.analysis
+              const valuation = a?.valuation
+              const inv = a?.investment_analysis
+              const exp = a?.explanation
+              const isExpanded = expandedId === property.id
+
+              return (
+                <div
+                  key={property.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-900/60 transition hover:border-slate-600"
+                >
+                  {/* Card header — always visible */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 p-5">
                     <div className="flex items-center gap-4">
                       <span className="flex h-7 min-w-[28px] flex-shrink-0 items-center justify-center rounded-lg bg-slate-800 px-1.5 text-xs font-bold text-slate-400">
                         {property.id}
                       </span>
                       <div>
                         <p className="font-semibold text-white">{property.address}</p>
-                        <p className="text-sm text-slate-400">{property.zipcode}</p>
+                        {inv && (
+                          <div className="mt-1">
+                            <ScoreBadge
+                              score={inv.investment_score}
+                              label={inv.deal_label}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-6 text-sm text-slate-300">
 
-                      <span>{property.bedrooms} bed</span>
-                      <span>{property.bathrooms} bath</span>
-                      <span>{property.sqft?.toLocaleString()} sqft</span>
-                      <span className="font-semibold text-cyan-400">
-                        {formatCurrency(property.listing_price)}
-                      </span>
+                    <div className="flex flex-wrap items-center gap-6 text-sm">
+                      {valuation && (
+                        <>
+                          <div className="text-right">
+                            <p className="text-xs text-slate-500">Predicted</p>
+                            <p className="font-semibold text-cyan-400">
+                              {formatCurrency(valuation.predicted_price)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-slate-500">Market</p>
+                            <p className="font-semibold text-white">
+                              {formatCurrency(valuation.market_price)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-slate-500">Difference</p>
+                            <p className={`font-semibold ${valuation.price_difference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {formatPercent(valuation.price_difference_pct)}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      {inv && (
+                        <div className="text-right">
+                          <p className="text-xs text-slate-500">ROI Est.</p>
+                          <p className="font-semibold text-white">
+                            {formatPercent(inv.roi_estimate)}
+                          </p>
+                        </div>
+                      )}
                     </div>
+
                     <div className="flex items-center gap-2">
+                      {a && (
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : property.id)}
+                          className="rounded-xl border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                        >
+                          {isExpanded ? 'Collapse' : 'Details'}
+                        </button>
+                      )}
                       {confirmDeleteId === property.id ? (
                         <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5">
                           <span className="text-sm text-rose-300">Delete?</span>
@@ -300,26 +210,57 @@ export default function Portfolio() {
                           </button>
                         </div>
                       ) : (
-                        <>
-                          <button
-                            onClick={() => startEdit(property)}
-                            className="flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-                          >
-                            <Pencil className="h-3.5 w-3.5" /> Edit
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteId(property.id)}
-                            className="flex items-center gap-1 rounded-xl border border-rose-500/30 px-3 py-1.5 text-sm text-rose-400 transition hover:bg-rose-500/10"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Delete
-                          </button>
-                        </>
+                        <button
+                          onClick={() => setConfirmDeleteId(property.id)}
+                          className="flex items-center gap-1 rounded-xl border border-rose-500/30 px-3 py-1.5 text-sm text-rose-400 transition hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
                       )}
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Expanded details */}
+                  {isExpanded && a && (
+                    <div className="border-t border-slate-800 px-5 pb-5 pt-4 space-y-4">
+                      {inv?.recommendation && (
+                        <p className="text-sm text-slate-300">
+                          <span className="font-semibold text-white">Recommendation: </span>
+                          {inv.recommendation}
+                        </p>
+                      )}
+                      {inv?.analysis_summary && (
+                        <p className="text-sm leading-7 text-slate-300">
+                          {inv.analysis_summary}
+                        </p>
+                      )}
+                      {exp && (
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          {exp.summary && (
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Summary</p>
+                              <p className="text-sm leading-6 text-slate-300">{exp.summary}</p>
+                            </div>
+                          )}
+                          {exp.opportunity && (
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Opportunity</p>
+                              <p className="text-sm leading-6 text-slate-300">{exp.opportunity}</p>
+                            </div>
+                          )}
+                          {exp.risks && (
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Risks</p>
+                              <p className="text-sm leading-6 text-slate-300">{exp.risks}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </section>

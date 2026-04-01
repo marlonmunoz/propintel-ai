@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, JSON, String, Float
 from backend.app.db.database import Base
 
 class Property(Base):
@@ -11,6 +11,7 @@ class Property(Base):
     bathrooms = Column(Integer, nullable=False)
     sqft = Column(Integer, nullable=False)
     listing_price = Column(Float, nullable=False)
+    analysis = Column(JSON, nullable=True)
     
     
 class HousingData(Base):

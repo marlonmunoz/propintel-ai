@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import { BookmarkPlus, CheckCircle2, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
+import { createProperty } from '../services/propertiesApi'
 import Navbar from '../components/Navbar'
 
 const boroughOptions = [
@@ -246,6 +247,9 @@ export default function Analyze() {
   const [analysisResult, setAnalysisResult] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [savedToPortfolio, setSavedToPortfolio] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -307,6 +311,8 @@ export default function Analyze() {
 
     setFormErrors({})
     setIsLoading(true)
+    setSavedToPortfolio(false)
+    setSaveError('')
 
     try {
       const payload = buildPayload()
@@ -317,6 +323,28 @@ export default function Analyze() {
       setError(err.message || 'Something went wrong while analyzing.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleSaveToPortfolio() {
+    if (!analysisResult) return
+    setIsSaving(true)
+    setSaveError('')
+    try {
+      await createProperty({
+        address: `${formData.neighborhood.trim()}, ${formData.borough.trim()}`,
+        zipcode: 'N/A',
+        bedrooms: 0,
+        bathrooms: 0,
+        sqft: Number(formData.gross_sqft) || 1,
+        listing_price: Number(formData.market_price),
+        analysis: analysisResult,
+      })
+      setSavedToPortfolio(true)
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save. Please try again.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -844,6 +872,33 @@ export default function Analyze() {
                     </div>
                   </div>
                 </div>
+
+                <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Save to Portfolio</p>
+                    <p className="text-xs text-slate-400">
+                      Store this analysis so you can review it later without re-running the model.
+                    </p>
+                  </div>
+                  {savedToPortfolio ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Saved
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleSaveToPortfolio}
+                      disabled={isSaving}
+                      className="flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
+                    >
+                      <BookmarkPlus className="h-4 w-4" />
+                      {isSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  )}
+                </div>
+                {saveError ? (
+                  <p className="text-sm text-rose-400">{saveError}</p>
+                ) : null}
               </div>
             ) : null}
           </div>

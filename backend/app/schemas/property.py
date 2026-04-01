@@ -1,21 +1,10 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Optional
 
 
 class PropertyBase(BaseModel):
-    address: str = Field(
-        ...,
-        min_length=3,
-        examples=["45 W 34th St"]
-    )
-
-    zipcode: str = Field(
-        ...,
-        min_length=3,
-        max_length=10,
-        examples=["10001"]
-    )
-
+    address: str = Field(min_length=3, examples=["45 W 34th St"])
+    zipcode: str = Field(min_length=3, max_length=10, examples=["10001"])
     bedrooms: int = Field(..., ge=0)
     bathrooms: int = Field(..., ge=0)
     sqft: int = Field(..., gt=0)
@@ -23,7 +12,7 @@ class PropertyBase(BaseModel):
 
 
 class PropertyCreate(PropertyBase):
-    pass
+    analysis: Optional[Any] = None
 
 
 class PropertyUpdate(BaseModel):
@@ -33,10 +22,12 @@ class PropertyUpdate(BaseModel):
     bathrooms: Optional[int] = Field(default=None, ge=0)
     sqft: Optional[int] = Field(default=None, gt=0)
     listing_price: Optional[float] = Field(default=None, gt=0)
+    analysis: Optional[Any] = None
 
 
 class PropertyResponse(PropertyBase):
     id: int
+    analysis: Optional[Any] = None
 
     model_config = {
         "from_attributes": True
