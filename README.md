@@ -55,7 +55,7 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 
 🟢 **Active — Production-Hardened Full-Stack AI Platform**
 
-All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (auth, rate limiting, CORS, error handling, structured logging).
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (auth, rate limiting, CORS, error handling, structured logging). Portfolio page redesigned to save and display analysis results.
 
 **Current milestone:**
 - Full-stack platform live: React 19 frontend talking to FastAPI backend
@@ -71,7 +71,8 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - Feature importance persisted as ML artifact and cached at runtime
 - LLM explanation layer live with structured JSON output
 - All prediction endpoints operational with v2 production contract
-- Property CRUD fully implemented and validated
+- Property CRUD fully implemented and validated — `analysis` JSONB column stores full analysis result per property
+- Portfolio page redesigned: save analysis from Analyze page, view cards with score, valuations, deal label, and expandable AI explanation
 - CI pipeline passing on GitHub Actions
 
 ---
@@ -560,7 +561,7 @@ propintel-ai/
 
 | Folder | Purpose |
 |---|---|
-| `frontend/` | React 19 UI — property analysis and portfolio dashboard |
+| `frontend/` | React 19 UI — Home, Analyze (with Save to Portfolio), and Portfolio (saved analyses) pages |
 | `api/` | FastAPI route handlers |
 | `core/` | Auth, rate limiting, error handlers, path config |
 | `db/` | Database engine, session, and ORM models |
@@ -657,7 +658,7 @@ python -m backend.app.db.init_db
 
 | Table | Model | Description |
 |---|---|---|
-| `properties` | `Property` | User-submitted property listings |
+| `properties` | `Property` | Saved property analyses — includes `analysis` JSONB column storing the full `POST /analyze-property-v2` response |
 | `housing_data` | `HousingData` | NYC training data loaded from CSV pipeline |
 
 ---
@@ -757,6 +758,10 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - React 19 + Vite 8 + TailwindCSS 4 + React Router 7
 - Live and integrated with FastAPI backend
 - Tested with sample data across prediction and analysis endpoints
+- **Home page** — hero section with feature highlights
+- **Analyze page** — full property analysis form with presets, v2 results display, and "Save to Portfolio" button
+- **Portfolio page** — saved analysis cards showing score badge, predicted vs market price, ROI estimate, deal label, and expandable AI explanation panels (Summary, Opportunity, Risks)
+- Fixed Navbar with active link highlighting across all pages
 
 ### Backend and Database
 - FastAPI backend with modular architecture
@@ -837,3 +842,6 @@ Current constraints of the valuation models:
 - Expand SHAP per-property explainability
 - Prediction confidence intervals (`price_low` / `price_high`)
 - Batch prediction endpoint for portfolio analysis
+- Portfolio sorting and filtering (by score, deal label, borough)
+- User authentication via Supabase Auth for multi-user portfolio isolation
+- Light/dark mode toggle
