@@ -1,42 +1,42 @@
-import { Link } from "react-router-dom";
-import { BarChart3, Brain, ShieldCheck } from "lucide-react";
-import Navbar from "../components/Navbar";
+import { Link } from 'react-router-dom'
+import { BarChart3, Brain, ShieldCheck } from 'lucide-react'
+import Navbar from '../components/Navbar'
 
 const features = [
   {
     icon: BarChart3,
-    title: "ML-Powered Valuation",
+    title: 'ML-Powered Valuation',
     description:
-      "XGBoost models trained on real NYC sales data route to the best segment model for your property type — one family, multi-family, condo, co-op, or rental.",
+      'XGBoost models trained on real NYC sales data route to the best segment model for your property type — one family, multi-family, condo, co-op, or rental.',
   },
   {
     icon: Brain,
-    title: "AI Investment Analysis",
+    title: 'AI Investment Analysis',
     description:
-      "Get a full investment breakdown: ROI estimate, valuation gap, deal label (Buy / Hold / Avoid), and an LLM-generated narrative explanation.",
+      'Get a full investment breakdown: ROI estimate, valuation gap, deal label (Buy / Hold / Avoid), and an LLM-generated narrative explanation.',
   },
   {
     icon: ShieldCheck,
-    title: "Production-Grade API",
+    title: 'Production-Grade API',
     description:
-      "Built on a hardened FastAPI backend with authentication, rate limiting, structured logging, and a consistent JSON contract.",
+      'Built on a hardened FastAPI backend with authentication, rate limiting, structured logging, and a consistent JSON contract.',
   },
-];
+]
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
       {/* Hero */}
       <section className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-6 pt-20 text-center">
-        <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
+        <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
           PropIntel AI
         </p>
         <h1 className="max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
           AI-powered property valuation and investment analysis
         </h1>
-        <p className="mt-6 max-w-2xl text-base text-slate-300 sm:text-lg">
+        <p className="mt-6 max-w-2xl text-base text-slate-500 sm:text-lg dark:text-slate-300">
           Analyze NYC residential properties with a production-ready AI workflow.
           Get valuations, investment scores, and LLM-generated deal narratives in seconds.
         </p>
@@ -51,7 +51,7 @@ export default function Home() {
             href="http://127.0.0.1:8000/docs"
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl border border-slate-700 px-6 py-3 font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
+            className="rounded-xl border border-slate-200 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
           >
             View API Docs
           </a>
@@ -64,17 +64,17 @@ export default function Home() {
           {features.map(({ icon: Icon, title, description }) => (
             <div
               key={title}
-              className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 transition hover:border-slate-600"
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-6 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-600"
             >
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10">
-                <Icon className="h-5 w-5 text-cyan-400" />
+                <Icon className="h-5 w-5 text-cyan-500 dark:text-cyan-400" />
               </div>
-              <h3 className="mb-2 font-semibold text-white">{title}</h3>
-              <p className="text-sm leading-relaxed text-slate-400">{description}</p>
+              <h3 className="mb-2 font-semibold text-slate-900 dark:text-white">{title}</h3>
+              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{description}</p>
             </div>
           ))}
         </div>
       </section>
     </div>
-  );
+  )
 }
