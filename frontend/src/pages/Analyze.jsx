@@ -14,15 +14,15 @@ const boroughOptions = [
 ]
 
 const buildingClassOptions = [
-  '01 ONE FAMILY DWELLINGS',
-  '02 TWO FAMILY DWELLINGS',
-  '03 THREE FAMILY DWELLINGS',
-  '07 RENTALS - WALKUP APARTMENTS',
-  '08 RENTALS - ELEVATOR APARTMENTS',
-  '09 COOPS - WALKUP APARTMENTS',
-  '10 COOPS - ELEVATOR APARTMENTS',
-  '13 CONDOS - ELEVATOR APARTMENTS',
-  '14 CONDOS - WALKUP APARTMENTS',
+  { label: 'Single Family Home',          value: '01 ONE FAMILY DWELLINGS' },
+  { label: 'Two Family Home',             value: '02 TWO FAMILY DWELLINGS' },
+  { label: 'Three Family Home',           value: '03 THREE FAMILY DWELLINGS' },
+  { label: 'Rental — Walkup',             value: '07 RENTALS - WALKUP APARTMENTS' },
+  { label: 'Rental — Elevator Building',  value: '08 RENTALS - ELEVATOR APARTMENTS' },
+  { label: 'Co-op — Walkup',              value: '09 COOPS - WALKUP APARTMENTS' },
+  { label: 'Co-op — Elevator Building',   value: '10 COOPS - ELEVATOR APARTMENTS' },
+  { label: 'Condo — Elevator Building',   value: '13 CONDOS - ELEVATOR APARTMENTS' },
+  { label: 'Condo — Walkup',              value: '14 CONDOS - WALKUP APARTMENTS' },
 ]
 
 const initialForm = {
@@ -434,7 +434,7 @@ export default function Analyze() {
 
                   <div className="sm:col-span-2">
                     <label htmlFor="building_class" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Building Class
+                      Property Type
                     </label>
                     <select
                       id="building_class"
@@ -443,9 +443,9 @@ export default function Analyze() {
                       onChange={handleChange}
                       className={getInputClasses(!!formErrors.building_class)}
                     >
-                      <option value="">Select building class</option>
-                      {buildingClassOptions.map((buildingClass) => (
-                        <option key={buildingClass} value={buildingClass}>{buildingClass}</option>
+                      <option value="">Select property type</option>
+                      {buildingClassOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
                     <FieldError message={formErrors.building_class} />
