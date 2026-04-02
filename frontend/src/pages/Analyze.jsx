@@ -109,44 +109,16 @@ function formatPercent(value) {
 
 function getDealLabelStyles(label) {
   const normalized = label?.toLowerCase()
-
-  if (normalized === 'buy') {
-    return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-  }
-
-  if (normalized === 'hold') {
-    return 'border-amber-500/30 bg-amber-500/15 text-amber-300'
-  }
-
-  return 'border-rose-500/30 bg-rose-500/15 text-rose-300'
+  if (normalized === 'buy') return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+  if (normalized === 'hold') return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-300'
+  return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-300'
 }
 
 function getScoreCategory(score) {
-  if (score >= 80) {
-    return {
-      label: 'Strong',
-      classes: 'border-lime-500/30 bg-lime-500/15 text-lime-300',
-    }
-  }
-
-  if (score >= 60) {
-    return {
-      label: 'Moderate',
-      classes: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-300',
-    }
-  }
-
-  if (score >= 40) {
-    return {
-      label: 'Cautious',
-      classes: 'border-amber-500/30 bg-amber-500/15 text-amber-300',
-    }
-  }
-
-  return {
-    label: 'Weak',
-    classes: 'border-rose-500/30 bg-rose-500/15 text-rose-300',
-  }
+  if (score >= 80) return { label: 'Strong', classes: 'border-lime-500/30 bg-lime-500/15 text-lime-700 dark:text-lime-300' }
+  if (score >= 60) return { label: 'Moderate', classes: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' }
+  if (score >= 40) return { label: 'Cautious', classes: 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300' }
+  return { label: 'Weak', classes: 'border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-300' }
 }
 
 function StatCard({ label, value, tone = 'default' }) {
@@ -155,46 +127,37 @@ function StatCard({ label, value, tone = 'default' }) {
       ? 'border-emerald-500/20 bg-emerald-500/10'
       : tone === 'negative'
         ? 'border-rose-500/20 bg-rose-500/10'
-        : 'border-slate-800 bg-slate-950'
+        : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950'
 
   return (
     <div className={`rounded-xl border p-4 ${toneClasses}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </p>
-      <p className="mt-2 text-xl font-bold text-white">{value}</p>
+      <p className="mt-2 text-xl font-bold text-slate-900 dark:text-white">{value}</p>
     </div>
   )
 }
 
 function FieldError({ message }) {
   if (!message) return null
-
-  return <p className="mt-2 text-sm text-rose-300">{message}</p>
+  return <p className="mt-2 text-sm text-rose-500 dark:text-rose-300">{message}</p>
 }
 
 function getInputClasses(hasError) {
-  return `w-full rounded-xl border bg-slate-950 px-4 py-3 text-white outline-none transition ${
+  return `w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition dark:bg-slate-950 dark:text-white ${
     hasError
-      ? 'border-rose-400 focus:border-rose-300'
-      : 'border-slate-700 focus:border-cyan-400'
+      ? 'border-rose-400 focus:border-rose-400'
+      : 'border-slate-300 focus:border-cyan-500 dark:border-slate-700 dark:focus:border-cyan-400'
   }`
 }
 
 function validateForm(formData) {
   const errors = {}
 
-  if (!formData.borough.trim()) {
-    errors.borough = 'Borough is required.'
-  }
-
-  if (!formData.neighborhood.trim()) {
-    errors.neighborhood = 'Neighborhood is required.'
-  }
-
-  if (!formData.building_class.trim()) {
-    errors.building_class = 'Building class is required.'
-  }
+  if (!formData.borough.trim()) errors.borough = 'Borough is required.'
+  if (!formData.neighborhood.trim()) errors.neighborhood = 'Neighborhood is required.'
+  if (!formData.building_class.trim()) errors.building_class = 'Building class is required.'
 
   const yearBuilt = Number(formData.year_built)
   if (!formData.year_built) {
@@ -253,12 +216,7 @@ export default function Analyze() {
 
   function handleChange(event) {
     const { name, value } = event.target
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-
+    setFormData((prev) => ({ ...prev, [name]: value }))
     setFormErrors((prev) => {
       if (!prev[name]) return prev
       const next = { ...prev }
@@ -270,7 +228,6 @@ export default function Analyze() {
   function handleUsePreset(presetName) {
     const preset = samplePresets[presetName]
     if (!preset) return
-
     setFormData(preset)
     setFormErrors({})
     setError('')
@@ -359,21 +316,20 @@ export default function Analyze() {
   const difference = analysisResult?.valuation?.price_difference ?? 0
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
       <section className="mx-auto max-w-7xl px-6 pb-12 pt-24">
         <div className="mb-10 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
               PropIntel AI
             </p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
               Property Analysis Workspace
             </h1>
-            <p className="mt-3 max-w-2xl text-slate-300">
-              Enter property details below to prepare an analysis request for
-              the
-              <span className="mx-1 font-semibold text-white">
+            <p className="mt-3 max-w-2xl text-slate-500 dark:text-slate-300">
+              Enter property details below to prepare an analysis request for the
+              <span className="mx-1 font-semibold text-slate-900 dark:text-white">
                 /analyze-property-v2
               </span>
               endpoint.
@@ -382,23 +338,24 @@ export default function Analyze() {
 
           <Link
             to="/"
-            className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
           >
             Back Home
           </Link>
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
+          {/* Form panel */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
             <div>
-                <h2 className="text-2xl font-semibold">Analysis Form</h2>
-                <p className="mt-2 text-sm text-slate-400">
-                    Fill in the property inputs required by the v2 analysis contract.
-                </p>
-                <br />
-                <p className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                    sample presets
-                </p>
+              <h2 className="text-2xl font-semibold">Analysis Form</h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Fill in the property inputs required by the v2 analysis contract.
+              </p>
+              <br />
+              <p className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
+                sample presets
+              </p>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {Object.keys(samplePresets).map((presetName) => (
@@ -406,7 +363,7 @@ export default function Analyze() {
                     key={presetName}
                     type="button"
                     onClick={() => handleUsePreset(presetName)}
-                    className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                    className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-500/20 dark:text-cyan-300"
                   >
                     {presetName}
                   </button>
@@ -415,7 +372,7 @@ export default function Analyze() {
                 <button
                   type="button"
                   onClick={handleResetForm}
-                  className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
                 >
                   Reset Form
                 </button>
@@ -424,15 +381,12 @@ export default function Analyze() {
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-6" noValidate>
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                   Property Basics
                 </h3>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label
-                      htmlFor="borough"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="borough" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Borough
                     </label>
                     <select
@@ -442,27 +396,16 @@ export default function Analyze() {
                       onChange={handleChange}
                       className={getInputClasses(!!formErrors.borough)}
                     >
-                      <option value="" className="bg-slate-950 text-slate-400">
-                        Select borough
-                      </option>
+                      <option value="">Select borough</option>
                       {boroughOptions.map((borough) => (
-                        <option
-                          key={borough}
-                          value={borough}
-                          className="bg-slate-950 text-white"
-                        >
-                          {borough}
-                        </option>
+                        <option key={borough} value={borough}>{borough}</option>
                       ))}
                     </select>
                     <FieldError message={formErrors.borough} />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="neighborhood"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="neighborhood" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Neighborhood
                     </label>
                     <input
@@ -478,10 +421,7 @@ export default function Analyze() {
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label
-                      htmlFor="building_class"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="building_class" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Building Class
                     </label>
                     <select
@@ -491,27 +431,16 @@ export default function Analyze() {
                       onChange={handleChange}
                       className={getInputClasses(!!formErrors.building_class)}
                     >
-                      <option value="" className="bg-slate-950 text-slate-400">
-                        Select building class
-                      </option>
+                      <option value="">Select building class</option>
                       {buildingClassOptions.map((buildingClass) => (
-                        <option
-                          key={buildingClass}
-                          value={buildingClass}
-                          className="bg-slate-950 text-white"
-                        >
-                          {buildingClass}
-                        </option>
+                        <option key={buildingClass} value={buildingClass}>{buildingClass}</option>
                       ))}
                     </select>
                     <FieldError message={formErrors.building_class} />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="year_built"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="year_built" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Year Built
                     </label>
                     <input
@@ -529,15 +458,12 @@ export default function Analyze() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
-                  Size & Location
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
+                  Size &amp; Location
                 </h3>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label
-                      htmlFor="gross_sqft"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="gross_sqft" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Gross Sqft
                     </label>
                     <input
@@ -553,10 +479,7 @@ export default function Analyze() {
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="land_sqft"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="land_sqft" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Land Sqft
                     </label>
                     <input
@@ -572,10 +495,7 @@ export default function Analyze() {
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="latitude"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="latitude" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Latitude
                     </label>
                     <input
@@ -592,10 +512,7 @@ export default function Analyze() {
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="longitude"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="longitude" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Longitude
                     </label>
                     <input
@@ -614,15 +531,12 @@ export default function Analyze() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                   Pricing
                 </h3>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label
-                      htmlFor="market_price"
-                      className="mb-2 block text-sm font-medium text-slate-200"
-                    >
+                    <label htmlFor="market_price" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Market Price
                     </label>
                     <input
@@ -650,52 +564,48 @@ export default function Analyze() {
               </div>
 
               {error ? (
-                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-200">
                   {error}
                 </div>
               ) : null}
             </form>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
+          {/* Results panel */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-2xl font-semibold">Analysis Results</h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Real backend results appear here after the analysis request
-                  completes.
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  Real backend results appear here after the analysis request completes.
                 </p>
               </div>
 
               {hasV2Result ? (
-                <span
-                  className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${getDealLabelStyles(
-                    dealLabel
-                  )}`}
-                >
+                <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${getDealLabelStyles(dealLabel)}`}>
                   {dealLabel}
                 </span>
               ) : null}
             </div>
 
             {!analysisResult && !isLoading ? (
-              <div className="mt-6 rounded-xl border border-dashed border-slate-700 p-6 text-sm text-slate-500">
+              <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
                 Submit the form to fetch valuation, investment score, drivers,
                 and explanation from the v2 backend.
               </div>
             ) : null}
 
             {isLoading ? (
-              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-6 text-sm text-slate-400">
+              <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
                 Loading analysis...
               </div>
             ) : null}
 
             {analysisResult && !hasV2Result && !isLoading ? (
-              <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+              <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-200">
                 The API returned a response, but it did not match the expected
                 v2 grouped shape. Open the browser console and inspect
-                <span className="mx-1 font-semibold text-white">
+                <span className="mx-1 font-semibold text-slate-900 dark:text-white">
                   API result:
                 </span>
                 to verify what the backend returned.
@@ -707,9 +617,7 @@ export default function Analyze() {
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <StatCard
                     label="Predicted Value"
-                    value={formatCurrency(
-                      analysisResult.valuation.predicted_price
-                    )}
+                    value={formatCurrency(analysisResult.valuation.predicted_price)}
                   />
                   <StatCard
                     label="Market Price"
@@ -717,82 +625,64 @@ export default function Analyze() {
                   />
                   <StatCard
                     label="Price Difference"
-                    value={formatCurrency(
-                      analysisResult.valuation.price_difference
-                    )}
+                    value={formatCurrency(analysisResult.valuation.price_difference)}
                     tone={difference >= 0 ? 'positive' : 'negative'}
                   />
                   <StatCard
                     label="Difference %"
-                    value={formatPercent(
-                      analysisResult.valuation.price_difference_pct
-                    )}
-                    tone={
-                      analysisResult.valuation.price_difference_pct >= 0
-                        ? 'positive'
-                        : 'negative'
-                    }
+                    value={formatPercent(analysisResult.valuation.price_difference_pct)}
+                    tone={analysisResult.valuation.price_difference_pct >= 0 ? 'positive' : 'negative'}
                   />
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Investment Score
                     </p>
-
-                    <p className="mt-4 text-5xl font-bold text-white">
+                    <p className="mt-4 text-5xl font-bold text-slate-900 dark:text-white">
                       {score}/100
                     </p>
-
                     {scoreCategory ? (
-                      <div
-                        className={`mt-4 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${scoreCategory.classes}`}
-                      >
+                      <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${scoreCategory.classes}`}>
                         {scoreCategory.label}
                       </div>
                     ) : null}
-
-                    <p className="mt-4 text-sm text-slate-400">
+                    <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
                       Confidence:{' '}
-                      <span className="font-semibold text-white">
+                      <span className="font-semibold text-slate-900 dark:text-white">
                         {analysisResult.investment_analysis.confidence}
                       </span>
                     </p>
-                  
-                    <p className="mt-2 text-sm text-slate-400">
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                       Recommendation:{' '}
-                      <span className="font-semibold text-white">
+                      <span className="font-semibold text-slate-900 dark:text-white">
                         {analysisResult.investment_analysis.recommendation}
                       </span>
                     </p>
-                </div>
+                  </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                       Investment Summary
                     </p>
-                    <p className="mt-4 text-base leading-7 text-slate-200">
+                    <p className="mt-4 text-base leading-7 text-slate-700 dark:text-slate-200">
                       {analysisResult.investment_analysis.analysis_summary}
                     </p>
-
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           ROI Estimate
                         </p>
-                        <p className="mt-2 text-lg font-semibold text-white">
-                          {formatPercent(
-                            analysisResult.investment_analysis.roi_estimate
-                          )}
+                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
+                          {formatPercent(analysisResult.investment_analysis.roi_estimate)}
                         </p>
                       </div>
-
-                      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Model Version
                         </p>
-                        <p className="mt-2 text-lg font-semibold text-white">
+                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
                           {analysisResult.metadata.model_version}
                         </p>
                       </div>
@@ -801,15 +691,15 @@ export default function Analyze() {
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                       Top Drivers
                     </h3>
-                    <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                    <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
                       {analysisResult.drivers.top_drivers.map((driver) => (
                         <li
                           key={driver}
-                          className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3"
+                          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70"
                         >
                           {driver}
                         </li>
@@ -817,15 +707,15 @@ export default function Analyze() {
                     </ul>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                       Model Context
                     </h3>
-                    <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                    <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
                       {analysisResult.drivers.global_context.map((item) => (
                         <li
                           key={item}
-                          className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3"
+                          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70"
                         >
                           {item}
                         </li>
@@ -834,53 +724,40 @@ export default function Analyze() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 animate-pulse text-amber-300 drop-shadow-[0_0_10px_rgba(252,211,77,0.35)]" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-400">
+                    <Sparkles className="h-5 w-5 animate-pulse text-amber-400 drop-shadow-[0_0_10px_rgba(252,211,77,0.35)]" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                       AI Explanation
                     </h3>
                   </div>
-
                   <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Summary
-                      </p>
-                      <p className="mt-3 text-sm leading-7 text-slate-300">
-                        {analysisResult.explanation.summary}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Opportunity
-                      </p>
-                      <p className="mt-3 text-sm leading-7 text-slate-300">
-                        {analysisResult.explanation.opportunity}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Risks
-                      </p>
-                      <p className="mt-3 text-sm leading-7 text-slate-300">
-                        {analysisResult.explanation.risks}
-                      </p>
-                    </div>
+                    {[
+                      { label: 'Summary', text: analysisResult.explanation.summary },
+                      { label: 'Opportunity', text: analysisResult.explanation.opportunity },
+                      { label: 'Risks', text: analysisResult.explanation.risks },
+                    ].map(({ label, text }) => (
+                      <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          {label}
+                        </p>
+                        <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                          {text}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950 px-5 py-4">
+                <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
                   <div>
-                    <p className="text-sm font-semibold text-white">Save to Portfolio</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Save to Portfolio</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       Store this analysis so you can review it later without re-running the model.
                     </p>
                   </div>
                   {savedToPortfolio ? (
-                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400">
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                       <CheckCircle2 className="h-4 w-4" />
                       Saved
                     </div>
@@ -896,7 +773,7 @@ export default function Analyze() {
                   )}
                 </div>
                 {saveError ? (
-                  <p className="text-sm text-rose-400">{saveError}</p>
+                  <p className="text-sm text-rose-500 dark:text-rose-400">{saveError}</p>
                 ) : null}
               </div>
             ) : null}
