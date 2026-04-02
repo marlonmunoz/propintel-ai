@@ -317,7 +317,6 @@ export default function Analyze() {
     try {
       const payload = buildPayload()
       const result = await analyzeProperty(payload)
-      console.log('API result:', result)
       setAnalysisResult(result)
     } catch (err) {
       setError(err.message || 'Something went wrong while analyzing.')
