@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
-import { createProperty } from '../services/propertiesApi'
+import { createProperty, getProperties } from '../services/propertiesApi'
 import Navbar from '../components/Navbar'
 
 const boroughOptions = [
@@ -286,9 +286,21 @@ export default function Analyze() {
     if (!analysisResult) return
     setIsSaving(true)
     setSaveError('')
+
+    const address = `${formData.neighborhood.trim()}, ${formData.borough.trim()}`
+
     try {
+      const existing = await getProperties({ limit: 50 })
+      const isDuplicate = existing.some(
+        (p) => p.address === address && p.listing_price === Number(formData.market_price)
+      )
+      if (isDuplicate) {
+        setSavedToPortfolio(true)
+        return
+      }
+
       await createProperty({
-        address: `${formData.neighborhood.trim()}, ${formData.borough.trim()}`,
+        address,
         zipcode: 'N/A',
         bedrooms: 0,
         bathrooms: 0,
