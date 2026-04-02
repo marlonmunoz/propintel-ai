@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { BarChart3, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
@@ -33,12 +33,37 @@ function ScoreBadge({ score, label }) {
   )
 }
 
+const DEAL_LABELS = ['All', 'Buy', 'Hold', 'Avoid']
+
+const SORT_OPTIONS = [
+  { value: 'default', label: 'Date saved' },
+  { value: 'score_desc', label: 'Score: High → Low' },
+  { value: 'score_asc', label: 'Score: Low → High' },
+  { value: 'roi_desc', label: 'ROI: High → Low' },
+  { value: 'predicted_desc', label: 'Predicted Price: High → Low' },
+]
+
+function filterChipClasses(label, active) {
+  if (active) {
+    if (label === 'Buy') return 'border-emerald-500 bg-emerald-500 text-white'
+    if (label === 'Hold') return 'border-amber-500 bg-amber-500 text-white'
+    if (label === 'Avoid') return 'border-rose-500 bg-rose-500 text-white'
+    return 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950'
+  }
+  if (label === 'Buy') return 'border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400'
+  if (label === 'Hold') return 'border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400'
+  if (label === 'Avoid') return 'border-rose-500/40 text-rose-700 hover:bg-rose-500/10 dark:text-rose-400'
+  return 'border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:bg-slate-800'
+}
+
 export default function Portfolio() {
   const [properties, setProperties] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
+  const [filterLabel, setFilterLabel] = useState('All')
+  const [sortBy, setSortBy] = useState('default')
 
   useEffect(() => {
     fetchProperties()
@@ -68,6 +93,50 @@ export default function Portfolio() {
     }
   }
 
+  // Derived list — computed from properties + filterLabel + sortBy.
+  // useMemo caches the result and only recomputes when one of those three changes.
+  const visibleProperties = useMemo(() => {
+    let result = [...properties]
+
+    // Filter by deal label
+    if (filterLabel !== 'All') {
+      result = result.filter(
+        (p) => p.analysis?.investment_analysis?.deal_label === filterLabel
+      )
+    }
+
+    // Sort
+    if (sortBy === 'score_desc') {
+      result.sort(
+        (a, b) =>
+          (b.analysis?.investment_analysis?.investment_score ?? -1) -
+          (a.analysis?.investment_analysis?.investment_score ?? -1)
+      )
+    } else if (sortBy === 'score_asc') {
+      result.sort(
+        (a, b) =>
+          (a.analysis?.investment_analysis?.investment_score ?? 101) -
+          (b.analysis?.investment_analysis?.investment_score ?? 101)
+      )
+    } else if (sortBy === 'roi_desc') {
+      result.sort(
+        (a, b) =>
+          (b.analysis?.investment_analysis?.roi_estimate ?? -Infinity) -
+          (a.analysis?.investment_analysis?.roi_estimate ?? -Infinity)
+      )
+    } else if (sortBy === 'predicted_desc') {
+      result.sort(
+        (a, b) =>
+          (b.analysis?.valuation?.predicted_price ?? 0) -
+          (a.analysis?.valuation?.predicted_price ?? 0)
+      )
+    }
+
+    return result
+  }, [properties, filterLabel, sortBy])
+
+  const isFiltered = filterLabel !== 'All'
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
@@ -75,7 +144,7 @@ export default function Portfolio() {
       <section className="mx-auto max-w-6xl px-6 pb-16 pt-24">
 
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
             Portfolio
           </p>
@@ -84,6 +153,42 @@ export default function Portfolio() {
             Properties you analyzed and saved — no need to re-run the model.
           </p>
         </div>
+
+        {/* Toolbar — filter chips + sort */}
+        {!isLoading && properties.length > 0 && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            {/* Filter chips */}
+            <div className="flex flex-wrap items-center gap-2">
+              {DEAL_LABELS.map((label) => (
+                <button
+                  key={label}
+                  onClick={() => setFilterLabel(label)}
+                  className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${filterChipClasses(label, filterLabel === label)}`}
+                >
+                  {label}
+                </button>
+              ))}
+              {isFiltered && (
+                <span className="text-sm text-slate-400 dark:text-slate-500">
+                  {visibleProperties.length} of {properties.length}
+                </span>
+              )}
+            </div>
+
+            {/* Sort dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none transition focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-cyan-400"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -99,7 +204,7 @@ export default function Portfolio() {
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty state — no properties at all */}
         {!isLoading && !error && properties.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 py-20 text-center dark:border-slate-700">
             <BarChart3 className="mb-4 h-10 w-10 text-slate-300 dark:text-slate-600" />
@@ -118,10 +223,25 @@ export default function Portfolio() {
           </div>
         )}
 
+        {/* Empty state — filter returned no results */}
+        {!isLoading && properties.length > 0 && visibleProperties.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 py-16 text-center dark:border-slate-700">
+            <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+              No <span className="text-slate-900 dark:text-white">{filterLabel}</span> analyses in your portfolio
+            </p>
+            <button
+              onClick={() => setFilterLabel('All')}
+              className="mt-4 text-sm font-semibold text-cyan-600 transition hover:text-cyan-500 dark:text-cyan-400"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
+
         {/* Analysis cards */}
-        {!isLoading && properties.length > 0 && (
+        {!isLoading && visibleProperties.length > 0 && (
           <div className="space-y-4">
-            {properties.map((property) => {
+            {visibleProperties.map((property) => {
               const a = property.analysis
               const valuation = a?.valuation
               const inv = a?.investment_analysis
