@@ -32,10 +32,16 @@ const initialForm = {
   year_built: '',
   gross_sqft: '',
   land_sqft: '',
+  total_units: '',
   latitude: '',
   longitude: '',
   market_price: '',
 }
+
+const RENTAL_CLASSES = new Set([
+  '07 RENTALS - WALKUP APARTMENTS',
+  '08 RENTALS - ELEVATOR APARTMENTS',
+])
 
 const samplePresets = {
   Brooklyn: {
@@ -396,6 +402,7 @@ export default function Analyze() {
         ...(data.year_built                && { year_built:     String(data.year_built) }),
         ...(data.gross_sqft                && { gross_sqft:     String(Math.round(data.gross_sqft)) }),
         ...(data.land_sqft  !== undefined  && { land_sqft:      String(Math.round(data.land_sqft ?? 0)) }),
+        ...(data.total_units               && { total_units:    String(Math.round(data.total_units)) }),
         ...(data.building_class            && { building_class: data.building_class }),
         ...(data.neighborhood              && { neighborhood:   data.neighborhood }),
       }))
@@ -424,6 +431,9 @@ export default function Analyze() {
       year_built: Number(formData.year_built),
       gross_sqft: Number(formData.gross_sqft),
       land_sqft: Number(formData.land_sqft),
+      // total_units is only sent when filled — used by rental models to compute
+      // price_per_unit. Omit rather than send 0 so the backend can detect absence.
+      ...(formData.total_units ? { total_units: Number(formData.total_units) } : {}),
       latitude: Number(formData.latitude),
       longitude: Number(formData.longitude),
       market_price: Number(formData.market_price),
@@ -745,6 +755,28 @@ export default function Analyze() {
                       className={getInputClasses(!!formErrors.land_sqft)}
                     />
                     <FieldError message={formErrors.land_sqft} />
+                  </div>
+
+                  {/* Total units — shown for all building types but highlighted for
+                      rental classes where it's used to reconstruct the full price */}
+                  <div>
+                    <label htmlFor="total_units" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                      Total Units
+                      {RENTAL_CLASSES.has(formData.building_class) && (
+                        <span className="ml-2 text-xs font-normal text-cyan-600 dark:text-cyan-400">
+                          required for rental valuation
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      id="total_units"
+                      name="total_units"
+                      type="number"
+                      value={formData.total_units}
+                      onChange={handleChange}
+                      placeholder="e.g. 12"
+                      className={getInputClasses(false)}
+                    />
                   </div>
 
                   <div>

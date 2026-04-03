@@ -1,0 +1,28 @@
+{
+    "name": "rental_walkup",
+    "version": "v1",
+    "segment": "rental_walkup",
+    "artifact_path": "ml/artifacts/subtype_models/rental_walkup_price_model.pkl",
+    "target": "price_per_unit",
+    "feature_columns": [
+        "gross_sqft",
+        "land_sqft",
+        "sqft_per_unit",
+        "total_units",
+        "residential_units",
+        "neighborhood_median_price",
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics": {
+        "mae": 103052.82,
+        "rmse": 176578.70,
+        "r2": 0.5688,
+        "note": "metrics are in $/unit — model predicts price_per_unit, multiplied by total_units at inference"
+    }
+}

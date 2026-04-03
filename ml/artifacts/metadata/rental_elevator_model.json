@@ -1,0 +1,28 @@
+{
+    "name": "rental_elevator",
+    "version": "v1",
+    "segment": "rental_elevator",
+    "artifact_path": "ml/artifacts/subtype_models/rental_elevator_price_model.pkl",
+    "target": "price_per_unit",
+    "feature_columns": [
+        "gross_sqft",
+        "land_sqft",
+        "sqft_per_unit",
+        "total_units",
+        "residential_units",
+        "neighborhood_median_price",
+        "year_built",
+        "property_age",
+        "latitude",
+        "longitude",
+        "borough",
+        "building_class",
+        "neighborhood"
+    ],
+    "metrics": {
+        "mae": 75327.85,
+        "rmse": 145129.73,
+        "r2": 0.6207,
+        "note": "metrics are in $/unit — model predicts price_per_unit, multiplied by total_units at inference"
+    }
+}

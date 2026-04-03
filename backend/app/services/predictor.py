@@ -60,6 +60,9 @@ def format_feature_name(feature: str) -> str:
     if "bldgarea" in feature_lower or "gross_sqft" in feature_lower:
         return "Building size significantly impacts property value"
 
+    if "sqft_per_unit" in feature_lower:
+        return "Average unit size (sqft per unit) drives per-unit valuation"
+
     if "land_sqft" in feature_lower:
         return "Land size contributes to overall property valuation"
 
@@ -78,6 +81,9 @@ def format_feature_name(feature: str) -> str:
     if "year_built" in feature_lower or "property_age" in feature_lower:
         return "Property age and build year affect valuation"
 
+    if "total_units" in feature_lower or "residential_units" in feature_lower:
+        return "Building unit count influences income potential and value"
+
     if "latitude" in feature_lower or "longitude" in feature_lower:
         return "Geographic positioning influences estimated price"
 
@@ -89,12 +95,26 @@ class PredictionService:
         
     def predict(self, payload: ProductionPredictionRequest) -> dict:
         model_key = self.registry.get_model_key(payload.building_class)
+
+        # Rental models predict price_per_unit and require total_units to
+        # reconstruct the full building price. Fall back to the global model
+        # when total_units is missing so the API never returns a zero price.
+        warnings = []
+        if model_key in ("rental_walkup", "rental_elevator"):
+            if not payload.total_units or payload.total_units <= 0:
+                model_key = "global"
+                warnings.append(
+                    "total_units was not provided for this rental building. "
+                    "Falling back to the global residential model. "
+                    "Supply total_units for a more accurate rental valuation."
+                )
+
         model = self.registry.load_model(model_key)
         metadata = self.registry.get_metadata(model_key)
-        
-        property_age = REFERENCE_YEAR - payload.year_built
 
+        property_age = REFERENCE_YEAR - payload.year_built
         neighborhood = payload.neighborhood.strip()
+        n_units = max(payload.total_units or 1, 1)
 
         row = {
             "gross_sqft": payload.gross_sqft,
@@ -110,6 +130,9 @@ class PredictionService:
             "neighborhood": neighborhood,
         }
 
+        if "sqft_per_unit" in metadata.feature_columns:
+            row["sqft_per_unit"] = (payload.gross_sqft or 0) / n_units
+
         if "neighborhood_median_price" in metadata.feature_columns:
             row["neighborhood_median_price"] = lookup_neighborhood_median(
                 model_key, neighborhood
@@ -119,17 +142,16 @@ class PredictionService:
             [[row.get(col) for col in metadata.feature_columns]],
             columns=metadata.feature_columns,
         )
-        
+
         prediction_log = model.predict(X)[0]
-        predicted_price = float(math.expm1(prediction_log))
-        
-        warnings = []
-        if model_key == "rental":
-            warnings.append(
-                "Rental property valuations have higher uncertainty (R²=0.37). "
-                "Use this estimate as a directional signal only."
-            )
-        elif model_key == "global":
+
+        # Price-per-unit models: multiply back by total_units to get full price.
+        if metadata.target == "price_per_unit":
+            predicted_price = float(math.expm1(prediction_log)) * n_units
+        else:
+            predicted_price = float(math.expm1(prediction_log))
+
+        if model_key == "global" and not warnings:
             warnings.append(
                 "Using global residential fallback model for this property type."
             )
@@ -208,7 +230,8 @@ class PredictionService:
         else:
             deal_label = "Avoid"
         
-        # 5. Top drivers — loaded from the model that actually made the prediction
+        # 5. Top drivers — loaded from the model that actually made the prediction.
+        # model_used is the metadata name, which matches the model key.
         model_key = prediction_result.get("model_used", "global")
         raw_drivers = [
             format_feature_name(item["feature"])

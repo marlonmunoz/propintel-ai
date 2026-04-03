@@ -1,5 +1,6 @@
 subtype,rows,mae,rmse,r2,model_path
 one_family,9712,245435.6376179113,621770.6322895146,0.7168471278317168,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/one_family_price_model.pkl
+rental_elevator,153,75327.85167886697,145129.72607544909,0.6207267428599663,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/rental_elevator_price_model.pkl
 multi_family,9115,314305.290335299,626464.81227008,0.6064278467455215,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/multi_family_price_model.pkl
+rental_walkup,1303,103052.82191225998,176578.70379976608,0.5688019656355928,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/rental_walkup_price_model.pkl
 condo_coop,12753,424950.51330207515,1006601.8754999773,0.5235808278076217,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/condo_coop_price_model.pkl
-rental,1728,1389087.5064238622,2470798.242817832,0.3720499165906287,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/rental_price_model.pkl

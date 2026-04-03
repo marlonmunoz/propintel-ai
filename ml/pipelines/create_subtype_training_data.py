@@ -85,7 +85,39 @@ def main():
     
     df = df[df["sales_price"] <= price_cap]
     print(f"After outlier removal: {len(df)}")
-    
+
+    # Rental buildings are income-producing assets whose sale prices vary by building
+    # size (unit count). Apply two additional filters specific to rental classes:
+    #   1. Per-unit floor of $30K — rows below this are data errors or distressed
+    #      sales that would mislead a price-per-unit model.
+    #   2. Per-class 95th percentile cap — tighter than the global 99th already
+    #      applied; catches portfolio / institutional mega-deals that differ
+    #      fundamentally from typical arm's-length building sales.
+    RENTAL_CLASSES = {
+        "07 RENTALS - WALKUP APARTMENTS",
+        "08 RENTALS - ELEVATOR APARTMENTS",
+    }
+    rental_mask = df["building_class"].isin(RENTAL_CLASSES)
+    if rental_mask.any() and "total_units" in df.columns:
+        non_rental = df[~rental_mask].copy()
+        rental = df[rental_mask].copy()
+
+        rental["_price_per_unit"] = rental["sales_price"] / rental["total_units"].clip(lower=1)
+        before = len(rental)
+        rental = rental[rental["_price_per_unit"] >= 30_000].drop(columns=["_price_per_unit"])
+        print(f"Rental per-unit floor ($30K): {before} → {len(rental)} rows")
+
+        capped = []
+        for bc in rental["building_class"].unique():
+            bc_rows = rental[rental["building_class"] == bc]
+            p95 = bc_rows["sales_price"].quantile(0.95)
+            capped.append(bc_rows[bc_rows["sales_price"] <= p95])
+        rental = pd.concat(capped).reset_index(drop=True) if capped else rental
+        print(f"Rental per-class 95th pct cap: {len(rental)} rows remain")
+        print(rental["building_class"].value_counts().to_string())
+
+        df = pd.concat([non_rental, rental]).reset_index(drop=True)
+
     df = df.drop_duplicates()
     print(f"After dropping duplicates: {len(df)}")
     

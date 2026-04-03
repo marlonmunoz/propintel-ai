@@ -63,17 +63,30 @@ SUBTYPE_XGB_PARAMS = {
         "reg_alpha": 0.3,
         "reg_lambda": 1.0,
     },
-    "rental": {
-        # Small dataset — keep complexity low, light regularization only.
-        "n_estimators": 300,
+    "rental_walkup": {
+        # ~1,500 rows after cleaning — moderate capacity, moderate regularization.
+        "n_estimators": 400,
         "learning_rate": 0.05,
         "max_depth": 5,
         "min_child_weight": 3,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
-        "gamma": 0.05,
+        "gamma": 0.1,
         "reg_alpha": 0.1,
         "reg_lambda": 1.0,
+    },
+    "rental_elevator": {
+        # ~250 rows after cleaning — small dataset, strong regularization to avoid
+        # overfitting. Shallower trees prevent the model from memorising outliers.
+        "n_estimators": 300,
+        "learning_rate": 0.04,
+        "max_depth": 4,
+        "min_child_weight": 5,
+        "subsample": 0.8,
+        "colsample_bytree": 0.7,
+        "gamma": 0.2,
+        "reg_alpha": 0.5,
+        "reg_lambda": 2.0,
     },
 }
 
@@ -93,8 +106,10 @@ SUBTYPE_GROUPS = {
         "15 CONDOS - 2-10 UNIT RESIDENTIAL",
         "17 CONDO COOPS",
     ],
-    "rental": [
+    "rental_walkup": [
         "07 RENTALS - WALKUP APARTMENTS",
+    ],
+    "rental_elevator": [
         "08 RENTALS - ELEVATOR APARTMENTS",
     ],
 }
@@ -152,10 +167,18 @@ SUBTYPE_FEATURES = {
         ],
         "require_gross_sqft": False,
     },
-    "rental": {
+    # Rental walkup (07) and elevator (08) are trained as separate models because
+    # they serve different buyer profiles and price levels.
+    # Both use price_per_unit as the prediction target — the model learns
+    # $/unit rather than total building price, which normalises for building
+    # size and produces a tighter, more learnable target distribution.
+    # At inference, predicted $/unit is multiplied by total_units to recover
+    # the full building price estimate.
+    "rental_walkup": {
         "numeric": [
             "gross_sqft",
             "land_sqft",
+            "sqft_per_unit",
             "total_units",
             "residential_units",
             "neighborhood_median_price",
@@ -170,6 +193,30 @@ SUBTYPE_FEATURES = {
             "neighborhood",
         ],
         "require_gross_sqft": True,
+        "target": "price_per_unit",
+    },
+    "rental_elevator": {
+        "numeric": [
+            "gross_sqft",
+            "land_sqft",
+            "sqft_per_unit",
+            "total_units",
+            "residential_units",
+            "neighborhood_median_price",
+            "year_built",
+            "property_age",
+            "latitude",
+            "longitude",
+        ],
+        "categorical": [
+            "borough",
+            "building_class",
+            "neighborhood",
+        ],
+        "require_gross_sqft": True,
+        "target": "price_per_unit",
+        # Lower minimum rows — elevator dataset is smaller after cleaning.
+        "min_rows": 100,
     },
 }
 
@@ -251,6 +298,18 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
     numeric_features = feature_config["numeric"]
     categorical_features = feature_config["categorical"]
 
+    # Derived features for rental subtypes that use price_per_unit as target.
+    target = feature_config.get("target", "sales_price")
+    if target == "price_per_unit":
+        # Require total_units > 0 — needed for both sqft_per_unit and the target.
+        subset = subset[subset["total_units"].notna() & (subset["total_units"] > 0)]
+        subset["price_per_unit"] = subset["sales_price"] / subset["total_units"]
+
+    if "sqft_per_unit" in numeric_features:
+        # gross_sqft / total_units: normalised size signal more meaningful than
+        # raw sqft for income-producing buildings with variable unit counts.
+        subset["sqft_per_unit"] = subset["gross_sqft"] / subset["total_units"].clip(lower=1)
+
     feature_columns = numeric_features + categorical_features
     existing_columns = [col for col in feature_columns if col in subset.columns]
 
@@ -260,7 +319,10 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         if col in X.columns:
             X[col] = X[col].astype(str)
 
-    y = np.log1p(subset["sales_price"].copy())
+    if target == "price_per_unit":
+        y = np.log1p(subset["price_per_unit"].copy())
+    else:
+        y = np.log1p(subset["sales_price"].copy())
 
     return subset, X, y, numeric_features, categorical_features, neighborhood_stats
 
@@ -275,12 +337,16 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
         prepare_subset_for_training(subset, subtype_name)
     )
 
+    target = SUBTYPE_FEATURES[subtype_name].get("target", "sales_price")
+    min_rows = SUBTYPE_FEATURES[subtype_name].get("min_rows", 500)
+
     print(f"Rows after subtype-specific filtering: {len(subset)}")
+    print(f"Target variable: {target}")
     print(f"Numeric features: {numeric_features}")
     print(f"Categorical features: {categorical_features}")
 
-    if len(subset) < 500:
-        print("Skipped: not enough rows")
+    if len(subset) < min_rows:
+        print(f"Skipped: only {len(subset)} rows (minimum: {min_rows})")
         return None
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -309,8 +375,9 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
         ("regressor", regressor),
     ])
 
-    print(f"MAE:  {mae:,.2f}")
-    print(f"RMSE: {rmse:,.2f}")
+    unit_label = "$/unit" if target == "price_per_unit" else "$"
+    print(f"MAE:  {mae:,.2f} {unit_label}")
+    print(f"RMSE: {rmse:,.2f} {unit_label}")
     print(f"R²:   {r2:.4f}")
 
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)

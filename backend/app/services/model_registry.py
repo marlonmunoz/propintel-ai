@@ -11,6 +11,10 @@ class RegisteredModel:
     artifact_path: str
     feature_columns: list[str]
     metrics: dict
+    # "sales_price" for most models; "price_per_unit" for rental subtypes.
+    # When target is "price_per_unit", the predictor multiplies the model output
+    # by total_units to recover the full building sale price.
+    target: str = "sales_price"
     
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -20,11 +24,12 @@ class ModelRegistry:
         self.base_dir = BASE_DIR
         self.metadata_dir = BASE_DIR / "ml" / "artifacts" / "metadata"
         self._models = {
-            "global":       self._load_metadata("global_model.json"),
-            "one_family":   self._load_metadata("one_family_model.json"),
-            "multi_family": self._load_metadata("multi_family_model.json"),
-            "condo_coop":   self._load_metadata("condo_coop_model.json"),
-            "rental":       self._load_metadata("rental_model.json"),
+            "global":          self._load_metadata("global_model.json"),
+            "one_family":      self._load_metadata("one_family_model.json"),
+            "multi_family":    self._load_metadata("multi_family_model.json"),
+            "condo_coop":      self._load_metadata("condo_coop_model.json"),
+            "rental_walkup":   self._load_metadata("rental_walkup_model.json"),
+            "rental_elevator": self._load_metadata("rental_elevator_model.json"),
         }
         self._loaded_models = {}
 
@@ -52,6 +57,7 @@ class ModelRegistry:
             artifact_path=data["artifact_path"],
             feature_columns=data["feature_columns"],
             metrics=data["metrics"],
+            target=data.get("target", "sales_price"),
         )
         
     def get_model_key(self, building_class: str) -> str:
@@ -67,19 +73,16 @@ class ModelRegistry:
             "15 CONDOS - 2-10 UNIT RESIDENTIAL",
             "17 CONDO COOPS",
         }
-        RENTAL = {
-            "07 RENTALS - WALKUP APARTMENTS",
-            "08 RENTALS - ELEVATOR APARTMENTS",
-        }
-
         if bc in ONE_FAMILY:
             return "one_family"
         if bc in MULTI_FAMILY:
             return "multi_family"
         if bc in CONDO_COOP:
             return "condo_coop"
-        if bc in RENTAL:
-            return "rental"
+        if bc == "07 RENTALS - WALKUP APARTMENTS":
+            return "rental_walkup"
+        if bc == "08 RENTALS - ELEVATOR APARTMENTS":
+            return "rental_elevator"
         return "global"
     
     

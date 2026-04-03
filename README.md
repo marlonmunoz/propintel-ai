@@ -255,13 +255,16 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 ### Subtype model results
 
-| Model | Segment | R² | MAE | RMSE |
-|---|---|---|---|---|
-| `one_family` | One family dwellings | 0.72 | $245,436 | $621,771 |
-| `multi_family` | Two & three family | 0.61 | $314,305 | $626,465 |
-| `condo_coop` | Condos & co-ops | 0.52 | $424,951 | $1,006,602 |
-| `rental` | Rental apartments | 0.37 | $1,389,088 | $2,470,798 |
-| `global` | All residential | 0.61 | $350,456 | $841,711 |
+| Model | Segment | R² | MAE | RMSE | Target |
+|---|---|---|---|---|---|
+| `one_family` | One family dwellings | 0.72 | $245,436 | $621,771 | sales_price |
+| `multi_family` | Two & three family | 0.61 | $314,305 | $626,465 | sales_price |
+| `condo_coop` | Condos & co-ops | 0.52 | $424,951 | $1,006,602 | sales_price |
+| `rental_walkup` | Walkup rental buildings (07) | 0.57 | $103,053/unit | $176,579/unit | price_per_unit |
+| `rental_elevator` | Elevator rental buildings (08) | 0.62 | $75,328/unit | $145,130/unit | price_per_unit |
+| `global` | All residential fallback | 0.61 | $350,456 | $841,711 | sales_price |
+
+Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
 
 ### Explainability
 Each subtype model is trained on its own feature set. Top features vary by segment:
@@ -272,7 +275,8 @@ Each subtype model is trained on its own feature set. Top features vary by segme
 | `one_family` | same as global + `neighborhood_median_price` |
 | `multi_family` | same as global + `neighborhood_median_price` |
 | `condo_coop` | `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` (no size features — co-op data rarely includes sqft) |
-| `rental` | same as one_family + `total_units`, `residential_units` |
+| `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit` |
+| `rental_elevator` | same as rental_walkup (separate model, stronger regularization for smaller dataset) |
 
 Feature importance CSVs for each segment are saved to `ml/artifacts/` after training and are loaded at inference time to drive the LLM explanation.
 

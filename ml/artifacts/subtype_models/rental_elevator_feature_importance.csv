@@ -1,0 +1,72 @@
+feature,importance
+num__residential_units,0.25145274
+num__land_sqft,0.15861447
+num__total_units,0.10808094
+num__latitude,0.07971329
+cat__borough_4,0.06833433
+num__gross_sqft,0.059368487
+num__neighborhood_median_price,0.054310806
+num__property_age,0.04359529
+cat__borough_3,0.04146892
+num__longitude,0.038218986
+num__sqft_per_unit,0.032450102
+num__year_built,0.029743737
+cat__borough_1,0.020266788
+cat__borough_2,0.014381073
+cat__neighborhood_LONG ISLAND CITY,0.0
+cat__neighborhood_PELHAM PARKWAY SOUTH,0.0
+cat__neighborhood_MOUNT HOPE/MOUNT EDEN,0.0
+cat__neighborhood_MORRISANIA/LONGWOOD,0.0
+cat__neighborhood_MIDWOOD,0.0
+cat__neighborhood_LOWER EAST SIDE,0.0
+cat__neighborhood_KEW GARDENS,0.0
+cat__neighborhood_LITTLE ITALY,0.0
+cat__neighborhood_KINGSBRIDGE/JEROME PARK,0.0
+cat__neighborhood_JAMAICA,0.0
+cat__neighborhood_JACKSON HEIGHTS,0.0
+cat__neighborhood_RIDGEWOOD,0.0
+cat__neighborhood_REGO PARK,0.0
+cat__neighborhood_UPPER WEST SIDE (59-79),0.0
+cat__neighborhood_ROSEBANK,0.0
+cat__neighborhood_SCHUYLERVILLE/PELHAM BAY,0.0
+cat__neighborhood_SOUNDVIEW,0.0
+cat__neighborhood_UPPER EAST SIDE (59-79),0.0
+cat__neighborhood_UPPER EAST SIDE (79-96),0.0
+cat__neighborhood_HIGHBRIDGE/MORRIS HEIGHTS,0.0
+cat__neighborhood_UPPER WEST SIDE (79-96),0.0
+cat__neighborhood_UPPER WEST SIDE (96-116),0.0
+cat__neighborhood_WASHINGTON HEIGHTS LOWER,0.0
+cat__neighborhood_WASHINGTON HEIGHTS UPPER,0.0
+cat__neighborhood_WESTCHESTER,0.0
+cat__neighborhood_WILLIAMSBRIDGE,0.0
+cat__neighborhood_WILLIAMSBURG-EAST,0.0
+cat__neighborhood_INWOOD,0.0
+cat__neighborhood_GRAMERCY,0.0
+cat__neighborhood_HARLEM-WEST,0.0
+cat__neighborhood_HARLEM-UPPER,0.0
+cat__borough_5,0.0
+cat__building_class_08 RENTALS - ELEVATOR APARTMENTS,0.0
+cat__neighborhood_ALPHABET CITY,0.0
+cat__neighborhood_ASTORIA,0.0
+cat__neighborhood_BAY RIDGE,0.0
+cat__neighborhood_BEDFORD PARK/NORWOOD,0.0
+cat__neighborhood_BEDFORD STUYVESANT,0.0
+cat__neighborhood_BOERUM HILL,0.0
+cat__neighborhood_BOROUGH PARK,0.0
+cat__neighborhood_BRIGHTON BEACH,0.0
+cat__neighborhood_CASTLE HILL/UNIONPORT,0.0
+cat__neighborhood_CHELSEA,0.0
+cat__neighborhood_CROWN HEIGHTS,0.0
+cat__neighborhood_CYPRESS HILLS,0.0
+cat__neighborhood_DOWNTOWN-FULTON FERRY,0.0
+cat__neighborhood_ELMHURST,0.0
+cat__neighborhood_FINANCIAL,0.0
+cat__neighborhood_FLATBUSH-CENTRAL,0.0
+cat__neighborhood_FLATBUSH-NORTH,0.0
+cat__neighborhood_FLUSHING-NORTH,0.0
+cat__neighborhood_FORDHAM,0.0
+cat__neighborhood_GREENPOINT,0.0
+cat__neighborhood_GREENWICH VILLAGE-CENTRAL,0.0
+cat__neighborhood_GREENWICH VILLAGE-WEST,0.0
+cat__neighborhood_HARLEM-EAST,0.0
+cat__neighborhood_WINDSOR TERRACE,0.0
