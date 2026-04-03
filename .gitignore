@@ -231,7 +231,7 @@ test.db
 ml/data/nyc_raw/
 ml/data/pluto_raw/
 ml/data/processed/
-
+ml/data/external/
 
 # generated ML outputs
 ml/data/features/
