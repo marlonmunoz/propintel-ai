@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from backend.app.core.limiter import limiter
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 
 from backend.app.core.security import verify_api_key
 from backend.app.db.database import get_db
-from backend.app.db.models import Property
+from backend.app.db.models import Property, HousingData
 from backend.app.schemas.property import (
     PropertyCreate, 
     PropertyResponse,
@@ -140,3 +141,63 @@ def delete_property(
         raise
     
     return {"message": "Property deleted successfully"}
+
+
+# ============== GET /housing/lookup ================
+# Finds the nearest property in housing_data to the given coordinates.
+# Called by the frontend after Mapbox resolves an address to lat/lng.
+# We use Euclidean distance on lat/lng — accurate enough for within-borough
+# lookups where we're comparing properties very close to each other.
+# Borough filter ensures we don't accidentally match across water (e.g.,
+# a Manhattan address matching a Brooklyn property across the East River).
+@limiter.limit("60/minute")
+@router.get("/housing/lookup")
+def lookup_housing(
+    request: Request,
+    lat: float = Query(...),
+    lng: float = Query(...),
+    borough: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
+):
+    distance = func.sqrt(
+        func.power(HousingData.latitude - lat, 2) +
+        func.power(HousingData.longitude - lng, 2)
+    )
+
+    base_filter = [
+        HousingData.latitude.isnot(None),
+        HousingData.longitude.isnot(None),
+    ]
+
+    # Try with borough filter first (case-insensitive).
+    # Falls back to proximity-only if no borough match is found —
+    # this handles any borough format mismatch between Mapbox and our data.
+    match = None
+    if borough:
+        match = (
+            db.query(HousingData)
+            .filter(*base_filter, func.lower(HousingData.borough) == borough.lower())
+            .order_by(distance)
+            .first()
+        )
+
+    if not match:
+        match = (
+            db.query(HousingData)
+            .filter(*base_filter)
+            .order_by(distance)
+            .first()
+        )
+
+    if not match:
+        raise HTTPException(status_code=404, detail="No nearby property found")
+
+    return {
+        "year_built":      match.year_built,
+        "gross_sqft":      match.gross_sqft,
+        "land_sqft":       match.land_sqft,
+        "building_class":  match.building_class,
+        "neighborhood":    match.neighborhood,
+        "borough":         match.borough,
+    }

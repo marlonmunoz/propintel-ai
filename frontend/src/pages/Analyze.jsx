@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { BookmarkPlus, CheckCircle2, Sparkles } from 'lucide-react'
+import { BookmarkPlus, CheckCircle2, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
 import Navbar from '../components/Navbar'
@@ -93,6 +93,33 @@ const samplePresets = {
     longitude: '-74.2396',
     market_price: '825000',
   },
+}
+
+
+// NYC bounding box — restricts Mapbox results to the 5 boroughs only.
+// Format: [west, south, east, north]. Swap to lat/lng order when reading results.
+// To expand to all of NYC + NJ someday, just widen this box.
+const NYC_BBOX = '-74.259090,40.477399,-73.700009,40.917577'
+
+// Mapbox returns NYC boroughs as "locality" context items.
+// "The Bronx" is the official Mapbox label — we normalize it to match our dropdown.
+function parseBoroughFromFeature(feature) {
+  const context = feature.context || []
+  const locality = context.find((c) => c.id?.startsWith('locality.'))
+  if (!locality) return ''
+  const name = locality.text
+  if (name === 'The Bronx') return 'Bronx'
+  const valid = ['Manhattan', 'Brooklyn', 'Queens', 'Staten Island', 'Bronx']
+  return valid.includes(name) ? name : ''
+}
+
+// Mapbox returns neighborhood as a "neighborhood" context item.
+// Falls back to "locality" (borough name) if no neighborhood is found —
+// better than leaving the field empty.
+function parseNeighborhoodFromFeature(feature) {
+  const context = feature.context || []
+  const nbhd = context.find((c) => c.id?.startsWith('neighborhood.'))
+  return nbhd?.text || ''
 }
 
 function formatCurrency(value) {
@@ -214,6 +241,24 @@ export default function Analyze() {
   const [savedToPortfolio, setSavedToPortfolio] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  // Address search state
+  // addressQuery: what the user typed in the search box
+  // suggestions: array of Mapbox feature results
+  // isSearching: shows a subtle loading indicator while the API is in flight
+  // showSuggestions: controls dropdown visibility
+  const [addressQuery, setAddressQuery] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
+  // true while the Rentcast API call is in flight after address selection.
+  // Shown as a subtle banner so the user knows the form is being filled.
+  const [isFetchingProperty, setIsFetchingProperty] = useState(false)
+
+  // useRef stores the debounce timer ID across renders without triggering re-renders.
+  // If we used useState for this, every keystroke would cause an extra render.
+  const debounceRef = useRef(null)
+
   function handleChange(event) {
     const { name, value } = event.target
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -239,6 +284,123 @@ export default function Analyze() {
     setFormErrors({})
     setAnalysisResult(null)
     setError('')
+    setAddressQuery('')
+    setSuggestions([])
+  }
+
+  // Called on every keystroke in the search box.
+  // Clears the previous debounce timer and starts a new one — so the API
+  // is only called 400ms after the user STOPS typing, not on every character.
+  function handleAddressInputChange(e) {
+    const query = e.target.value
+    setAddressQuery(query)
+    setShowSuggestions(true)
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (!query || query.length < 3) {
+      setSuggestions([])
+      return
+    }
+
+    debounceRef.current = setTimeout(() => fetchSuggestions(query), 400)
+  }
+
+  // Calls the Mapbox Geocoding v5 REST API directly — no SDK needed.
+  // bbox restricts results to NYC only. types=address means we only get
+  // street addresses back, not parks, businesses, etc.
+  async function fetchSuggestions(query) {
+    const token = import.meta.env.VITE_MAPBOX_TOKEN
+    if (!token) return
+    setIsSearching(true)
+    try {
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?bbox=${NYC_BBOX}&country=US&types=address&access_token=${token}`
+      const res = await fetch(url)
+      const data = await res.json()
+      setSuggestions(data.features || [])
+    } catch {
+      setSuggestions([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Called when the user clicks a suggestion.
+  // Step 1: fill location fields immediately from Mapbox (instant — no extra API call).
+  // Step 2: fire Rentcast in the background to fill property details.
+  // Mapbox feature.center is [longitude, latitude] — note the order is lng first.
+  function handleSelectSuggestion(feature) {
+    const [lng, lat] = feature.center
+    const borough = parseBoroughFromFeature(feature)
+    const neighborhood = parseNeighborhoodFromFeature(feature)
+
+    setAddressQuery(feature.place_name)
+    setSuggestions([])
+    setShowSuggestions(false)
+
+    setFormData((prev) => ({
+      ...prev,
+      latitude: String(lat.toFixed(6)),
+      longitude: String(lng.toFixed(6)),
+      ...(borough && { borough }),
+      ...(neighborhood && { neighborhood }),
+    }))
+
+    setFormErrors((prev) => {
+      const next = { ...prev }
+      delete next.latitude
+      delete next.longitude
+      if (borough) delete next.borough
+      if (neighborhood) delete next.neighborhood
+      return next
+    })
+
+    // Call our backend with the lat/lng Mapbox just gave us.
+    // Borough is passed as a filter so we only match properties in the same borough.
+    fetchPropertyDetails(lat, lng, borough)
+  }
+
+  // Calls our own FastAPI backend to find the nearest property in housing_data
+  // to the given coordinates. Uses our PLUTO-derived dataset — no third-party
+  // API needed. Borough filter prevents cross-water false matches.
+  // On success: fills year_built, gross_sqft, land_sqft, building_class, neighborhood.
+  // On failure or no match: silently does nothing — fields stay blank for manual entry.
+  async function fetchPropertyDetails(lat, lng, borough) {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL
+    const apiKey  = import.meta.env.VITE_API_KEY
+    if (!baseUrl) return
+    setIsFetchingProperty(true)
+    try {
+      const params = new URLSearchParams({ lat, lng })
+      if (borough) params.set('borough', borough)
+      const url = `${baseUrl}/housing/lookup?${params}`
+      const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } })
+      if (!res.ok) return
+      const data = await res.json()
+
+      setFormData((prev) => ({
+        ...prev,
+        ...(data.year_built                && { year_built:     String(data.year_built) }),
+        ...(data.gross_sqft                && { gross_sqft:     String(Math.round(data.gross_sqft)) }),
+        ...(data.land_sqft  !== undefined  && { land_sqft:      String(Math.round(data.land_sqft ?? 0)) }),
+        ...(data.building_class            && { building_class: data.building_class }),
+        ...(data.neighborhood              && { neighborhood:   data.neighborhood }),
+      }))
+
+      setFormErrors((prev) => {
+        const next = { ...prev }
+        if (data.year_built)                delete next.year_built
+        if (data.gross_sqft)                delete next.gross_sqft
+        if (data.land_sqft !== undefined)   delete next.land_sqft
+        if (data.building_class)            delete next.building_class
+        if (data.neighborhood)              delete next.neighborhood
+        return next
+      })
+    } catch {
+      // Silently fail — user fills manually
+    } finally {
+      setIsFetchingProperty(false)
+    }
   }
 
   function buildPayload() {
@@ -392,6 +554,69 @@ export default function Analyze() {
             </div>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-6" noValidate>
+
+              {/* Address Search — auto-fills borough, neighborhood, lat, lng */}
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
+                  Find Property
+                </h3>
+                <p className="mt-1 mb-3 text-xs text-slate-500 dark:text-slate-400">
+                  Type an NYC address to auto-fill all property fields.
+                </p>
+                <div className="relative">
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={addressQuery}
+                      onChange={handleAddressInputChange}
+                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setShowSuggestions(false)}
+                      placeholder="123 Main St, Brooklyn…"
+                      className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
+                    />
+                    {isSearching && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                        Searching…
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Suggestions dropdown */}
+                  {/* onMouseDown with e.preventDefault() is key here —
+                      it prevents the input's onBlur from firing before the
+                      click registers, which would close the dropdown too early */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                      {suggestions.map((feature, index) => (
+                        <li key={`${feature.id}-${index}`}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              handleSelectSuggestion(feature)
+                            }}
+                            className="flex w-full items-start gap-2 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
+                            <span>{feature.place_name}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* Rentcast loading banner — shown while property details are being fetched.
+                  Appears between the search box and the form fields so the user knows
+                  the form is about to populate. Disappears once the call completes. */}
+              {isFetchingProperty && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-700 dark:text-cyan-300">
+                  Fetching property details…
+                </div>
+              )}
+
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                   Property Basics
@@ -476,7 +701,7 @@ export default function Analyze() {
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="gross_sqft" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Gross Sqft
+                      Building Size (sq ft)
                     </label>
                     <input
                       id="gross_sqft"
@@ -492,7 +717,7 @@ export default function Analyze() {
 
                   <div>
                     <label htmlFor="land_sqft" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Land Sqft
+                      Lot Size (sq ft)
                     </label>
                     <input
                       id="land_sqft"
