@@ -274,7 +274,13 @@ export default function Portfolio() {
                           {inv && <ScoreBadge score={inv.investment_score} label={inv.deal_label} />}
                           {property.created_at && (
                             <span className="text-xs text-slate-400 dark:text-slate-500">
-                              Saved {new Date(property.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              Saved {new Date(property.created_at).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
                             </span>
                           )}
                         </div>
