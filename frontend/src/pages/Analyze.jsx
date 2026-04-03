@@ -122,6 +122,14 @@ function parseNeighborhoodFromFeature(feature) {
   return nbhd?.text || ''
 }
 
+// Mapbox includes NYC zip codes as "postcode" context items.
+// Returns the 5-digit zip string, or empty string if not found.
+function parseZipFromFeature(feature) {
+  const context = feature.context || []
+  const postcode = context.find((c) => c.id?.startsWith('postcode.'))
+  return postcode?.text || ''
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -242,16 +250,18 @@ export default function Analyze() {
   const [saveError, setSaveError] = useState('')
 
   // Address search state
-  // addressQuery: what the user typed in the search box
+  // addressQuery: the full Mapbox place_name (e.g. "123 Main St, Brooklyn, NY 11201")
+  // addressZip: 5-digit zip extracted from the selected Mapbox feature
   // suggestions: array of Mapbox feature results
   // isSearching: shows a subtle loading indicator while the API is in flight
   // showSuggestions: controls dropdown visibility
   const [addressQuery, setAddressQuery] = useState('')
+  const [addressZip, setAddressZip] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
 
-  // true while the Rentcast API call is in flight after address selection.
+  // true while the backend housing/lookup call is in flight after address selection.
   // Shown as a subtle banner so the user knows the form is being filled.
   const [isFetchingProperty, setIsFetchingProperty] = useState(false)
 
@@ -285,6 +295,7 @@ export default function Analyze() {
     setAnalysisResult(null)
     setError('')
     setAddressQuery('')
+    setAddressZip('')
     setSuggestions([])
   }
 
@@ -327,14 +338,16 @@ export default function Analyze() {
 
   // Called when the user clicks a suggestion.
   // Step 1: fill location fields immediately from Mapbox (instant — no extra API call).
-  // Step 2: fire Rentcast in the background to fill property details.
+  // Step 2: call our backend housing/lookup to fill property details from PLUTO data.
   // Mapbox feature.center is [longitude, latitude] — note the order is lng first.
   function handleSelectSuggestion(feature) {
     const [lng, lat] = feature.center
     const borough = parseBoroughFromFeature(feature)
     const neighborhood = parseNeighborhoodFromFeature(feature)
+    const zip = parseZipFromFeature(feature)
 
     setAddressQuery(feature.place_name)
+    setAddressZip(zip)
     setSuggestions([])
     setShowSuggestions(false)
 
@@ -449,7 +462,10 @@ export default function Analyze() {
     setIsSaving(true)
     setSaveError('')
 
-    const address = `${formData.neighborhood.trim()}, ${formData.borough.trim()}`
+    // Use the full Mapbox place_name when the user selected from suggestions.
+    // Fall back to "Neighborhood, Borough" only when fields were entered manually.
+    const address = addressQuery.trim() || `${formData.neighborhood.trim()}, ${formData.borough.trim()}`
+    const zipcode = addressZip || 'N/A'
 
     try {
       const existing = await getProperties({ limit: 50 })
@@ -463,7 +479,7 @@ export default function Analyze() {
 
       await createProperty({
         address,
-        zipcode: 'N/A',
+        zipcode,
         bedrooms: 0,
         bathrooms: 0,
         sqft: Number(formData.gross_sqft) || 1,
@@ -608,7 +624,7 @@ export default function Analyze() {
                 </div>
               </div>
 
-              {/* Rentcast loading banner — shown while property details are being fetched.
+              {/* Loading banner — shown while backend housing/lookup is in flight.
                   Appears between the search box and the form fields so the user knows
                   the form is about to populate. Disappears once the call completes. */}
               {isFetchingProperty && (
