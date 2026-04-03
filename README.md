@@ -62,11 +62,12 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - Real NYC Rolling Sales + PLUTO ingestion pipeline implemented
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
-- 4 subtype models trained and fully routed via ModelRegistry:
+- 5 subtype models trained and fully routed via ModelRegistry:
   - `one_family` — R²=0.72
   - `multi_family` — R²=0.61
   - `condo_coop` — R²=0.52
-  - `rental` — R²=0.37 (low-confidence warning served)
+  - `rental_walkup` — R²=0.57 (walkup buildings, predicts price/unit)
+  - `rental_elevator` — R²=0.62 (elevator buildings, predicts price/unit)
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
 - LLM explanation layer live with structured JSON output
@@ -246,7 +247,7 @@ Each model has a JSON metadata file in `ml/artifacts/metadata/` that defines:
 
 ### Warning system
 The `warnings` field in `ProductionPredictionResponse` is populated based on model key:
-- `rental` → low-confidence warning served (R²=0.37)
+- `rental_walkup` / `rental_elevator` → warning served if `total_units` is missing (falls back to global model)
 - `global` → fallback model warning
 
 ---
@@ -522,12 +523,14 @@ propintel-ai/
 │   │   │   ├── one_family_model.json
 │   │   │   ├── multi_family_model.json
 │   │   │   ├── condo_coop_model.json
-│   │   │   └── rental_model.json
+│   │   │   ├── rental_walkup_model.json
+│   │   │   └── rental_elevator_model.json
 │   │   └── subtype_models/
 │   │       ├── one_family_price_model.pkl
 │   │       ├── multi_family_price_model.pkl
 │   │       ├── condo_coop_price_model.pkl
-│   │       ├── rental_price_model.pkl
+│   │       ├── rental_walkup_price_model.pkl
+│   │       ├── rental_elevator_price_model.pkl
 │   │       └── subtype_model_metrics.csv
 │   ├── data/
 │   │   ├── nyc_raw/                 # NYC Rolling Sales Excel files (git-ignored)
@@ -798,14 +801,15 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - Residential-only dataset filtering
 - Log-transformed target training (`log1p` / `expm1`)
 - Global XGBoost residential valuation model
-- 4 trained subtype XGBoost models:
+- 5 trained subtype XGBoost models:
   - `one_family` (R²=0.72)
   - `multi_family` (R²=0.61)
   - `condo_coop` (R²=0.52)
-  - `rental` (R²=0.37)
+  - `rental_walkup` (R²=0.57) — walkup rentals, price/unit target
+  - `rental_elevator` (R²=0.62) — elevator rentals, price/unit target
 - Full building-class routing via `ModelRegistry.get_model_key()`
 - Feature importance artifact persisted and cached at runtime
-- All 5 models registered with version metadata JSONs
+- All 6 models registered with version metadata JSONs
 - ML inference endpoints:
   - `POST /predict-price-v2` (primary)
   - `POST /analyze-property-v2` (primary)
@@ -838,7 +842,7 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 Current constraints of the valuation models:
 
 - Trained only on **NYC residential properties** — not applicable to commercial
-- `rental` model has high uncertainty (R²=0.37) — treat as a directional signal only
+- `rental_walkup` (R²=0.57) and `rental_elevator` (R²=0.62) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
 - No temporal features — does not capture market cycles or seasonality
 - No macroeconomic indicators
 - Sensitive to data quality in source NYC datasets
