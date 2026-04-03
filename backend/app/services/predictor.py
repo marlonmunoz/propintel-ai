@@ -1,10 +1,16 @@
+import json
 import logging
 import math
-import pandas as pd
-from datetime import datetime
-
 import os
+from pathlib import Path
+
+import pandas as pd
 from dotenv import load_dotenv
+
+# Must match REFERENCE_YEAR in train_subtype_models.py and feature_engineering.py
+# so property_age at inference equals the values seen during training.
+REFERENCE_YEAR = 2024
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 logger = logging.getLogger("propintel")
 from backend.app.services.explainer import generate_explanation
@@ -12,6 +18,40 @@ from backend.app.schemas.prediction import ProductionPredictionRequest
 from backend.app.services.model_registry import ModelRegistry
 
 load_dotenv()
+
+def lookup_neighborhood_median(model_key: str, neighborhood: str) -> float | None:
+    """Return the pre-computed median sale price for a neighborhood.
+
+    Falls back to the global training median when the neighborhood is not
+    found, and returns None if the stats file doesn't exist yet.
+    """
+    stats_path = BASE_DIR / f"ml/artifacts/subtype_models/{model_key}_neighborhood_stats.json"
+    if not stats_path.exists():
+        return None
+    with open(stats_path) as f:
+        stats = json.load(f)
+    return stats["neighborhoods"].get(neighborhood, stats.get("global_median"))
+
+
+def load_model_feature_importance(model_key: str, top_n: int = 3) -> list[dict]:
+    """Load the top-N feature importances for the given model.
+
+    Prefers the subtype-specific CSV; falls back to the global model CSV so
+    we never silently return an empty list.
+    """
+    subtype_path = BASE_DIR / f"ml/artifacts/subtype_models/{model_key}_feature_importance.csv"
+    global_path  = BASE_DIR / "ml/artifacts/feature_importance.csv"
+
+    path = subtype_path if subtype_path.exists() else global_path
+    if not path.exists():
+        return []
+
+    try:
+        df = pd.read_csv(path).sort_values("importance", ascending=False).head(top_n)
+        return df[["feature", "importance"]].to_dict(orient="records")
+    except Exception:
+        return []
+
 
 def format_feature_name(feature: str) -> str:
     """Convert raw model feature names into human-readable explanations."""
@@ -22,6 +62,9 @@ def format_feature_name(feature: str) -> str:
 
     if "land_sqft" in feature_lower:
         return "Land size contributes to overall property valuation"
+
+    if "neighborhood_median_price" in feature_lower:
+        return "Neighborhood price level is a strong driver of property value"
 
     if "neighborhood" in feature_lower:
         return "Neighborhood demand strongly influences pricing"
@@ -49,22 +92,31 @@ class PredictionService:
         model = self.registry.load_model(model_key)
         metadata = self.registry.get_metadata(model_key)
         
-        property_age = datetime.now().year - payload.year_built
-        
+        property_age = REFERENCE_YEAR - payload.year_built
+
+        neighborhood = payload.neighborhood.strip()
+
         row = {
             "gross_sqft": payload.gross_sqft,
             "land_sqft": payload.land_sqft,
+            "total_units": payload.total_units,
+            "residential_units": payload.residential_units,
             "year_built": payload.year_built,
             "property_age": property_age,
             "latitude": payload.latitude,
             "longitude": payload.longitude,
             "borough": str(payload.borough).strip(),
             "building_class": payload.building_class.strip(),
-            "neighborhood": payload.neighborhood.strip(),
+            "neighborhood": neighborhood,
         }
-        
+
+        if "neighborhood_median_price" in metadata.feature_columns:
+            row["neighborhood_median_price"] = lookup_neighborhood_median(
+                model_key, neighborhood
+            )
+
         X = pd.DataFrame(
-            [[row[col] for col in metadata.feature_columns]],
+            [[row.get(col) for col in metadata.feature_columns]],
             columns=metadata.feature_columns,
         )
         
@@ -110,8 +162,6 @@ class PredictionService:
         predicted_price = prediction_result["predicted_price"]
         market_price = request.market_price
         
-        from ml.inference.predict import load_feature_importance
-        
         # 2. Compute price difference
         price_difference = predicted_price - market_price
         
@@ -133,7 +183,7 @@ class PredictionService:
         # Negative gap means overpriced.
         # Clamp to -30% to +30% and scale to 0-100.
         clamped_gap = max(-0.30, min(price_gap_pct, 0.30))
-        valuation_score = ((clamped_gap + 0.30) /0.60) * 100.0
+        valuation_score = ((clamped_gap + 0.30) / 0.60) * 100.0
         
         # Risk Penalty:
         # Bigger pricing dislocations imply more uncertainty / execution risk.
@@ -158,12 +208,11 @@ class PredictionService:
         else:
             deal_label = "Avoid"
         
-        # 5. Top drivers 
-        feature_data = load_feature_importance(top_n=3)
-        
+        # 5. Top drivers — loaded from the model that actually made the prediction
+        model_key = prediction_result.get("model_used", "global")
         raw_drivers = [
             format_feature_name(item["feature"])
-            for item in feature_data["items"]
+            for item in load_model_feature_importance(model_key, top_n=3)
         ]
         
         seen = set()

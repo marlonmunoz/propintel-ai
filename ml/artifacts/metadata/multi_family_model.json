@@ -6,6 +6,7 @@
     "feature_columns": [
         "gross_sqft",
         "land_sqft",
+        "neighborhood_median_price",
         "year_built",
         "property_age",
         "latitude",
@@ -15,8 +16,8 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 304808.31,
-        "rmse": 503625.18,
-        "r2": 0.6336
+        "mae": 314305.29,
+        "rmse": 626464.81,
+        "r2": 0.6064
     }
 }

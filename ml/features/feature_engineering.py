@@ -1,6 +1,10 @@
 import pandas as pd
 from pathlib import Path
-from datetime import datetime   
+
+# Fixed reference year matching the data collection period.
+# Using datetime.now().year would cause property_age to drift by 1 every
+# calendar year, making the feature mean different things on each retrain.
+REFERENCE_YEAR = 2024
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -41,9 +45,8 @@ def convert_numeric_columns(df):
 
 def engineer_features(df):
     """Create derived features for modeling."""
-    current_year = datetime.now().year
     if "year_built" in df.columns:
-        df["property_age"] = current_year - df["year_built"]
+        df["property_age"] = REFERENCE_YEAR - df["year_built"]
     return df
 
 

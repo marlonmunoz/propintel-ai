@@ -4,6 +4,7 @@
     "segment": "condo_coop",
     "artifact_path": "ml/artifacts/subtype_models/condo_coop_price_model.pkl",
     "feature_columns": [
+        "neighborhood_median_price",
         "year_built",
         "property_age",
         "latitude",
@@ -13,8 +14,8 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 440509.95,
-        "rmse": 1046344.60,
-        "r2": 0.5028
+        "mae": 424950.51,
+        "rmse": 1006601.88,
+        "r2": 0.5236
     }
 }
