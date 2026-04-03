@@ -1,8 +1,12 @@
 import joblib
+import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from datetime import datetime
+
+# Must match feature_engineering.py so property_age means the same thing
+# at training time and when the feature pipeline is re-run.
+REFERENCE_YEAR = 2024
 
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -17,6 +21,61 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 INPUT_FILE = BASE_DIR / "ml/data/processed/nyc_subtype_training_data.csv"
 ARTIFACTS_DIR = BASE_DIR / "ml/artifacts/subtype_models"
 METRICS_FILE = ARTIFACTS_DIR / "subtype_model_metrics.csv"
+
+    # Per-subtype XGBoost hyperparameters.
+# Tuned based on dataset size and property class characteristics.
+# No early stopping — each model trains to its full n_estimators on the
+# complete 80% training split, which consistently outperforms small-validation
+# early stopping on these dataset sizes.
+SUBTYPE_XGB_PARAMS = {
+    "one_family": {
+        "n_estimators": 500,
+        "learning_rate": 0.05,
+        "max_depth": 6,
+        "min_child_weight": 3,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "gamma": 0.1,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
+    },
+    "multi_family": {
+        # Shallower trees for the 2+3-family building mix.
+        "n_estimators": 500,
+        "learning_rate": 0.05,
+        "max_depth": 5,
+        "min_child_weight": 3,
+        "subsample": 0.8,
+        "colsample_bytree": 0.7,
+        "gamma": 0.1,
+        "reg_alpha": 0.05,
+        "reg_lambda": 1.0,
+    },
+    "condo_coop": {
+        # Hits 300 trees easily with limited numeric features — more trees help.
+        "n_estimators": 800,
+        "learning_rate": 0.05,
+        "max_depth": 5,
+        "min_child_weight": 4,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "gamma": 0.1,
+        "reg_alpha": 0.3,
+        "reg_lambda": 1.0,
+    },
+    "rental": {
+        # Small dataset — keep complexity low, light regularization only.
+        "n_estimators": 300,
+        "learning_rate": 0.05,
+        "max_depth": 5,
+        "min_child_weight": 3,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "gamma": 0.05,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
+    },
+}
 
 SUBTYPE_GROUPS = {
     "one_family": [
@@ -45,6 +104,7 @@ SUBTYPE_FEATURES = {
         "numeric": [
             "gross_sqft",
             "land_sqft",
+            "neighborhood_median_price",
             "year_built",
             "property_age",
             "latitude",
@@ -61,6 +121,7 @@ SUBTYPE_FEATURES = {
         "numeric": [
             "gross_sqft",
             "land_sqft",
+            "neighborhood_median_price",
             "year_built",
             "property_age",
             "latitude",
@@ -74,7 +135,11 @@ SUBTYPE_FEATURES = {
         "require_gross_sqft": True,
     },
     "condo_coop": {
+        # NYC co-op transactions record share sales, not physical units,
+        # so gross_sqft and land_sqft are almost universally null in the
+        # rolling sales data. We rely on location + age + categorical signals.
         "numeric": [
+            "neighborhood_median_price",
             "year_built",
             "property_age",
             "latitude",
@@ -91,6 +156,9 @@ SUBTYPE_FEATURES = {
         "numeric": [
             "gross_sqft",
             "land_sqft",
+            "total_units",
+            "residential_units",
+            "neighborhood_median_price",
             "year_built",
             "property_age",
             "latitude",
@@ -111,44 +179,23 @@ def load_data():
     return pd.read_csv(INPUT_FILE, low_memory=False)
 
 
-def build_pipeline(numeric_features, categorical_features):
+def build_preprocessor(numeric_features, categorical_features) -> ColumnTransformer:
+    """Return a fitted-ready ColumnTransformer for the given feature lists."""
     numeric_transformer = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="median")),
-        ]
+        steps=[("imputer", SimpleImputer(strategy="median"))]
     )
-
     categorical_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
             ("onehot", OneHotEncoder(handle_unknown="ignore")),
         ]
     )
-
-    preprocessor = ColumnTransformer(
+    return ColumnTransformer(
         transformers=[
             ("num", numeric_transformer, numeric_features),
             ("cat", categorical_transformer, categorical_features),
         ]
     )
-
-    model = Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("regressor", XGBRegressor(
-                n_estimators=300,
-                learning_rate=0.05,
-                max_depth=6,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                random_state=42,
-                n_jobs=-1,
-                objective="reg:squarederror",
-            )),
-        ]
-    )
-
-    return model
 
 
 def evaluate_predictions(y_test_log, y_pred_log):
@@ -169,6 +216,8 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         "sales_price",
         "gross_sqft",
         "land_sqft",
+        "total_units",
+        "residential_units",
         "year_built",
         "latitude",
         "longitude",
@@ -177,7 +226,7 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         if col in subset.columns:
             subset[col] = pd.to_numeric(subset[col], errors="coerce")
 
-    subset["property_age"] = datetime.now().year - subset["year_built"]
+    subset["property_age"] = REFERENCE_YEAR - subset["year_built"]
 
     subset = subset.dropna(subset=["sales_price", "year_built", "latitude", "longitude"])
 
@@ -185,6 +234,19 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
 
     if feature_config["require_gross_sqft"]:
         subset = subset[subset["gross_sqft"].notna() & (subset["gross_sqft"] > 0)]
+
+    # Compute neighborhood-level median price from the filtered training data.
+    # This gives the model a direct numeric signal about each neighborhood's
+    # price level rather than relying solely on one-hot categorical encoding.
+    neighborhood_medians = subset.groupby("neighborhood")["sales_price"].median()
+    global_median = float(subset["sales_price"].median())
+    subset["neighborhood_median_price"] = (
+        subset["neighborhood"].map(neighborhood_medians).fillna(global_median)
+    )
+    neighborhood_stats = {
+        "neighborhoods": neighborhood_medians.to_dict(),
+        "global_median": global_median,
+    }
 
     numeric_features = feature_config["numeric"]
     categorical_features = feature_config["categorical"]
@@ -200,7 +262,7 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
 
     y = np.log1p(subset["sales_price"].copy())
 
-    return subset, X, y, numeric_features, categorical_features
+    return subset, X, y, numeric_features, categorical_features, neighborhood_stats
 
 
 def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: list[str]):
@@ -209,8 +271,8 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
     print(f"\n=== {subtype_name.upper()} ===")
     print(f"Rows before subtype-specific filtering: {len(subset)}")
 
-    subset, X, y, numeric_features, categorical_features = prepare_subset_for_training(
-        subset, subtype_name
+    subset, X, y, numeric_features, categorical_features, neighborhood_stats = (
+        prepare_subset_for_training(subset, subtype_name)
     )
 
     print(f"Rows after subtype-specific filtering: {len(subset)}")
@@ -225,11 +287,27 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
         X, y, test_size=0.2, random_state=42
     )
 
-    model = build_pipeline(numeric_features, categorical_features)
-    model.fit(X_train, y_train)
+    xgb_params = SUBTYPE_XGB_PARAMS[subtype_name]
 
-    y_pred = model.predict(X_test)
+    preprocessor = build_preprocessor(numeric_features, categorical_features)
+    X_train_proc = preprocessor.fit_transform(X_train)
+    X_test_proc  = preprocessor.transform(X_test)
+
+    regressor = XGBRegressor(
+        **xgb_params,
+        random_state=42,
+        n_jobs=-1,
+        objective="reg:squarederror",
+    )
+    regressor.fit(X_train_proc, y_train)
+
+    y_pred = regressor.predict(X_test_proc)
     mae, rmse, r2 = evaluate_predictions(y_test, y_pred)
+
+    model = Pipeline([
+        ("preprocessor", preprocessor),
+        ("regressor", regressor),
+    ])
 
     print(f"MAE:  {mae:,.2f}")
     print(f"RMSE: {rmse:,.2f}")
@@ -238,6 +316,22 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     model_path = ARTIFACTS_DIR / f"{subtype_name}_price_model.pkl"
     joblib.dump(model, model_path)
+
+    stats_path = ARTIFACTS_DIR / f"{subtype_name}_neighborhood_stats.json"
+    with open(stats_path, "w") as f:
+        json.dump(neighborhood_stats, f, indent=2)
+    print(f"Neighborhood stats saved: {len(neighborhood_stats['neighborhoods'])} neighborhoods")
+
+    try:
+        feature_names = model.named_steps["preprocessor"].get_feature_names_out()
+        importances = model.named_steps["regressor"].feature_importances_
+        fi_df = pd.DataFrame({"feature": feature_names, "importance": importances})
+        fi_df = fi_df.sort_values("importance", ascending=False)
+        fi_path = ARTIFACTS_DIR / f"{subtype_name}_feature_importance.csv"
+        fi_df.to_csv(fi_path, index=False)
+        print(f"Feature importances saved: {fi_path.name}")
+    except Exception as e:
+        print(f"Warning: could not save feature importances — {e}")
 
     return {
         "subtype": subtype_name,

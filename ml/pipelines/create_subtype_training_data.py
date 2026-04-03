@@ -23,7 +23,9 @@ SELECT
     gross_sqft,
     land_sqft,
     latitude,
-    longitude
+    longitude,
+    total_units,
+    residential_units
 FROM housing_data
 """
 
@@ -53,12 +55,14 @@ def main():
     print(f"After residential filter: {len(df)}")
     
     numeric_cols = [
-        "sales_price", 
-        "gross_sqft", 
-        "land_sqft", 
-        "year_built", 
-        "latitude", 
-        "longitude"
+        "sales_price",
+        "gross_sqft",
+        "land_sqft",
+        "year_built",
+        "latitude",
+        "longitude",
+        "total_units",
+        "residential_units",
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")

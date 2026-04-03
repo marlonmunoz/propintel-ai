@@ -112,6 +112,16 @@ class ProductionPredictionRequest(BaseModel):
         ge=0,
         description="Land square footage, if available."
     )
+    total_units: float | None = Field(
+        default=None,
+        ge=0,
+        description="Total number of units in the building, used for rental property valuation."
+    )
+    residential_units: float | None = Field(
+        default=None,
+        ge=0,
+        description="Number of residential units in the building, used for rental property valuation."
+    )
     latitude: float = Field(
         ...,
         ge=40.0,
