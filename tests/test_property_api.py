@@ -154,10 +154,68 @@ def test_housing_lookup_missing_params():
 
 
 def test_housing_lookup_no_results():
-    """With an empty housing_data table and an impossible location, expect 404."""
-    db = SessionLocal()
-    db.query(HousingData).delete()
-    db.commit()
-    db.close()
+    """Coordinates far outside NYC should return 404 (no rows within threshold)."""
     response = client.get("/housing/lookup", params={"lat": 0.0, "lng": 0.0})
     assert response.status_code == 404
+
+
+# ── Property CRUD additional coverage ────────────────────────────────────────
+
+def test_create_property_returns_created_at():
+    """created_at must be present and non-null after creating a property."""
+    response = client.post("/properties/", json=PROPERTY_PAYLOAD)
+    assert response.status_code == 200
+    data = response.json()
+    assert "created_at" in data
+    assert data["created_at"] is not None
+
+
+def test_get_properties_min_price_filter():
+    """min_price filter should exclude properties below the threshold."""
+    low = {**PROPERTY_PAYLOAD, "listing_price": 100_000}
+    high = {**PROPERTY_PAYLOAD, "listing_price": 2_000_000}
+    low_id  = client.post("/properties/", json=low).json()["id"]
+    high_id = client.post("/properties/", json=high).json()["id"]
+
+    response = client.get("/properties/", params={"min_price": 1_000_000, "limit": 100})
+    assert response.status_code == 200
+    ids = [p["id"] for p in response.json()]
+    assert high_id in ids
+    assert low_id  not in ids
+
+    client.delete(f"/properties/{low_id}")
+    client.delete(f"/properties/{high_id}")
+
+
+def test_get_properties_max_price_filter():
+    """max_price filter should exclude properties above the threshold."""
+    low = {**PROPERTY_PAYLOAD, "listing_price": 100_000}
+    high = {**PROPERTY_PAYLOAD, "listing_price": 2_000_000}
+    low_id  = client.post("/properties/", json=low).json()["id"]
+    high_id = client.post("/properties/", json=high).json()["id"]
+
+    response = client.get("/properties/", params={"max_price": 500_000, "limit": 100})
+    assert response.status_code == 200
+    ids = [p["id"] for p in response.json()]
+    assert low_id  in ids
+    assert high_id not in ids
+
+    client.delete(f"/properties/{low_id}")
+    client.delete(f"/properties/{high_id}")
+
+
+def test_get_properties_zipcode_filter():
+    """zipcode filter should return only properties matching that zip."""
+    zip_a = {**PROPERTY_PAYLOAD, "zipcode": "11201"}
+    zip_b = {**PROPERTY_PAYLOAD, "zipcode": "10001"}
+    id_a = client.post("/properties/", json=zip_a).json()["id"]
+    id_b = client.post("/properties/", json=zip_b).json()["id"]
+
+    response = client.get("/properties/", params={"zipcode": "11201", "limit": 100})
+    assert response.status_code == 200
+    ids = [p["id"] for p in response.json()]
+    assert id_a in ids
+    assert id_b not in ids
+
+    client.delete(f"/properties/{id_a}")
+    client.delete(f"/properties/{id_b}")

@@ -264,13 +264,17 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 | `global` | All residential | 0.61 | $350,456 | $841,711 |
 
 ### Explainability
-Top global feature importances from the trained model:
-- neighborhood
-- building area (`bldgarea` / `gross_sqft`)
-- borough
-- total units
-- building class category
-- geographic coordinates
+Each subtype model is trained on its own feature set. Top features vary by segment:
+
+| Model | Key features |
+|---|---|
+| `global` | `gross_sqft`, `land_sqft`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
+| `one_family` | same as global + `neighborhood_median_price` |
+| `multi_family` | same as global + `neighborhood_median_price` |
+| `condo_coop` | `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` (no size features — co-op data rarely includes sqft) |
+| `rental` | same as one_family + `total_units`, `residential_units` |
+
+Feature importance CSVs for each segment are saved to `ml/artifacts/` after training and are loaded at inference time to drive the LLM explanation.
 
 ---
 

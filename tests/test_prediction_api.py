@@ -360,7 +360,7 @@ class MockPredictionServiceGlobal:
             },
         }
         
-def test_predict_price_v2_one_famliy_route():
+def test_predict_price_v2_one_family_route():
     app.dependency_overrides[get_prediction_service] = lambda: MockPredictionServiceOneFamily()
     
     payload = {

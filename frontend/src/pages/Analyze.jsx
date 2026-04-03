@@ -218,15 +218,15 @@ function validateForm(formData) {
   const latitude = Number(formData.latitude)
   if (!formData.latitude) {
     errors.latitude = 'Latitude is required.'
-  } else if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
-    errors.latitude = 'Latitude must be between -90 and 90.'
+  } else if (Number.isNaN(latitude) || latitude < 40.0 || latitude > 41.5) {
+    errors.latitude = 'Latitude must be within NYC bounds (40.0 – 41.5).'
   }
 
   const longitude = Number(formData.longitude)
   if (!formData.longitude) {
     errors.longitude = 'Longitude is required.'
-  } else if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
-    errors.longitude = 'Longitude must be between -180 and 180.'
+  } else if (Number.isNaN(longitude) || longitude < -75.0 || longitude > -73.0) {
+    errors.longitude = 'Longitude must be within NYC bounds (−75.0 – −73.0).'
   }
 
   const marketPrice = Number(formData.market_price)
@@ -387,7 +387,7 @@ export default function Analyze() {
       const params = new URLSearchParams({ lat, lng })
       if (borough) params.set('borough', borough)
       const url = `${baseUrl}/housing/lookup?${params}`
-      const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } })
+      const res = await fetch(url, { headers: { 'X-API-Key': apiKey } })
       if (!res.ok) return
       const data = await res.json()
 
