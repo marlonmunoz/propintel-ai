@@ -48,7 +48,7 @@ export default function Home() {
             Analyze Property
           </Link>
           <a
-            href="http://127.0.0.1:8000/docs"
+            href={`${import.meta.env.VITE_API_BASE_URL}/docs`}
             target="_blank"
             rel="noreferrer"
             className="rounded-xl border border-slate-200 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"

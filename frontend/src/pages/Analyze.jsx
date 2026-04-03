@@ -22,7 +22,7 @@ const buildingClassOptions = [
   { label: 'Co-op — Walkup',              value: '09 COOPS - WALKUP APARTMENTS' },
   { label: 'Co-op — Elevator Building',   value: '10 COOPS - ELEVATOR APARTMENTS' },
   { label: 'Condo — Elevator Building',   value: '13 CONDOS - ELEVATOR APARTMENTS' },
-  { label: 'Condo — Walkup',              value: '14 CONDOS - WALKUP APARTMENTS' },
+  { label: 'Condo — Walkup',              value: '12 CONDOS - WALKUP APARTMENTS' },
 ]
 
 const initialForm = {

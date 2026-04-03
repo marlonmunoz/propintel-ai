@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Any, Optional
 
@@ -28,6 +29,7 @@ class PropertyUpdate(BaseModel):
 class PropertyResponse(PropertyBase):
     id: int
     analysis: Optional[Any] = None
+    created_at: Optional[datetime] = None
 
     model_config = {
         "from_attributes": True

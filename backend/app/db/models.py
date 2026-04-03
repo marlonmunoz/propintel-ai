@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, JSON, String, Float
+from sqlalchemy import Column, Integer, JSON, String, Float, DateTime
+from sqlalchemy.sql import func
 from backend.app.db.database import Base
 
 class Property(Base):
@@ -12,6 +13,9 @@ class Property(Base):
     sqft = Column(Integer, nullable=False)
     listing_price = Column(Float, nullable=False)
     analysis = Column(JSON, nullable=True)
+    # Nullable so existing rows in Supabase are unaffected until the migration runs.
+    # Run: ALTER TABLE properties ADD COLUMN created_at TIMESTAMPTZ DEFAULT now();
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
     
     
 class HousingData(Base):

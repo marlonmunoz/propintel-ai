@@ -63,9 +63,9 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
 - 4 subtype models trained and fully routed via ModelRegistry:
-  - `one_family` — R²=0.75
-  - `multi_family` — R²=0.63
-  - `condo_coop` — R²=0.50
+  - `one_family` — R²=0.72
+  - `multi_family` — R²=0.61
+  - `condo_coop` — R²=0.52
   - `rental` — R²=0.37 (low-confidence warning served)
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
@@ -246,7 +246,7 @@ Each model has a JSON metadata file in `ml/artifacts/metadata/` that defines:
 
 ### Warning system
 The `warnings` field in `ProductionPredictionResponse` is populated based on model key:
-- `rental` → low-confidence warning (R²=0.37)
+- `rental` → low-confidence warning served (R²=0.37)
 - `global` → fallback model warning
 
 ---
@@ -257,10 +257,10 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 | Model | Segment | R² | MAE | RMSE |
 |---|---|---|---|---|
-| `one_family` | One family dwellings | 0.75 | $221,569 | $454,385 |
-| `multi_family` | Two & three family | 0.63 | $304,808 | $503,625 |
-| `condo_coop` | Condos & co-ops | 0.50 | $440,510 | $1,046,345 |
-| `rental` | Rental apartments | 0.37 | $1,250,152 | $2,206,338 |
+| `one_family` | One family dwellings | 0.72 | $245,436 | $621,771 |
+| `multi_family` | Two & three family | 0.61 | $314,305 | $626,465 |
+| `condo_coop` | Condos & co-ops | 0.52 | $424,951 | $1,006,602 |
+| `rental` | Rental apartments | 0.37 | $1,389,088 | $2,470,798 |
 | `global` | All residential | 0.61 | $350,456 | $841,711 |
 
 ### Explainability
@@ -791,9 +791,9 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - Log-transformed target training (`log1p` / `expm1`)
 - Global XGBoost residential valuation model
 - 4 trained subtype XGBoost models:
-  - `one_family` (R²=0.75)
-  - `multi_family` (R²=0.63)
-  - `condo_coop` (R²=0.50)
+  - `one_family` (R²=0.72)
+  - `multi_family` (R²=0.61)
+  - `condo_coop` (R²=0.52)
   - `rental` (R²=0.37)
 - Full building-class routing via `ModelRegistry.get_model_key()`
 - Feature importance artifact persisted and cached at runtime
@@ -830,7 +830,7 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 Current constraints of the valuation models:
 
 - Trained only on **NYC residential properties** — not applicable to commercial
-- `rental` model has high uncertainty (R²=0.37) — treat as directional signal only
+- `rental` model has high uncertainty (R²=0.37) — treat as a directional signal only
 - No temporal features — does not capture market cycles or seasonality
 - No macroeconomic indicators
 - Sensitive to data quality in source NYC datasets

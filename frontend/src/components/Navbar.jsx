@@ -36,7 +36,7 @@ export default function Navbar() {
           {navLink('/analyze', 'Analyze')}
           {navLink('/portfolio', 'Portfolio')}
           <a
-            href="http://127.0.0.1:8000/docs"
+            href={`${import.meta.env.VITE_API_BASE_URL}/docs`}
             target="_blank"
             rel="noreferrer"
             className="text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
