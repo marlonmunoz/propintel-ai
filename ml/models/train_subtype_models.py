@@ -19,6 +19,10 @@ from xgboost import XGBRegressor
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 INPUT_FILE = BASE_DIR / "ml/data/processed/nyc_subtype_training_data.csv"
+# Phase 2a: enriched rental CSV (Rolling Sales + PLUTO join).
+# When this file exists, rental subtypes use it instead of INPUT_FILE
+# to gain the assess_per_unit feature and more complete training rows.
+INPUT_FILE_RENTAL = BASE_DIR / "ml/data/processed/nyc_rental_enriched_training_data.csv"
 ARTIFACTS_DIR = BASE_DIR / "ml/artifacts/subtype_models"
 METRICS_FILE = ARTIFACTS_DIR / "subtype_model_metrics.csv"
 
@@ -174,6 +178,12 @@ SUBTYPE_FEATURES = {
     # size and produces a tighter, more learnable target distribution.
     # At inference, predicted $/unit is multiplied by total_units to recover
     # the full building price estimate.
+    # Rental walkup (07) and elevator (08) are trained as separate models because
+    # they serve different buyer profiles and price levels.
+    # Phase 2b TODO: add assess_per_unit once BBL is available in housing_data
+    # (requires a spatial join to PLUTO or a housing_data migration). The
+    # create_enriched_rental_data.py pipeline and lookup_assess_per_unit() in
+    # predictor.py are ready for activation once that join is reliable.
     "rental_walkup": {
         "numeric": [
             "gross_sqft",
@@ -215,14 +225,21 @@ SUBTYPE_FEATURES = {
         ],
         "require_gross_sqft": True,
         "target": "price_per_unit",
-        # Lower minimum rows — elevator dataset is smaller after cleaning.
         "min_rows": 100,
     },
 }
 
 
-def load_data():
-    print("Loading subtype training dataset...")
+def load_data(enriched: bool = False) -> pd.DataFrame:
+    """Load the appropriate training CSV.
+
+    When enriched=True and the Phase 2a enriched rental CSV exists, load that.
+    Otherwise fall back to the standard subtype training data.
+    """
+    if enriched and INPUT_FILE_RENTAL.exists():
+        print(f"Loading enriched rental dataset: {INPUT_FILE_RENTAL.name}")
+        return pd.read_csv(INPUT_FILE_RENTAL, low_memory=False)
+    print(f"Loading standard subtype dataset: {INPUT_FILE.name}")
     return pd.read_csv(INPUT_FILE, low_memory=False)
 
 
@@ -297,6 +314,21 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
 
     numeric_features = feature_config["numeric"]
     categorical_features = feature_config["categorical"]
+
+    # For subtypes that use assess_per_unit, also store neighborhood-level
+    # medians so the predictor can look up a reasonable value at inference time
+    # (the user never provides assesstot directly).
+    if "assess_per_unit" in numeric_features and "assess_per_unit" in subset.columns:
+        apu_medians = subset.groupby("neighborhood")["assess_per_unit"].median()
+        apu_global = float(subset["assess_per_unit"].median())
+        subset["assess_per_unit"] = (
+            subset["neighborhood"].map(apu_medians).where(
+                subset["assess_per_unit"].isna(),
+                subset["assess_per_unit"],
+            )
+        )
+        neighborhood_stats["assess_per_unit_neighborhoods"] = apu_medians.to_dict()
+        neighborhood_stats["assess_per_unit_global_median"] = apu_global
 
     # Derived features for rental subtypes that use price_per_unit as target.
     target = feature_config.get("target", "sales_price")
@@ -411,10 +443,18 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
 
 
 def main():
-    df = load_data()
+    df_standard = load_data(enriched=False)
+    df_enriched  = load_data(enriched=True) if INPUT_FILE_RENTAL.exists() else None
+
+    if df_enriched is not None:
+        print(f"Phase 2a enriched rental data available ({len(df_enriched):,} rows).")
+    else:
+        print("No enriched rental data found — rental subtypes will use standard data.")
 
     results = []
     for subtype_name, building_classes in SUBTYPE_GROUPS.items():
+        use_enriched = SUBTYPE_FEATURES[subtype_name].get("enriched_data", False)
+        df = df_enriched if (use_enriched and df_enriched is not None) else df_standard
         result = train_subtype_model(df, subtype_name, building_classes)
         if result:
             results.append(result)

@@ -19,18 +19,39 @@ from backend.app.services.model_registry import ModelRegistry
 
 load_dotenv()
 
+def _load_neighborhood_stats(model_key: str) -> dict:
+    """Load and cache the neighborhood stats JSON for a model key."""
+    stats_path = BASE_DIR / f"ml/artifacts/subtype_models/{model_key}_neighborhood_stats.json"
+    if not stats_path.exists():
+        return {}
+    with open(stats_path) as f:
+        return json.load(f)
+
+
 def lookup_neighborhood_median(model_key: str, neighborhood: str) -> float | None:
     """Return the pre-computed median sale price for a neighborhood.
 
     Falls back to the global training median when the neighborhood is not
     found, and returns None if the stats file doesn't exist yet.
     """
-    stats_path = BASE_DIR / f"ml/artifacts/subtype_models/{model_key}_neighborhood_stats.json"
-    if not stats_path.exists():
+    stats = _load_neighborhood_stats(model_key)
+    if not stats:
         return None
-    with open(stats_path) as f:
-        stats = json.load(f)
     return stats["neighborhoods"].get(neighborhood, stats.get("global_median"))
+
+
+def lookup_assess_per_unit(model_key: str, neighborhood: str) -> float | None:
+    """Return the pre-computed median assessed-value-per-unit for a neighborhood.
+
+    Used at inference time for rental models because the user never provides
+    assesstot directly. Falls back to the global training median, then None.
+    """
+    stats = _load_neighborhood_stats(model_key)
+    if not stats or "assess_per_unit_neighborhoods" not in stats:
+        return None
+    return stats["assess_per_unit_neighborhoods"].get(
+        neighborhood, stats.get("assess_per_unit_global_median")
+    )
 
 
 def load_model_feature_importance(model_key: str, top_n: int = 3) -> list[dict]:
@@ -62,6 +83,9 @@ def format_feature_name(feature: str) -> str:
 
     if "sqft_per_unit" in feature_lower:
         return "Average unit size (sqft per unit) drives per-unit valuation"
+
+    if "assess_per_unit" in feature_lower:
+        return "City-assessed value per unit reflects income potential of the building"
 
     if "land_sqft" in feature_lower:
         return "Land size contributes to overall property valuation"
@@ -137,6 +161,12 @@ class PredictionService:
             row["neighborhood_median_price"] = lookup_neighborhood_median(
                 model_key, neighborhood
             )
+
+        # Phase 2b: assess_per_unit lookup is ready in lookup_assess_per_unit()
+        # but not yet activated — waiting for a reliable BBL join so training
+        # and inference use the same building-level values.
+        # if "assess_per_unit" in metadata.feature_columns:
+        #     row["assess_per_unit"] = lookup_assess_per_unit(model_key, neighborhood)
 
         X = pd.DataFrame(
             [[row.get(col) for col in metadata.feature_columns]],
