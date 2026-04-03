@@ -443,7 +443,7 @@ export default function Analyze() {
                       onChange={handleChange}
                       className={getInputClasses(!!formErrors.building_class)}
                     >
-                      <option value="">Select property type</option>
+                      <option value="">Select Property Type</option>
                       {buildingClassOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
