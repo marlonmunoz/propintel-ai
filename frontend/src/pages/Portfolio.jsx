@@ -106,7 +106,16 @@ export default function Portfolio() {
     }
 
     // Sort
-    if (sortBy === 'score_desc') {
+    if (sortBy === 'default') {
+      // Newest saved first. created_at is present after the DB migration;
+      // fall back to id desc so pre-migration rows still sort reasonably.
+      result.sort((a, b) => {
+        if (a.created_at && b.created_at) {
+          return new Date(b.created_at) - new Date(a.created_at)
+        }
+        return b.id - a.id
+      })
+    } else if (sortBy === 'score_desc') {
       result.sort(
         (a, b) =>
           (b.analysis?.investment_analysis?.investment_score ?? -1) -
@@ -261,11 +270,14 @@ export default function Portfolio() {
                       </span>
                       <div>
                         <p className="font-semibold text-slate-900 dark:text-white">{property.address}</p>
-                        {inv && (
-                          <div className="mt-1">
-                            <ScoreBadge score={inv.investment_score} label={inv.deal_label} />
-                          </div>
-                        )}
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {inv && <ScoreBadge score={inv.investment_score} label={inv.deal_label} />}
+                          {property.created_at && (
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                              Saved {new Date(property.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
