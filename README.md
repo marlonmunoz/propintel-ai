@@ -63,11 +63,11 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
 - 5 subtype models trained and fully routed via ModelRegistry:
-  - `one_family` — R²=0.72
+  - `one_family` — R²=0.736 ✅ production grade
   - `multi_family` — R²=0.747 ✅ production grade
-  - `condo_coop` — R²=0.80 (up from 0.52 — parent BBL fix + condo transactions + numfloors/lot_coverage)
-  - `rental_walkup` — R²=0.58 (walkup buildings, predicts price/unit; density + subway features added)
-  - `rental_elevator` — R²=0.59 (elevator buildings, predicts price/unit)
+  - `condo_coop` — R²=0.801 (parent BBL fix + condo unit transactions + `numfloors` / `lot_coverage`)
+  - `rental_walkup` — R²=0.594 MVP (walkup class 07, **price/unit**; density + subway features)
+  - `rental_elevator` — R²=0.592 MVP (elevator class 08, **price/unit**)
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
 - LLM explanation layer live with structured JSON output
@@ -259,17 +259,17 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 | Model | Segment | R² | MAE | RMSE | RMSE/MAE | Target | Ver |
 |---|---|---|---|---|---|---|---|
-| `condo_coop` | Condos & co-ops | **0.80** | $289k | $493k | 1.70 | sales_price | v4 |
-| `one_family` | One family dwellings | 0.74 | **$140k** | **$203k** | 1.45 | sales_price | v2 |
+| `condo_coop` | Condos & co-ops | **0.801** | $289k | $493k | 1.70 | sales_price | v4 |
+| `one_family` | One family dwellings | **0.736** | **$140k** | **$203k** | 1.45 | sales_price | v2 |
 | `multi_family` | Two & three family | **0.747** | **$205k** | **$321k** | 1.56 | sales_price | v4 |
-| `rental_elevator` | Elevator rental buildings (08) | 0.59 | $78k/unit | $150k/unit | 1.92 | price_per_unit | v2 |
-| `rental_walkup` | Walkup rental buildings (07) | 0.594 | $107k/unit | $170k/unit | 1.59 | price_per_unit | v4 |
-| `global` | All residential fallback | 0.61 | $350k | $842k | 2.40 | sales_price | v1 |
+| `rental_elevator` | Elevator rental buildings (08) | **0.592** | $78k/unit | $150k/unit | 1.92 | price_per_unit | v2 |
+| `rental_walkup` | Walkup rental buildings (07) | **0.594** | $107k/unit | $170k/unit | 1.59 | price_per_unit | v4 |
+| `global` | All residential fallback | **0.610** | $350k | $842k | 2.40 | sales_price | v1 |
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
 
 **v4 improvements (Phase 3 — feature engineering):**
-- `condo_coop` **R² 0.55 → 0.80** (biggest single-session jump): root cause was a BBL mismatch — NYC condo unit lots (1001+) were not matching PLUTO's building lots (0001). Fixed by deriving the parent lot before the join, unlocking 4,599 individual condo elevator transaction records that were previously dropped. Training dataset grew from 12k → 18k rows. Added `numfloors` (floor count = prestige signal) and `lot_coverage` (FAR proxy = density signal) from PLUTO. Higher MAE/RMSE reflects the expanded price range now including condos up to $7.5M (vs co-op-only $4.5M cap before).
+- `condo_coop` **R² 0.55 → 0.801** (biggest single-session jump): root cause was a BBL mismatch — NYC condo unit lots (1001+) were not matching PLUTO's building lots (0001). Fixed by deriving the parent lot before the join, unlocking 4,599 individual condo elevator transaction records that were previously dropped. Training dataset grew from 12k → 18k rows. Added `numfloors` (floor count = prestige signal) and `lot_coverage` (FAR proxy = density signal) from PLUTO. Higher MAE/RMSE reflects the expanded price range now including condos up to $7.5M (vs co-op-only $4.5M cap before).
 - `rental_walkup` **v4** R² 0.58 → 0.594: deduplicated 56 genuinely new class 07 rows from rolling sales (P5–P95 ppu filter + PLUTO inner join) appended to the housing_data base; further augmentation limited by the fact that `housing_data` was already built from the same rolling sales source. Reaching 0.65+ requires multi-year rolling sales or external data beyond public NYC sources.
 - `multi_family` **v4** R² 0.641 → **0.747** (+16.5%): three-year dataset (2022 + 2023 + current, 26,931 rows vs 8,266), direct PLUTO BBL join adds `assess_per_unit`, `bldg_footprint` (front×depth), `numfloors`, `builtfar`, `lotdepth`. Per-borough×class P97 price caps preserve Manhattan transactions (260 rows vs 106). Hyperparameters: n_estimators=800, lr=0.04, max_depth=6. MAE $214k→$205k (−4%).
 
@@ -285,7 +285,7 @@ Each subtype model is trained on its own feature set. Top features vary by segme
 |---|---|
 | `global` | `gross_sqft`, `land_sqft`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
 | `one_family` | same as global + `neighborhood_median_price` |
-| `multi_family` | same as global + `neighborhood_median_price`, `neighborhood_median_ppsf` |
+| `multi_family` | same as global + `neighborhood_median_price`, `neighborhood_median_ppsf`, `assess_per_unit`, `bldg_footprint`, `numfloors`, `builtfar`, `lotdepth` |
 | `condo_coop` | `assess_per_unit`, `numfloors`, `lot_coverage`, `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
 | `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit`, `numfloors`, `units_per_floor`, `lot_coverage`, `subway_dist_km`, `stabilization_ratio` |
 | `rental_elevator` | same as rental_walkup minus density/subway features (separate model, stronger regularization for smaller dataset) |
@@ -812,12 +812,12 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - Residential-only dataset filtering
 - Log-transformed target training (`log1p` / `expm1`)
 - Global XGBoost residential valuation model
-- 5 trained subtype XGBoost models (v2/v3 — outlier-hardened):
-  - `one_family` (R²=0.74, MAE=$140k) — per-class price cap + price/sqft filter
-  - `multi_family` (R²=0.747, MAE=$205k) — per-borough×class caps + PLUTO building dimensions
-  - `condo_coop` (R²=0.80, MAE=$289k) — parent BBL fix, condo unit transactions, numfloors + lot_coverage (v4)
-  - `rental_walkup` (R²=0.58, MAE=$99k/unit) — density features + subway proximity (v3)
-  - `rental_elevator` (R²=0.59, MAE=$78k/unit) — stabilization_ratio
+- 5 trained subtype XGBoost models (v2–v4 — outlier-hardened / enriched where noted):
+  - `one_family` (R²=0.736, MAE=$140k) — per-class price cap + price/sqft filter (v2)
+  - `multi_family` (R²=0.747, MAE=$205k) — per-borough×class caps + PLUTO building dimensions (v4)
+  - `condo_coop` (R²=0.801, MAE=$289k) — parent BBL fix, condo unit transactions, numfloors + lot_coverage (v4)
+  - `rental_walkup` (R²=0.594, MAE=$107k/unit) — density features + subway proximity (v4)
+  - `rental_elevator` (R²=0.592, MAE=$78k/unit) — stabilization_ratio (v2)
 - Full building-class routing via `ModelRegistry.get_model_key()`
 - Feature importance artifact persisted and cached at runtime
 - All 6 models registered with version metadata JSONs
@@ -853,8 +853,8 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 Current constraints of the valuation models:
 
 - Trained only on **NYC residential properties** — not applicable to commercial
- - `condo_coop` (R²=0.80) is now the strongest subtype model after the parent BBL fix unlocked individual condo unit transactions
- - `rental_walkup` (R²=0.58) and `rental_elevator` (R²=0.59) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
+ - `condo_coop` (R²=0.801) is the strongest subtype model after the parent BBL fix unlocked individual condo unit transactions
+ - `rental_walkup` (R²=0.594) and `rental_elevator` (R²=0.592) predict **price per unit** and require `total_units` — falls back to the global model when not provided
 - All models are trained on the filtered (non-luxury) price range; very-high-end properties (above 95th–97th pct per class) should use the global model or be interpreted as directional estimates
 - No temporal features — does not capture market cycles or seasonality
 - No macroeconomic indicators
