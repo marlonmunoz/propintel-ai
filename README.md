@@ -65,8 +65,8 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - 5 subtype models trained and fully routed via ModelRegistry:
   - `one_family` — R²=0.72
   - `multi_family` — R²=0.61
-  - `condo_coop` — R²=0.65 (up from 0.52 — PLUTO assess_per_unit added)
-  - `rental_walkup` — R²=0.58 (walkup buildings, predicts price/unit)
+  - `condo_coop` — R²=0.80 (up from 0.52 — parent BBL fix + condo transactions + numfloors/lot_coverage)
+  - `rental_walkup` — R²=0.58 (walkup buildings, predicts price/unit; density + subway features added)
   - `rental_elevator` — R²=0.59 (elevator buildings, predicts price/unit)
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
@@ -259,18 +259,22 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 | Model | Segment | R² | MAE | RMSE | RMSE/MAE | Target | Ver |
 |---|---|---|---|---|---|---|---|
+| `condo_coop` | Condos & co-ops | **0.80** | $289k | $493k | 1.70 | sales_price | v4 |
 | `one_family` | One family dwellings | 0.74 | **$140k** | **$203k** | 1.45 | sales_price | v2 |
 | `multi_family` | Two & three family | 0.64 | **$216k** | **$320k** | 1.48 | sales_price | v2 |
-| `condo_coop` | Condos & co-ops | 0.55 | **$221k** | **$369k** | 1.67 | sales_price | v3 |
-| `rental_walkup` | Walkup rental buildings (07) | 0.58 | $103k/unit | $174k/unit | 1.69 | price_per_unit | v2 |
 | `rental_elevator` | Elevator rental buildings (08) | 0.59 | $78k/unit | $150k/unit | 1.92 | price_per_unit | v2 |
+| `rental_walkup` | Walkup rental buildings (07) | 0.58 | $99k/unit | $174k/unit | 1.76 | price_per_unit | v3 |
 | `global` | All residential fallback | 0.61 | $350k | $842k | 2.40 | sales_price | v1 |
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
 
+**v4 improvements (Phase 3 — feature engineering):**
+- `condo_coop` **R² 0.55 → 0.80** (biggest single-session jump): root cause was a BBL mismatch — NYC condo unit lots (1001+) were not matching PLUTO's building lots (0001). Fixed by deriving the parent lot before the join, unlocking 4,599 individual condo elevator transaction records that were previously dropped. Training dataset grew from 12k → 18k rows. Added `numfloors` (floor count = prestige signal) and `lot_coverage` (FAR proxy = density signal) from PLUTO. Higher MAE/RMSE reflects the expanded price range now including condos up to $7.5M (vs co-op-only $4.5M cap before).
+- `rental_walkup` **v3**: added PLUTO density features via 150 m spatial BallTree join — `numfloors`, `units_per_floor` (#1 feature at 17.4% importance), `lot_coverage`; added `subway_dist_km` from MTA station data (BallTree haversine). Tuned hyperparameters for expanded feature set. MAE improved $103k → $99k.
+
 **v2/v3 improvements (Phase 2 + outlier hardening):**
-- `one_family` + `multi_family`: per-class 97th-pct price cap + price/sqft P2–P98 anomaly filter — MAE reduced by 43% / 31%, RMSE by 67% / 49%. RMSE/MAE ratio dropped from 2.5 → 1.45 and 2.0 → 1.48.
-- `condo_coop`: per-class 95th-pct cap removed Manhattan luxury elevator co-op outliers (class 10 capped at \.6M vs \.9M previously); MAE reduced by 57%, RMSE by 75%. RMSE/MAE ratio dropped from 2.83 → 1.67. `assess_per_unit` (PLUTO BBL join) added as building quality proxy.
+- `one_family` + `multi_family`: per-class 97th-pct price cap + price/sqft P2–P98 anomaly filter — MAE reduced by 43% / 31%, RMSE by 67% / 49%.
+- `condo_coop` (v3): per-class 95th-pct cap + `assess_per_unit` (PLUTO BBL join) added as building quality proxy.
 - Rental models: `stabilization_ratio` (DHCR rent-stabilized units / total_units) added as a regulatory cash-flow signal.
 
 ### Explainability
@@ -281,9 +285,9 @@ Each subtype model is trained on its own feature set. Top features vary by segme
 | `global` | `gross_sqft`, `land_sqft`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
 | `one_family` | same as global + `neighborhood_median_price` |
 | `multi_family` | same as global + `neighborhood_median_price` |
-| `condo_coop` | `assess_per_unit`, `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
-| `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit`, `stabilization_ratio` |
-| `rental_elevator` | same as rental_walkup (separate model, stronger regularization for smaller dataset) |
+| `condo_coop` | `assess_per_unit`, `numfloors`, `lot_coverage`, `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
+| `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit`, `numfloors`, `units_per_floor`, `lot_coverage`, `subway_dist_km`, `stabilization_ratio` |
+| `rental_elevator` | same as rental_walkup minus density/subway features (separate model, stronger regularization for smaller dataset) |
 
 Feature importance CSVs for each segment are saved to `ml/artifacts/` after training and are loaded at inference time to drive the LLM explanation.
 
@@ -307,7 +311,7 @@ The feature engineering pipeline transforms the merged NYC dataset into a model-
 | `building_class` | categorical | NYC building class label |
 | `neighborhood` | categorical | NYC neighborhood name |
 
-> Note: `condo_coop` model does not use `gross_sqft` / `land_sqft` (not recorded for NYC co-op share sales). Instead, `assess_per_unit` (PLUTO tax assessment ÷ residential units) is used as a building quality and size proxy. `rental_walkup` and `rental_elevator` add `stabilization_ratio` (DHCR rent-stabilized units ÷ total_units) as a regulatory cash-flow signal. The ModelRegistry handles per-model feature columns automatically.
+> Note: `condo_coop` model does not use `gross_sqft` / `land_sqft` (not recorded for NYC co-op share sales). Instead it uses `assess_per_unit` (PLUTO tax assessment ÷ units), `numfloors` (building height), and `lot_coverage` (FAR proxy) from PLUTO via BBL join — covering 98%+ of rows. `rental_walkup` adds `numfloors`, `units_per_floor`, `lot_coverage` (PLUTO spatial join) and `subway_dist_km` (MTA haversine BallTree) alongside `stabilization_ratio` (DHCR). The ModelRegistry handles per-model feature columns automatically.
 
 ---
 
@@ -810,8 +814,8 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - 5 trained subtype XGBoost models (v2/v3 — outlier-hardened):
   - `one_family` (R²=0.74, MAE=$140k) — per-class price cap + price/sqft filter
   - `multi_family` (R²=0.64, MAE=$216k) — same outlier hardening
-  - `condo_coop` (R²=0.55, MAE=$221k) — luxury cap + PLUTO assess_per_unit
-  - `rental_walkup` (R²=0.58, MAE=$103k/unit) — stabilization_ratio
+  - `condo_coop` (R²=0.80, MAE=$289k) — parent BBL fix, condo unit transactions, numfloors + lot_coverage (v4)
+  - `rental_walkup` (R²=0.58, MAE=$99k/unit) — density features + subway proximity (v3)
   - `rental_elevator` (R²=0.59, MAE=$78k/unit) — stabilization_ratio
 - Full building-class routing via `ModelRegistry.get_model_key()`
 - Feature importance artifact persisted and cached at runtime
@@ -848,7 +852,8 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 Current constraints of the valuation models:
 
 - Trained only on **NYC residential properties** — not applicable to commercial
-- `rental_walkup` (R²=0.58) and `rental_elevator` (R²=0.59) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
+ - `condo_coop` (R²=0.80) is now the strongest subtype model after the parent BBL fix unlocked individual condo unit transactions
+ - `rental_walkup` (R²=0.58) and `rental_elevator` (R²=0.59) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
 - All models are trained on the filtered (non-luxury) price range; very-high-end properties (above 95th–97th pct per class) should use the global model or be interpreted as directional estimates
 - No temporal features — does not capture market cycles or seasonality
 - No macroeconomic indicators

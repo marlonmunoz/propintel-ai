@@ -3,20 +3,15 @@
 Pipeline:
   1. Load NYC Rolling Sales Excel files (classes 09, 10, 12, 13, 15, 17).
   2. Construct BBL (borough-block-lot identifier).
-  3. Join with PLUTO → latitude, longitude, building area, residential units,
-     total assessment.
-  4. Compute building-level approximations:
-       sqft_per_unit   = bldgarea / unitsres   (avg unit size)
+  3. Join with PLUTO → lat/lon, bldgarea, unitsres, assesstot, numfloors, lotarea.
+  4. Compute building-level features:
+       sqft_per_unit   = bldgarea / unitsres   (avg unit size proxy)
        assess_per_unit = assesstot / unitsres   (tax assessment per unit)
-  5. Apply standard price and location quality filters.
-  6. Save to ml/data/processed/nyc_condo_training_data.csv.
-
-This file is consumed by train_subtype_models.py when the
-INPUT_FILE_CONDO path exists. It replaces the DB-dependent
-create_subtype_training_data.py for condo_coop model training and
-adds sqft_per_unit as the primary size signal (individual unit sqft
-is not recorded in NYC rolling sales for co-ops or condos, so we
-use the building average from PLUTO as a proxy).
+       numfloors                                 (building height in floors)
+       lot_coverage    = bldgarea / lotarea      (FAR proxy — density signal)
+  5. Retain zipcode from rolling sales for zip-level price lookups.
+  6. Apply per-class 95th-pct price caps and dedup.
+  7. Save to ml/data/processed/nyc_condo_training_data.csv.
 
 Run from the project root:
     python ml/pipelines/create_condo_training_data.py
@@ -75,26 +70,64 @@ def load_rolling_sales() -> pd.DataFrame:
 
 
 def construct_bbl(df: pd.DataFrame) -> pd.DataFrame:
+    """Build BBL and a parent BBL used to look up PLUTO.
+
+    In NYC's property mapping, individual condo units receive their own lot
+    numbers in the 1000+ range (e.g. lot 1042 = unit 42 in building lot 0001).
+    PLUTO stores the building-level record under lot 0001, not the unit lots.
+    Co-ops use standard (< 1000) lots and match PLUTO directly.
+
+    Strategy:
+      - Standard lots (< 1000): bbl_parent = bbl  (direct match)
+      - Unit lots (≥ 1000):     bbl_parent uses lot = 1 (the parent parcel)
+
+    This lets elevator and walkup condos (classes 12, 13) join PLUTO to get
+    numfloors, assesstot, and unitsres — fixing the previous 0% condo match rate.
+    """
     df = df.copy()
     df["block"] = pd.to_numeric(df["block"], errors="coerce")
     df["lot"]   = pd.to_numeric(df["lot"],   errors="coerce")
     valid = df["block"].notna() & df["lot"].notna() & df["borocode"].notna()
     df = df[valid].copy()
-    df["bbl"] = (
-        df["borocode"].astype(np.int64) * 1_000_000_000
-        + df["block"].astype(np.int64) * 10_000
-        + df["lot"].astype(np.int64)
-    )
+
+    boro  = df["borocode"].astype(np.int64)
+    block = df["block"].astype(np.int64)
+    lot   = df["lot"].astype(np.int64)
+
+    df["bbl"] = boro * 1_000_000_000 + block * 10_000 + lot
+
+    # For unit-level lots (≥ 1000), derive the parent lot (0001) to look up
+    # the building record in PLUTO.
+    is_unit_lot = lot >= 1000
+    parent_lot  = lot.where(~is_unit_lot, other=1)
+    df["bbl_parent"] = boro * 1_000_000_000 + block * 10_000 + parent_lot
+
+    n_unit = is_unit_lot.sum()
+    print(f"BBL constructed: {len(df):,} rows  ({n_unit:,} unit-level lots remapped to parent)")
     return df
 
 
 def load_pluto_lookup() -> pd.DataFrame:
-    cols = ["BBL", "latitude", "longitude", "unitsres", "unitstotal", "bldgarea", "assesstot"]
+    cols = [
+        "BBL", "latitude", "longitude",
+        "unitsres", "unitstotal",
+        "bldgarea", "assesstot",
+        "numfloors", "lotarea",
+    ]
     pluto = pd.read_csv(PLUTO_CSV, usecols=cols, low_memory=False)
     pluto = pluto.rename(columns={"BBL": "bbl"})
     pluto["bbl"] = pd.to_numeric(pluto["bbl"], errors="coerce")
-    for col in ["latitude", "longitude", "unitsres", "unitstotal", "bldgarea", "assesstot"]:
+
+    # bldgarea and lotarea are comma-formatted integers ("1,224") in PLUTO CSV
+    for col in ["bldgarea", "lotarea"]:
+        pluto[col] = (
+            pluto[col].astype(str).str.replace(",", "", regex=False)
+            .pipe(pd.to_numeric, errors="coerce")
+        )
+    for col in ["latitude", "longitude", "unitsres", "unitstotal",
+                "assesstot", "numfloors"]:
         pluto[col] = pd.to_numeric(pluto[col], errors="coerce")
+
     pluto = pluto.dropna(subset=["bbl", "latitude", "longitude"])
     pluto = pluto.drop_duplicates(subset=["bbl"])
     print(f"\nPLUTO lookup loaded: {len(pluto):,} unique BBLs")
@@ -151,12 +184,15 @@ def main() -> None:
     pluto = load_pluto_lookup()
 
     before = len(sales)
+    pluto_cols = ["bbl", "latitude", "longitude", "unitsres",
+                  "bldgarea", "assesstot", "numfloors", "lotarea"]
+    # Join on bbl_parent so condo unit lots (1001+) match the parent building in PLUTO.
     sales = sales.merge(
-        pluto[["bbl", "latitude", "longitude", "unitsres", "bldgarea", "assesstot"]],
-        on="bbl", how="left",
+        pluto[pluto_cols].rename(columns={"bbl": "bbl_parent"}),
+        on="bbl_parent", how="left",
     )
     matched = sales["latitude"].notna().sum()
-    print(f"\nPLUTO geo join: {matched}/{before} rows matched ({matched/before*100:.1f}%)")
+    print(f"\nPLUTO geo join (via bbl_parent): {matched}/{before} rows matched ({matched/before*100:.1f}%)")
 
     # Fill total_units / residential_units from PLUTO where missing
     sales["total_units"] = sales["total_units"].where(
@@ -172,24 +208,40 @@ def main() -> None:
     sales = sales[sales["latitude"].notna() & sales["longitude"].notna()].copy()
     print(f"Rows with valid lat/lon: {len(sales)}")
 
-    # Building-level size and assessment signals from PLUTO.
-    # For co-ops and condos the rolling sales gross_sqft is almost always null;
-    # bldgarea / unitsres gives the average interior sqft per unit within the
-    # building — a useful proxy for unit size and market positioning.
+    # --- PLUTO-derived features ---
     units_floor = sales["unitsres"].clip(lower=1)
-    sales["sqft_per_unit"]   = (sales["bldgarea"]  / units_floor).where(
+
+    # sqft_per_unit: building gross area ÷ residential units — approximates
+    # average unit size (individual unit sqft is not recorded in rolling sales).
+    sales["sqft_per_unit"] = (sales["bldgarea"] / units_floor).where(
         sales["bldgarea"].notna() & (sales["bldgarea"] > 0)
     )
+
+    # assess_per_unit: tax assessment ÷ residential units — proxy for city's
+    # valuation of building quality and income potential.
     sales["assess_per_unit"] = (sales["assesstot"] / units_floor).where(
         sales["assesstot"].notna() & (sales["assesstot"] > 0)
     )
 
-    sqft_cov = sales["sqft_per_unit"].notna().mean() * 100
-    asmt_cov = sales["assess_per_unit"].notna().mean() * 100
-    print(f"\nsqft_per_unit coverage:   {sqft_cov:.1f}%")
-    print(f"assess_per_unit coverage: {asmt_cov:.1f}%")
-    if sales["sqft_per_unit"].notna().any():
-        print(f"sqft_per_unit range: {sales['sqft_per_unit'].min():.0f}–{sales['sqft_per_unit'].max():.0f} sqft")
+    # numfloors: building height in floors — taller buildings command higher
+    # prices for upper-floor units and signal density / prestige.
+    # (passed through directly from PLUTO)
+
+    # lot_coverage: total building area ÷ lot area — effective FAR proxy;
+    # higher values indicate denser, more urbanised buildings.
+    sales["lot_coverage"] = (sales["bldgarea"] / sales["lotarea"].clip(lower=1)).where(
+        sales["bldgarea"].notna() & (sales["bldgarea"] > 0) &
+        sales["lotarea"].notna() & (sales["lotarea"] > 0)
+    )
+
+    for feat, label in [
+        ("sqft_per_unit",   "sqft_per_unit"),
+        ("assess_per_unit", "assess_per_unit"),
+        ("numfloors",       "numfloors"),
+        ("lot_coverage",    "lot_coverage"),
+    ]:
+        cov = sales[feat].notna().mean() * 100
+        print(f"{label} coverage: {cov:.1f}%")
 
     sales["sales_price"] = pd.to_numeric(sales.get("sales_price", pd.Series()), errors="coerce")
 
@@ -201,6 +253,8 @@ def main() -> None:
         "latitude", "longitude",
         "total_units", "residential_units",
         "sqft_per_unit", "assess_per_unit",
+        "numfloors", "lot_coverage",
+        "zipcode",
     ]
     keep = [c for c in keep if c in sales.columns]
     sales = sales[keep]
@@ -211,7 +265,9 @@ def main() -> None:
     print(f"\n✅ Saved {len(sales):,} rows to {OUTPUT}")
     print("\nBuilding class counts:")
     print(sales["building_class"].value_counts().to_string())
-    print(f"\nsqft_per_unit non-null: {sales['sqft_per_unit'].notna().sum():,} rows")
+    for feat in ["sqft_per_unit", "assess_per_unit", "numfloors", "lot_coverage", "zipcode"]:
+        if feat in sales.columns:
+            print(f"{feat} non-null: {sales[feat].notna().sum():,} rows ({sales[feat].notna().mean()*100:.1f}%)")
 
 
 if __name__ == "__main__":

@@ -2,8 +2,10 @@ import json
 import logging
 import math
 import os
+from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -11,6 +13,9 @@ from dotenv import load_dotenv
 # so property_age at inference equals the values seen during training.
 REFERENCE_YEAR = 2024
 BASE_DIR = Path(__file__).resolve().parents[3]
+
+SUBWAY_CSV = BASE_DIR / "ml/data/external/nyc_subway_stations.csv"
+EARTH_RADIUS_KM = 6_371.0
 
 logger = logging.getLogger("propintel")
 from backend.app.services.explainer import generate_explanation
@@ -69,6 +74,62 @@ def lookup_stabilization_ratio(model_key: str, neighborhood: str) -> float:
     )
 
 
+def lookup_pluto_stat(model_key: str, neighborhood: str, stat_name: str) -> float | None:
+    """Return a neighbourhood-level median for any PLUTO-derived stat.
+
+    Covers: numfloors, lot_coverage, units_per_floor.
+    Falls back to the global training median, then None if no data exists.
+    """
+    stats = _load_neighborhood_stats(model_key)
+    key = f"{stat_name}_neighborhoods"
+    if not stats or key not in stats:
+        return None
+    return stats[key].get(neighborhood, stats.get(f"{stat_name}_global_median"))
+
+
+def lookup_subway_dist_km(
+    lat: float | None,
+    lon: float | None,
+    model_key: str,
+    neighborhood: str,
+) -> float | None:
+    """Return distance (km) to the nearest NYC subway station.
+
+    When lat/lon are available uses a BallTree haversine query for an exact
+    distance.  Falls back to the neighbourhood-level training median stored
+    in neighborhood_stats when coordinates are missing.
+    """
+    if lat is not None and lon is not None:
+        stations = _load_subway_stations()
+        if stations is not None:
+            from sklearn.neighbors import BallTree
+            coords_rad = np.radians([[lat, lon]])
+            dist_rad, _ = stations.query(coords_rad, k=1)
+            return float(dist_rad[0, 0]) * EARTH_RADIUS_KM
+
+    # Fallback: neighbourhood training median
+    stats = _load_neighborhood_stats(model_key)
+    if stats and "subway_dist_km_neighborhoods" in stats:
+        return stats["subway_dist_km_neighborhoods"].get(
+            neighborhood, stats.get("subway_dist_km_global_median")
+        )
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_subway_stations():
+    """Load and cache a BallTree over NYC subway station coordinates."""
+    if not SUBWAY_CSV.exists():
+        return None
+    try:
+        from sklearn.neighbors import BallTree
+        df = pd.read_csv(SUBWAY_CSV, usecols=["GTFS Latitude", "GTFS Longitude"]).dropna()
+        coords = np.radians(df[["GTFS Latitude", "GTFS Longitude"]].values)
+        return BallTree(coords, metric="haversine")
+    except Exception:
+        return None
+
+
 def load_model_feature_importance(model_key: str, top_n: int = 3) -> list[dict]:
     """Load the top-N feature importances for the given model.
 
@@ -104,6 +165,18 @@ def format_feature_name(feature: str) -> str:
 
     if "stabilization_ratio" in feature_lower:
         return "Rent-stabilization rate affects cash-flow and resale dynamics significantly"
+
+    if "numfloors" in feature_lower:
+        return "Building height (floors) is a key driver of condo and rental pricing"
+
+    if "lot_coverage" in feature_lower:
+        return "Lot coverage (building density) reflects urban density and building type"
+
+    if "units_per_floor" in feature_lower:
+        return "Units per floor captures building layout and density premium"
+
+    if "subway_dist" in feature_lower:
+        return "Proximity to subway transit is a primary driver of NYC rental pricing"
 
     if "land_sqft" in feature_lower:
         return "Land size contributes to overall property valuation"
@@ -185,6 +258,19 @@ class PredictionService:
 
         if "stabilization_ratio" in metadata.feature_columns:
             row["stabilization_ratio"] = lookup_stabilization_ratio(model_key, neighborhood)
+
+        # PLUTO density features — looked up from neighbourhood medians saved
+        # at training time; no BBL or spatial join needed at inference.
+        for pluto_feat in ("numfloors", "lot_coverage", "units_per_floor"):
+            if pluto_feat in metadata.feature_columns:
+                row[pluto_feat] = lookup_pluto_stat(model_key, neighborhood, pluto_feat)
+
+        # Subway proximity — exact haversine distance when lat/lon available,
+        # neighbourhood median fallback otherwise.
+        if "subway_dist_km" in metadata.feature_columns:
+            row["subway_dist_km"] = lookup_subway_dist_km(
+                payload.latitude, payload.longitude, model_key, neighborhood
+            )
 
         X = pd.DataFrame(
             [[row.get(col) for col in metadata.feature_columns]],
