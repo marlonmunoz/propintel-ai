@@ -175,6 +175,15 @@ def format_feature_name(feature: str) -> str:
     if "units_per_floor" in feature_lower:
         return "Units per floor captures building layout and density premium"
 
+    if "bldg_footprint" in feature_lower:
+        return "Building footprint (front × depth) is a precise proxy for building area"
+
+    if "builtfar" in feature_lower:
+        return "Built floor-area ratio reflects how densely the parcel is developed"
+
+    if "lotdepth" in feature_lower:
+        return "Lot depth influences rear-yard potential and overall parcel value"
+
     if "subway_dist" in feature_lower:
         return "Proximity to subway transit is a primary driver of NYC rental pricing"
 
@@ -267,9 +276,10 @@ class PredictionService:
         if "stabilization_ratio" in metadata.feature_columns:
             row["stabilization_ratio"] = lookup_stabilization_ratio(model_key, neighborhood)
 
-        # PLUTO density features — looked up from neighbourhood medians saved
-        # at training time; no BBL or spatial join needed at inference.
-        for pluto_feat in ("numfloors", "lot_coverage", "units_per_floor"):
+        # PLUTO features — looked up from neighbourhood medians saved at training
+        # time; no BBL or spatial join needed at inference.
+        for pluto_feat in ("numfloors", "lot_coverage", "units_per_floor",
+                           "bldg_footprint", "builtfar", "lotdepth"):
             if pluto_feat in metadata.feature_columns:
                 row[pluto_feat] = lookup_pluto_stat(model_key, neighborhood, pluto_feat)
 

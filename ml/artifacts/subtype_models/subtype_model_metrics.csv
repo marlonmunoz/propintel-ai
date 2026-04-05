@@ -1,2 +1,2 @@
 subtype,rows,mae,rmse,r2,model_path
-rental_walkup,1359,107055.68836889282,170481.30294836848,0.5942820499209985,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/rental_walkup_price_model.pkl
+multi_family,26931,205427.34618062002,320764.81689574406,0.7465315428615331,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/multi_family_price_model.pkl

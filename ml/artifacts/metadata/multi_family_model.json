@@ -1,11 +1,16 @@
 {
     "name": "multi_family",
-    "version": "v3",
+    "version": "v4",
     "segment": "multi_family",
     "artifact_path": "ml/artifacts/subtype_models/multi_family_price_model.pkl",
     "feature_columns": [
         "gross_sqft",
         "land_sqft",
+        "assess_per_unit",
+        "bldg_footprint",
+        "numfloors",
+        "builtfar",
+        "lotdepth",
         "neighborhood_median_price",
         "neighborhood_median_ppsf",
         "year_built",
@@ -17,9 +22,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 214483.55,
-        "rmse": 317522.33,
-        "r2": 0.6411,
-        "note": "v3: added neighborhood_median_ppsf (median $/sqft by neighbourhood) as a direct borough-size interaction signal — ranks #4 feature at 4.7% importance. MAE -0.5%, RMSE -0.7%, R2 0.636→0.641."
+        "mae": 205427.35,
+        "rmse": 320764.82,
+        "r2": 0.7465,
+        "note": "v4: 3-year dataset (2022+2023+current, 26,931 rows vs 8,266 prior). PLUTO BBL join unlocks assess_per_unit, bldg_footprint (bldgfront×bldgdepth), numfloors, builtfar, lotdepth. Per-borough×class P97 caps preserve Manhattan (260 rows vs 106 prior). n_estimators=800, lr=0.04, max_depth=6. R²: 0.641→0.747 (+16.5%), MAE: $214k→$205k (-4%)."
     }
 }

@@ -25,6 +25,8 @@ INPUT_FILE_RENTAL = BASE_DIR / "ml/data/processed/nyc_rental_enriched_training_d
 INPUT_FILE_RENTAL_STAB = BASE_DIR / "ml/data/processed/nyc_rental_stab_training_data.csv"
 # Condo/co-op training data with assess_per_unit from raw Excel + PLUTO BBL join.
 INPUT_FILE_CONDO = BASE_DIR / "ml/data/processed/nyc_condo_training_data.csv"
+# Multi-family: 3 years of rolling sales (current + 2022 + 2023) + PLUTO BBL join.
+INPUT_FILE_MULTIFAMILY = BASE_DIR / "ml/data/processed/nyc_multifamily_training_data.csv"
 ARTIFACTS_DIR = BASE_DIR / "ml/artifacts/subtype_models"
 METRICS_FILE = ARTIFACTS_DIR / "subtype_model_metrics.csv"
 
@@ -49,11 +51,11 @@ SUBTYPE_XGB_PARAMS = {
         "reg_lambda": 1.0,
     },
     "multi_family": {
-        # Shallower trees for the 2+3-family building mix; borough and
-        # neighborhood_median_ppsf dominate — deep trees would overfit.
-        "n_estimators": 500,
-        "learning_rate": 0.05,
-        "max_depth": 5,
+        # 26k rows (3× previous) + 5 new PLUTO features → can afford deeper
+        # trees and more estimators without overfitting.
+        "n_estimators": 800,
+        "learning_rate": 0.04,
+        "max_depth": 6,
         "min_child_weight": 3,
         "subsample": 0.8,
         "colsample_bytree": 0.7,
@@ -144,12 +146,22 @@ SUBTYPE_FEATURES = {
         "require_gross_sqft": True,
     },
     "multi_family": {
-        # neighborhood_median_ppsf = median(sales_price / gross_sqft) by neighbourhood.
-        # Encodes the borough × size interaction directly: a sqft of building in
-        # Flatbush trades at a very different rate than in Manhattan or Staten Island.
+        # New PLUTO-enriched feature set (3-year BBL-joined pipeline):
+        #   assess_per_unit  — city's per-unit tax assessment; same signal that
+        #                      pushed condo_coop from 0.55 → 0.80.
+        #   bldg_footprint   — bldgfront × bldgdepth; precise building area proxy.
+        #   numfloors        — number of storeys; structural height signal.
+        #   builtfar         — actual floor-area ratio; density of the parcel.
+        #   lotdepth         — lot depth; correlates with rear-yard potential.
+        #   neighborhood_median_ppsf — $/sqft by neighbourhood; encodes borough × size.
         "numeric": [
             "gross_sqft",
             "land_sqft",
+            "assess_per_unit",
+            "bldg_footprint",
+            "numfloors",
+            "builtfar",
+            "lotdepth",
             "neighborhood_median_price",
             "neighborhood_median_ppsf",
             "year_built",
@@ -163,6 +175,7 @@ SUBTYPE_FEATURES = {
             "neighborhood",
         ],
         "require_gross_sqft": True,
+        "enriched_data": True,
     },
     "condo_coop": {
         # NYC co-op transactions don't record individual unit sqft, so we rely
@@ -261,9 +274,10 @@ def load_data(source: str = "standard") -> pd.DataFrame:
     """Load the appropriate training CSV.
 
     source:
-      "standard"     – DB-based subtype training data (fallback for all models)
-      "rental_stab"  – Phase 2b raw Excel + PLUTO + rentstab (rental models)
-      "condo"        – raw Excel + PLUTO assess_per_unit (condo_coop model)
+      "standard"      – DB-based subtype training data (fallback for all models)
+      "rental_stab"   – Phase 2b raw Excel + PLUTO + rentstab (rental models)
+      "condo"         – raw Excel + PLUTO assess_per_unit (condo_coop model)
+      "multifamily"   – 3-year rolling sales + PLUTO BBL join (multi_family model)
     """
     if source == "rental_stab" and INPUT_FILE_RENTAL_STAB.exists():
         print(f"Loading rental-stab dataset: {INPUT_FILE_RENTAL_STAB.name}")
@@ -271,6 +285,9 @@ def load_data(source: str = "standard") -> pd.DataFrame:
     if source == "condo" and INPUT_FILE_CONDO.exists():
         print(f"Loading condo dataset: {INPUT_FILE_CONDO.name}")
         return pd.read_csv(INPUT_FILE_CONDO, low_memory=False)
+    if source == "multifamily" and INPUT_FILE_MULTIFAMILY.exists():
+        print(f"Loading multifamily dataset: {INPUT_FILE_MULTIFAMILY.name}")
+        return pd.read_csv(INPUT_FILE_MULTIFAMILY, low_memory=False)
     print(f"Loading standard subtype dataset: {INPUT_FILE.name}")
     return pd.read_csv(INPUT_FILE, low_memory=False)
 
@@ -322,7 +339,9 @@ def apply_price_outlier_caps(subset: pd.DataFrame, subtype_name: str) -> pd.Data
     percentile — these are typically data-entry errors, related-party sales, or
     land-only transactions mislabelled as improved properties.
     """
-    if subtype_name in ("rental_walkup", "rental_elevator"):
+    # Rental and multi_family already have per-borough×class caps applied
+    # in their respective pipeline scripts — skip double-capping here.
+    if subtype_name in ("rental_walkup", "rental_elevator", "multi_family"):
         return subset
 
     before = len(subset)
@@ -384,14 +403,18 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         "year_built",
         "latitude",
         "longitude",
-        # PLUTO density features
+        # PLUTO density features (rental)
         "numfloors",
         "lot_coverage",
         "units_per_floor",
         # Rental-specific
         "subway_dist_km",
         "stabilization_ratio",
+        # PLUTO features (multi_family + condo)
         "assess_per_unit",
+        "bldg_footprint",
+        "builtfar",
+        "lotdepth",
     ]
     for col in numeric_cols:
         if col in subset.columns:
@@ -463,10 +486,10 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         neighborhood_stats["stabilization_ratio_neighborhoods"] = stab_medians.to_dict()
         neighborhood_stats["stabilization_ratio_global_median"] = stab_global
 
-    # For PLUTO density features (numfloors, lot_coverage, units_per_floor):
-    # store neighbourhood medians so the predictor can fill them at inference
-    # time without needing a BBL or spatial join.
-    for pluto_feat in ("numfloors", "lot_coverage", "units_per_floor"):
+    # For PLUTO features: store neighbourhood medians so the predictor can fill
+    # them at inference time without needing a BBL or spatial join.
+    for pluto_feat in ("numfloors", "lot_coverage", "units_per_floor",
+                       "bldg_footprint", "builtfar", "lotdepth"):
         if pluto_feat in numeric_features and pluto_feat in subset.columns:
             feat_medians = subset.groupby("neighborhood")[pluto_feat].median()
             feat_global  = float(subset[pluto_feat].median())
@@ -609,29 +632,35 @@ def main(only_subtypes: set | None = None):
                        are left untouched. Pass None to train all subtypes.
     """
     df_standard    = load_data("standard")
-    df_rental_stab = load_data("rental_stab") if INPUT_FILE_RENTAL_STAB.exists() else None
-    df_condo       = load_data("condo")        if INPUT_FILE_CONDO.exists()        else None
+    df_rental_stab = load_data("rental_stab")  if INPUT_FILE_RENTAL_STAB.exists()   else None
+    df_condo       = load_data("condo")         if INPUT_FILE_CONDO.exists()          else None
+    df_multifamily = load_data("multifamily")   if INPUT_FILE_MULTIFAMILY.exists()    else None
 
     if df_rental_stab is not None:
-        print(f"Phase 2b rental-stab data available ({len(df_rental_stab):,} rows).")
+        print(f"Rental-stab data available ({len(df_rental_stab):,} rows).")
     else:
-        print("No rental-stab data found — rental subtypes will use standard data.")
+        print("No rental-stab data — rental subtypes will use standard data.")
 
     if df_condo is not None:
         print(f"Enriched condo data available ({len(df_condo):,} rows).")
     else:
-        print("No enriched condo data found — condo_coop will use standard data.")
+        print("No enriched condo data — condo_coop will use standard data.")
+
+    if df_multifamily is not None:
+        print(f"Enriched multifamily data available ({len(df_multifamily):,} rows).")
+    else:
+        print("No enriched multifamily data — multi_family will use standard data.")
 
     if only_subtypes:
         print(f"\nSelective training — only: {', '.join(sorted(only_subtypes))}")
         print("All other models are left untouched.\n")
 
     # Route each subtype to its best available dataset.
-    # "enriched_data: True" means prefer the specialised CSV over the DB-based fallback.
     DATASET_MAP = {
         "rental_walkup":   df_rental_stab,
         "rental_elevator": df_rental_stab,
         "condo_coop":      df_condo,
+        "multi_family":    df_multifamily,
     }
 
     results = []
