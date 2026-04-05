@@ -4,6 +4,7 @@ import { BookmarkPlus, CheckCircle2, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
 import Navbar from '../components/Navbar'
+import DealLabelBadge from '../components/DealLabelBadge'
 
 const boroughOptions = [
   'Bronx',
@@ -106,6 +107,8 @@ const samplePresets = {
 // Format: [west, south, east, north]. Swap to lat/lng order when reading results.
 // To expand to all of NYC + NJ someday, just widen this box.
 const NYC_BBOX = '-74.259090,40.477399,-73.700009,40.917577'
+// Bias autocomplete toward Manhattan / city core (lng,lat for Mapbox proximity).
+const NYC_PROXIMITY = '-74.0060,40.7128'
 
 // Mapbox returns NYC boroughs as "locality" context items.
 // "The Bronx" is the official Mapbox label — we normalize it to match our dropdown.
@@ -146,13 +149,6 @@ function formatCurrency(value) {
 
 function formatPercent(value) {
   return `${value.toFixed(2)}%`
-}
-
-function getDealLabelStyles(label) {
-  const normalized = label?.toLowerCase()
-  if (normalized === 'buy') return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
-  if (normalized === 'hold') return 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-300'
-  return 'border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-300'
 }
 
 function getScoreCategory(score) {
@@ -331,7 +327,9 @@ export default function Analyze() {
     if (!token) return
     setIsSearching(true)
     try {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?bbox=${NYC_BBOX}&country=US&types=address&access_token=${token}`
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+        query,
+      )}.json?bbox=${NYC_BBOX}&country=US&types=address&limit=8&proximity=${NYC_PROXIMITY}&access_token=${token}`
       const res = await fetch(url)
       const data = await res.json()
       setSuggestions(data.features || [])
@@ -587,8 +585,16 @@ export default function Analyze() {
                   Find Property
                 </h3>
                 <p className="mt-1 mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  Type an NYC address to auto-fill all property fields.
+                  Type an NYC street address to auto-fill borough, neighborhood, coordinates, and — when
+                  available — building attributes from our dataset.
                 </p>
+                {!import.meta.env.VITE_MAPBOX_TOKEN ? (
+                  <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    Add <code className="rounded bg-amber-500/20 px-1">VITE_MAPBOX_TOKEN</code> to{' '}
+                    <code className="rounded bg-amber-500/20 px-1">frontend/.env</code> to enable address
+                    search (free tier at mapbox.com).
+                  </div>
+                ) : null}
                 <div className="relative">
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -867,9 +873,15 @@ export default function Analyze() {
               </div>
 
               {hasV2Result ? (
-                <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${getDealLabelStyles(dealLabel)}`}>
-                  {dealLabel}
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <DealLabelBadge label={dealLabel} />
+                  {score !== undefined && score !== null ? (
+                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                      Investment score <span className="text-slate-900 dark:text-white">{score}</span>
+                      /100
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
@@ -919,6 +931,25 @@ export default function Analyze() {
                     tone={analysisResult.valuation.price_difference_pct >= 0 ? 'positive' : 'negative'}
                   />
                 </div>
+
+                {analysisResult.valuation.price_low != null &&
+                analysisResult.valuation.price_high != null ? (
+                  <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-5 dark:border-cyan-500/30 dark:bg-cyan-950/30">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-400">
+                      Estimated valuation range
+                    </p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      {formatCurrency(analysisResult.valuation.price_low)}
+                      <span className="mx-2 font-normal text-slate-400 dark:text-slate-500">–</span>
+                      {formatCurrency(analysisResult.valuation.price_high)}
+                    </p>
+                    {analysisResult.valuation.valuation_interval_note ? (
+                      <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        {analysisResult.valuation.valuation_interval_note}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">

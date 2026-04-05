@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { BarChart3, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import DealLabelBadge from '../components/DealLabelBadge'
 import { getProperties, deleteProperty } from '../services/propertiesApi'
 
 function formatCurrency(value) {
@@ -17,20 +18,6 @@ function formatPercent(value) {
   if (value == null) return '—'
   const sign = value >= 0 ? '+' : ''
   return `${sign}${value.toFixed(1)}%`
-}
-
-function ScoreBadge({ score, label }) {
-  let classes = 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-  if (score >= 75) classes = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-  else if (score >= 50) classes = 'border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400'
-  else if (score >= 25) classes = 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-  else classes = 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400'
-
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${classes}`}>
-      {score}/100 · {label}
-    </span>
-  )
 }
 
 const DEAL_LABELS = ['All', 'Buy', 'Hold', 'Avoid']
@@ -271,7 +258,12 @@ export default function Portfolio() {
                       <div>
                         <p className="font-semibold text-slate-900 dark:text-white">{property.address}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          {inv && <ScoreBadge score={inv.investment_score} label={inv.deal_label} />}
+                          {inv?.deal_label ? <DealLabelBadge label={inv.deal_label} size="sm" /> : null}
+                          {inv?.investment_score != null ? (
+                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              Score {inv.investment_score}/100
+                            </span>
+                          ) : null}
                           {property.created_at && (
                             <span className="text-xs text-slate-400 dark:text-slate-500">
                               Saved {new Date(property.created_at).toLocaleString('en-US', {
@@ -295,6 +287,12 @@ export default function Portfolio() {
                             <p className="font-semibold text-cyan-600 dark:text-cyan-400">
                               {formatCurrency(valuation.predicted_price)}
                             </p>
+                            {valuation.price_low != null && valuation.price_high != null ? (
+                              <p className="mt-0.5 max-w-[11rem] text-right text-[10px] leading-tight text-slate-400 dark:text-slate-500">
+                                Range {formatCurrency(valuation.price_low)} –{' '}
+                                {formatCurrency(valuation.price_high)}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="text-right">
                             <p className="text-xs text-slate-400 dark:text-slate-500">Market</p>

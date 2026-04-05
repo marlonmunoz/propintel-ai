@@ -20,7 +20,15 @@ EARTH_RADIUS_KM = 6_371.0
 logger = logging.getLogger("propintel")
 from backend.app.services.explainer import generate_explanation
 from backend.app.schemas.prediction import ProductionPredictionRequest
-from backend.app.services.model_registry import ModelRegistry
+from backend.app.services.model_registry import ModelRegistry, RegisteredModel
+
+# Symmetric dollar band around the point estimate using training-set MAE for the
+# active model. Rental subtypes report MAE in $/unit — scale by total_units.
+VALUATION_INTERVAL_MAE_MULTIPLIER = 1.0
+VALUATION_INTERVAL_NOTE = (
+    "Approximate range ±1× the model's training MAE for this segment "
+    "(not a formal confidence interval)."
+)
 
 load_dotenv()
 
@@ -216,6 +224,32 @@ def format_feature_name(feature: str) -> str:
 
     return "Model identified this feature as influential"
 
+
+def _valuation_interval_dollars(
+    predicted_price: float,
+    metadata: RegisteredModel,
+    n_units: float,
+) -> tuple[float, float] | None:
+    """Return (price_low, price_high) from training MAE, or None if unavailable."""
+    metrics = metadata.metrics or {}
+    mae_raw = metrics.get("mae")
+    if mae_raw is None:
+        return None
+    try:
+        mae = float(mae_raw)
+    except (TypeError, ValueError):
+        return None
+    if mae <= 0 or predicted_price < 0:
+        return None
+    if metadata.target == "price_per_unit":
+        half = mae * max(float(n_units), 1.0) * VALUATION_INTERVAL_MAE_MULTIPLIER
+    else:
+        half = mae * VALUATION_INTERVAL_MAE_MULTIPLIER
+    low = max(0.0, predicted_price - half)
+    high = predicted_price + half
+    return (low, high)
+
+
 class PredictionService:
     def __init__(self, registry: ModelRegistry) -> None:
         self.registry = registry
@@ -307,7 +341,8 @@ class PredictionService:
             warnings.append(
                 "Using global residential fallback model for this property type."
             )
-        return {
+        interval = _valuation_interval_dollars(predicted_price, metadata, n_units)
+        out: dict = {
             "predicted_price": predicted_price,
             "model_used": metadata.name,
             "model_version": metadata.version,
@@ -320,6 +355,12 @@ class PredictionService:
             "warnings": warnings,
             "model_metrics": metadata.metrics,
         }
+        if interval:
+            low, high = interval
+            out["price_low"] = low
+            out["price_high"] = high
+            out["valuation_interval_note"] = VALUATION_INTERVAL_NOTE
+        return out
         
         
         
@@ -441,13 +482,21 @@ class PredictionService:
         
         price_difference_pct = (price_difference / market_price) * 100 if market_price > 0 else 0.0
 
+        valuation_block: dict = {
+            "predicted_price": predicted_price,
+            "market_price": market_price,
+            "price_difference": price_difference,
+            "price_difference_pct": price_difference_pct,
+        }
+        if prediction_result.get("price_low") is not None:
+            valuation_block["price_low"] = prediction_result["price_low"]
+            valuation_block["price_high"] = prediction_result["price_high"]
+            valuation_block["valuation_interval_note"] = prediction_result.get(
+                "valuation_interval_note"
+            )
+
         return {
-            "valuation": {
-                "predicted_price": predicted_price,
-                "market_price": market_price,
-                "price_difference": price_difference,
-                "price_difference_pct": price_difference_pct,
-            },
+            "valuation": valuation_block,
             "investment_analysis": {
                 "roi_estimate": roi_estimate,
                 "investment_score": investment_score,

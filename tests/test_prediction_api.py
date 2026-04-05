@@ -288,6 +288,9 @@ class MockPredictionServiceOneFamily:
     def predict(self, payload):
         return {
             "predicted_price": 659430.07,
+            "price_low": 519590.44,
+            "price_high": 799269.70,
+            "valuation_interval_note": "mock interval note",
             "model_used": "one_family",
             "model_version": "v1",
             "segment": "one_family",
@@ -303,6 +306,9 @@ class MockPredictionServiceGlobal:
     def predict(self, payload):
         return {
             "predicted_price": 650980.91,
+            "price_low": 300524.66,
+            "price_high": 1001437.16,
+            "valuation_interval_note": "mock interval note",
             "model_used": "global",
             "model_version": "v1",
             "segment": "all_residential",
@@ -328,6 +334,9 @@ class MockPredictionServiceGlobal:
                 "market_price": 550000.0,
                 "price_difference": 100980.91000000003,
                 "price_difference_pct": 18.36016545454546,
+                "price_low": 300524.66,
+                "price_high": 1001437.16,
+                "valuation_interval_note": "mock interval note",
             },
             "investment_analysis": {
                 "roi_estimate": 18.36016545454546,
@@ -384,7 +393,10 @@ def test_predict_price_v2_one_family_route():
     assert data["segment"] == "one_family"
     assert data["input_summary"]["building_class"] == "01 ONE FAMILY DWELLINGS"
     assert data["warnings"] == []
-    
+    assert data["price_low"] == 519590.44
+    assert data["price_high"] == 799269.70
+    assert data["valuation_interval_note"] == "mock interval note"
+
     app.dependency_overrides.pop(get_prediction_service, None)
     
 
@@ -413,7 +425,9 @@ def test_predict_price_v2_global_fallback_route():
     assert data["input_summary"]["building_class"] == "02 TWO FAMILY DWELLINGS"
     assert len(data["warnings"]) == 1
     assert "fallback model" in data["warnings"][0].lower()
-    
+    assert data["price_low"] == 300524.66
+    assert data["price_high"] == 1001437.16
+
     app.dependency_overrides.pop(get_prediction_service, None)
     
 
@@ -467,6 +481,9 @@ def test_analyze_property_v2():
     assert data["valuation"]["market_price"] == 550000.0
     assert "price_difference" in data["valuation"]
     assert "price_difference_pct" in data["valuation"]
+    assert data["valuation"]["price_low"] == 300524.66
+    assert data["valuation"]["price_high"] == 1001437.16
+    assert data["valuation"]["valuation_interval_note"] == "mock interval note"
 
     assert "roi_estimate" in data["investment_analysis"]
     assert "investment_score" in data["investment_analysis"]
