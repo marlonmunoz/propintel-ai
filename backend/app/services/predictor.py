@@ -43,7 +43,7 @@ def lookup_neighborhood_median(model_key: str, neighborhood: str) -> float | Non
 def lookup_assess_per_unit(model_key: str, neighborhood: str) -> float | None:
     """Return the pre-computed median assessed-value-per-unit for a neighborhood.
 
-    Used at inference time for rental models because the user never provides
+    Used at inference time for condo_coop because the user never provides
     assesstot directly. Falls back to the global training median, then None.
     """
     stats = _load_neighborhood_stats(model_key)
@@ -51,6 +51,21 @@ def lookup_assess_per_unit(model_key: str, neighborhood: str) -> float | None:
         return None
     return stats["assess_per_unit_neighborhoods"].get(
         neighborhood, stats.get("assess_per_unit_global_median")
+    )
+
+
+def lookup_stabilization_ratio(model_key: str, neighborhood: str) -> float:
+    """Return the neighborhood-level median rent-stabilization ratio.
+
+    stabilization_ratio = DHCR stabilized units / total residential units.
+    Returns 0.0 (no regulated units assumed) when the neighborhood is not found
+    or when the stats file has no stabilization data.
+    """
+    stats = _load_neighborhood_stats(model_key)
+    if not stats or "stabilization_ratio_neighborhoods" not in stats:
+        return 0.0
+    return stats["stabilization_ratio_neighborhoods"].get(
+        neighborhood, stats.get("stabilization_ratio_global_median", 0.0)
     )
 
 
@@ -85,7 +100,10 @@ def format_feature_name(feature: str) -> str:
         return "Average unit size (sqft per unit) drives per-unit valuation"
 
     if "assess_per_unit" in feature_lower:
-        return "City-assessed value per unit reflects income potential of the building"
+        return "City-assessed value per unit reflects building quality and income potential"
+
+    if "stabilization_ratio" in feature_lower:
+        return "Rent-stabilization rate affects cash-flow and resale dynamics significantly"
 
     if "land_sqft" in feature_lower:
         return "Land size contributes to overall property valuation"
@@ -162,11 +180,11 @@ class PredictionService:
                 model_key, neighborhood
             )
 
-        # Phase 2b: assess_per_unit lookup is ready in lookup_assess_per_unit()
-        # but not yet activated — waiting for a reliable BBL join so training
-        # and inference use the same building-level values.
-        # if "assess_per_unit" in metadata.feature_columns:
-        #     row["assess_per_unit"] = lookup_assess_per_unit(model_key, neighborhood)
+        if "assess_per_unit" in metadata.feature_columns:
+            row["assess_per_unit"] = lookup_assess_per_unit(model_key, neighborhood)
+
+        if "stabilization_ratio" in metadata.feature_columns:
+            row["stabilization_ratio"] = lookup_stabilization_ratio(model_key, neighborhood)
 
         X = pd.DataFrame(
             [[row.get(col) for col in metadata.feature_columns]],

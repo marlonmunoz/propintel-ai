@@ -29,7 +29,7 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - End-to-end ML pipeline: ingestion → feature engineering → training → inference
 - XGBoost regression with log-transformed target for residential property valuation
 - ModelRegistry pattern: metadata-driven, segment-routable, lazy-loading model serving
-- 4 trained subtype models: one_family, multi_family, condo_coop, rental
+- 5 trained subtype models: one_family, multi_family, condo_coop, rental_walkup, rental_elevator
 - Full building-class routing to dedicated segment models
 - Feature importance / explainability artifact persisted after training
 - Global explainability endpoint: `GET /model/feature-importance`
@@ -65,9 +65,9 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - 5 subtype models trained and fully routed via ModelRegistry:
   - `one_family` — R²=0.72
   - `multi_family` — R²=0.61
-  - `condo_coop` — R²=0.52
-  - `rental_walkup` — R²=0.57 (walkup buildings, predicts price/unit)
-  - `rental_elevator` — R²=0.62 (elevator buildings, predicts price/unit)
+  - `condo_coop` — R²=0.65 (up from 0.52 — PLUTO assess_per_unit added)
+  - `rental_walkup` — R²=0.58 (walkup buildings, predicts price/unit)
+  - `rental_elevator` — R²=0.59 (elevator buildings, predicts price/unit)
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
 - LLM explanation layer live with structured JSON output
@@ -235,7 +235,8 @@ PropIntel uses a `ModelRegistry` to route each prediction request to the most ap
 | `01 ONE FAMILY DWELLINGS` | `one_family` | `one_family_price_model.pkl` |
 | `02 TWO FAMILY DWELLINGS`, `03 THREE FAMILY DWELLINGS` | `multi_family` | `multi_family_price_model.pkl` |
 | `09`–`17` COOPS / CONDOS | `condo_coop` | `condo_coop_price_model.pkl` |
-| `07`–`08` RENTALS | `rental` | `rental_price_model.pkl` |
+| `07 RENTALS - WALKUP APARTMENTS` | `rental_walkup` | `rental_walkup_price_model.pkl` |
+| `08 RENTALS - ELEVATOR APARTMENTS` | `rental_elevator` | `rental_elevator_price_model.pkl` |
 | All others | `global` | `price_model.pkl` |
 
 ### Model metadata
@@ -256,16 +257,20 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 ### Subtype model results
 
-| Model | Segment | R² | MAE | RMSE | Target |
-|---|---|---|---|---|---|
-| `one_family` | One family dwellings | 0.72 | $245,436 | $621,771 | sales_price |
-| `multi_family` | Two & three family | 0.61 | $314,305 | $626,465 | sales_price |
-| `condo_coop` | Condos & co-ops | 0.52 | $424,951 | $1,006,602 | sales_price |
-| `rental_walkup` | Walkup rental buildings (07) | 0.57 | $103,053/unit | $176,579/unit | price_per_unit |
-| `rental_elevator` | Elevator rental buildings (08) | 0.62 | $75,328/unit | $145,130/unit | price_per_unit |
-| `global` | All residential fallback | 0.61 | $350,456 | $841,711 | sales_price |
+| Model | Segment | R² | MAE | RMSE | Target | Ver |
+|---|---|---|---|---|---|---|
+| `one_family` | One family dwellings | 0.72 | $245,436 | $621,771 | sales_price | v1 |
+| `multi_family` | Two & three family | 0.61 | $314,305 | $626,465 | sales_price | v1 |
+| `condo_coop` | Condos & co-ops | **0.65** | $518,968 | $1,468,431 | sales_price | v2 |
+| `rental_walkup` | Walkup rental buildings (07) | **0.58** | $102,673/unit | $173,589/unit | price_per_unit | v2 |
+| `rental_elevator` | Elevator rental buildings (08) | 0.59 | $78,175/unit | $150,448/unit | price_per_unit | v2 |
+| `global` | All residential fallback | 0.61 | $350,456 | $841,711 | sales_price | v1 |
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
+
+**v2 improvements (Phase 2):**
+- `condo_coop` R² improved from 0.52 → 0.65 (+25% relative) by adding `assess_per_unit` (PLUTO assesstot/unitsres) as a building quality proxy via BBL join on raw rolling sales data
+- Rental models gained `stabilization_ratio` (DHCR rent-stabilized units / total_units) as a regulatory cash-flow signal; looked up from neighbourhood stats at inference time
 
 ### Explainability
 Each subtype model is trained on its own feature set. Top features vary by segment:
@@ -275,8 +280,8 @@ Each subtype model is trained on its own feature set. Top features vary by segme
 | `global` | `gross_sqft`, `land_sqft`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
 | `one_family` | same as global + `neighborhood_median_price` |
 | `multi_family` | same as global + `neighborhood_median_price` |
-| `condo_coop` | `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` (no size features — co-op data rarely includes sqft) |
-| `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit` |
+| `condo_coop` | `assess_per_unit`, `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
+| `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit`, `stabilization_ratio` |
 | `rental_elevator` | same as rental_walkup (separate model, stronger regularization for smaller dataset) |
 
 Feature importance CSVs for each segment are saved to `ml/artifacts/` after training and are loaded at inference time to drive the LLM explanation.
@@ -301,7 +306,7 @@ The feature engineering pipeline transforms the merged NYC dataset into a model-
 | `building_class` | categorical | NYC building class label |
 | `neighborhood` | categorical | NYC neighborhood name |
 
-> Note: `condo_coop` model is trained without `gross_sqft` and `land_sqft` — those features are not available for all condo/co-op records. The ModelRegistry handles this automatically via per-model `feature_columns`.
+> Note: `condo_coop` model does not use `gross_sqft` / `land_sqft` (not recorded for NYC co-op share sales). Instead, `assess_per_unit` (PLUTO tax assessment ÷ residential units) is used as a building quality and size proxy. `rental_walkup` and `rental_elevator` add `stabilization_ratio` (DHCR rent-stabilized units ÷ total_units) as a regulatory cash-flow signal. The ModelRegistry handles per-model feature columns automatically.
 
 ---
 
@@ -801,12 +806,12 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - Residential-only dataset filtering
 - Log-transformed target training (`log1p` / `expm1`)
 - Global XGBoost residential valuation model
-- 5 trained subtype XGBoost models:
+- 5 trained subtype XGBoost models (v2):
   - `one_family` (R²=0.72)
   - `multi_family` (R²=0.61)
-  - `condo_coop` (R²=0.52)
-  - `rental_walkup` (R²=0.57) — walkup rentals, price/unit target
-  - `rental_elevator` (R²=0.62) — elevator rentals, price/unit target
+  - `condo_coop` (R²=0.65) — +25% improvement via PLUTO assess_per_unit
+  - `rental_walkup` (R²=0.58) — walkup rentals, price/unit + stabilization_ratio
+  - `rental_elevator` (R²=0.59) — elevator rentals, price/unit + stabilization_ratio
 - Full building-class routing via `ModelRegistry.get_model_key()`
 - Feature importance artifact persisted and cached at runtime
 - All 6 models registered with version metadata JSONs
@@ -842,13 +847,12 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 Current constraints of the valuation models:
 
 - Trained only on **NYC residential properties** — not applicable to commercial
-- `rental_walkup` (R²=0.57) and `rental_elevator` (R²=0.62) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
+- `rental_walkup` (R²=0.58) and `rental_elevator` (R²=0.59) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
 - No temporal features — does not capture market cycles or seasonality
 - No macroeconomic indicators
 - Sensitive to data quality in source NYC datasets
 
 ### Future improvements
-- Retrain `rental` model with improved features or larger dataset
 - Add time-series features for market trend awareness
 - Add macroeconomic indicators
 - Expand SHAP per-property explainability
