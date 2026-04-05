@@ -73,16 +73,18 @@ SUBTYPE_XGB_PARAMS = {
         "reg_lambda": 1.0,
     },
     "rental_walkup": {
-        # ~1,300 rows after cleaning — moderate capacity, moderate regularization.
-        "n_estimators": 400,
-        "learning_rate": 0.05,
-        "max_depth": 5,
-        "min_child_weight": 3,
+        # ~1,300 rows, 15 numeric features after feature engineering.
+        # Lower max_depth and colsample_bytree prevent overfitting on the
+        # expanded feature set; more estimators improve generalisation.
+        "n_estimators": 600,
+        "learning_rate": 0.04,
+        "max_depth": 4,
+        "min_child_weight": 4,
         "subsample": 0.8,
-        "colsample_bytree": 0.8,
+        "colsample_bytree": 0.6,
         "gamma": 0.1,
-        "reg_alpha": 0.1,
-        "reg_lambda": 1.0,
+        "reg_alpha": 0.2,
+        "reg_lambda": 1.5,
     },
     "rental_elevator": {
         # ~150 rows after cleaning — strong regularization to avoid overfitting.
@@ -158,13 +160,16 @@ SUBTYPE_FEATURES = {
         "require_gross_sqft": True,
     },
     "condo_coop": {
-        # NYC co-op transactions record share sales, not physical units,
-        # so gross_sqft and land_sqft are almost universally null in the
-        # rolling sales data. We rely on location + age + categorical signals,
-        # plus assess_per_unit (PLUTO assesstot/unitsres) as a proxy for unit
-        # size and building quality — 97%+ coverage via BBL join.
+        # NYC co-op transactions don't record individual unit sqft, so we rely
+        # on PLUTO-derived building signals joined via BBL (97%+ coverage):
+        #   assess_per_unit — city's valuation of unit quality / income potential
+        #   numfloors       — building height; taller = higher-prestige / higher price
+        #   lot_coverage    — bldgarea / lotarea; effective FAR proxy for density
+        # neighborhood_median_price anchors the location price level.
         "numeric": [
             "assess_per_unit",
+            "numfloors",
+            "lot_coverage",
             "neighborhood_median_price",
             "year_built",
             "property_age",
@@ -186,22 +191,24 @@ SUBTYPE_FEATURES = {
     # size and produces a tighter, more learnable target distribution.
     # At inference, predicted $/unit is multiplied by total_units to recover
     # the full building price estimate.
-    # Rental walkup (07) and elevator (08) are trained as separate models because
-    # they serve different buyer profiles and price levels.
-    # Phase 2b TODO: add assess_per_unit once BBL is available in housing_data
-    # (requires a spatial join to PLUTO or a housing_data migration). The
-    # create_enriched_rental_data.py pipeline and lookup_assess_per_unit() in
-    # predictor.py are ready for activation once that join is reliable.
     "rental_walkup": {
-        # stabilization_ratio = rent-stabilized units / total_units (from DHCR rentstab).
-        # Buildings not in rentstab get ratio = 0 (assumed non-regulated).
-        # At inference, a neighborhood-level median is looked up from saved stats.
+        # Density features from PLUTO spatial join (150 m nearest-building):
+        #   numfloors       — building height: more floors = more units = lower $/unit
+        #   units_per_floor — density signal: compact floor plates command premium
+        #   lot_coverage    — FAR proxy: high coverage = dense urban building
+        # subway_dist_km — distance to nearest subway station (BallTree, MTA data);
+        #   the strongest single locational predictor for walkup rental pricing in NYC.
+        # stabilization_ratio — DHCR rent-stabilised units / total_units, neighbourhood median.
         "numeric": [
             "gross_sqft",
             "land_sqft",
             "sqft_per_unit",
             "total_units",
             "residential_units",
+            "numfloors",
+            "units_per_floor",
+            "lot_coverage",
+            "subway_dist_km",
             "stabilization_ratio",
             "neighborhood_median_price",
             "year_built",
@@ -372,6 +379,14 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         "year_built",
         "latitude",
         "longitude",
+        # PLUTO density features
+        "numfloors",
+        "lot_coverage",
+        "units_per_floor",
+        # Rental-specific
+        "subway_dist_km",
+        "stabilization_ratio",
+        "assess_per_unit",
     ]
     for col in numeric_cols:
         if col in subset.columns:
@@ -419,14 +434,38 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         neighborhood_stats["assess_per_unit_global_median"] = apu_global
 
     # For stabilization_ratio: store neighborhood-level medians so the predictor
-    # can look up a neighbourhood stabilization rate at inference time
-    # (the user doesn't submit a BBL).
+    # can look up a neighbourhood stabilization rate at inference time.
     if "stabilization_ratio" in numeric_features and "stabilization_ratio" in subset.columns:
         stab_medians = subset.groupby("neighborhood")["stabilization_ratio"].median()
         stab_global = float(subset["stabilization_ratio"].median())
         subset["stabilization_ratio"] = subset["stabilization_ratio"].fillna(stab_global)
         neighborhood_stats["stabilization_ratio_neighborhoods"] = stab_medians.to_dict()
         neighborhood_stats["stabilization_ratio_global_median"] = stab_global
+
+    # For PLUTO density features (numfloors, lot_coverage, units_per_floor):
+    # store neighbourhood medians so the predictor can fill them at inference
+    # time without needing a BBL or spatial join.
+    for pluto_feat in ("numfloors", "lot_coverage", "units_per_floor"):
+        if pluto_feat in numeric_features and pluto_feat in subset.columns:
+            feat_medians = subset.groupby("neighborhood")[pluto_feat].median()
+            feat_global  = float(subset[pluto_feat].median())
+            subset[pluto_feat] = subset[pluto_feat].fillna(
+                subset["neighborhood"].map(feat_medians).fillna(feat_global)
+            )
+            neighborhood_stats[f"{pluto_feat}_neighborhoods"] = feat_medians.to_dict()
+            neighborhood_stats[f"{pluto_feat}_global_median"]  = feat_global
+
+    # For subway_dist_km: store neighbourhood medians so the predictor can
+    # fall back to a neighbourhood-level estimate when lat/lon is unavailable.
+    # When lat/lon IS available the predictor recomputes the exact distance.
+    if "subway_dist_km" in numeric_features and "subway_dist_km" in subset.columns:
+        sub_medians = subset.groupby("neighborhood")["subway_dist_km"].median()
+        sub_global  = float(subset["subway_dist_km"].median())
+        subset["subway_dist_km"] = subset["subway_dist_km"].fillna(
+            subset["neighborhood"].map(sub_medians).fillna(sub_global)
+        )
+        neighborhood_stats["subway_dist_km_neighborhoods"] = sub_medians.to_dict()
+        neighborhood_stats["subway_dist_km_global_median"]  = sub_global
 
     # Derived features for rental subtypes that use price_per_unit as target.
     target = feature_config.get("target", "sales_price")

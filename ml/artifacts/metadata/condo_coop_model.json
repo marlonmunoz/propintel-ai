@@ -1,10 +1,12 @@
 {
     "name": "condo_coop",
-    "version": "v3",
+    "version": "v4",
     "segment": "condo_coop",
     "artifact_path": "ml/artifacts/subtype_models/condo_coop_price_model.pkl",
     "feature_columns": [
         "assess_per_unit",
+        "numfloors",
+        "lot_coverage",
         "neighborhood_median_price",
         "year_built",
         "property_age",
@@ -15,9 +17,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 221474.52,
-        "rmse": 369198.45,
-        "r2": 0.5468,
-        "note": "v3: per-class 95th-pct cap removed luxury elevator co-op outliers; MAE -57%, RMSE -75% vs v1. R2 reflects filtered (non-luxury) population."
+        "mae": 289305.32,
+        "rmse": 492655.80,
+        "r2": 0.8009,
+        "note": "v4: parent BBL fix unlocked 4,599 condo elevator unit transactions (previously 0 matching); added numfloors + lot_coverage from PLUTO; dataset grew 12k→18k rows; R2 jumped 0.55→0.80. Higher MAE/RMSE reflects expanded condo price range ($100k–$7.5M vs co-op-only $100k–$4.5M)."
     }
 }
