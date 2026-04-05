@@ -181,6 +181,9 @@ def format_feature_name(feature: str) -> str:
     if "land_sqft" in feature_lower:
         return "Land size contributes to overall property valuation"
 
+    if "neighborhood_median_ppsf" in feature_lower:
+        return "Neighborhood price per sqft encodes the location-size value interaction"
+
     if "neighborhood_median_price" in feature_lower:
         return "Neighborhood price level is a strong driver of property value"
 
@@ -251,6 +254,11 @@ class PredictionService:
         if "neighborhood_median_price" in metadata.feature_columns:
             row["neighborhood_median_price"] = lookup_neighborhood_median(
                 model_key, neighborhood
+            )
+
+        if "neighborhood_median_ppsf" in metadata.feature_columns:
+            row["neighborhood_median_ppsf"] = lookup_pluto_stat(
+                model_key, neighborhood, "neighborhood_median_ppsf"
             )
 
         if "assess_per_unit" in metadata.feature_columns:

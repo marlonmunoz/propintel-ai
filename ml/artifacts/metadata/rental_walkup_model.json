@@ -1,6 +1,6 @@
 {
     "name": "rental_walkup",
-    "version": "v3",
+    "version": "v4",
     "segment": "rental_walkup",
     "artifact_path": "ml/artifacts/subtype_models/rental_walkup_price_model.pkl",
     "target": "price_per_unit",
@@ -25,9 +25,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 98952.62,
-        "rmse": 174112.87,
-        "r2": 0.5808,
-        "note": "metrics in $/unit. v3: added PLUTO density features (numfloors, units_per_floor rank #1 at 17.4% importance, lot_coverage) via 150m spatial join; subway_dist_km from MTA station data; tuned hyperparameters for larger feature set. MAE improved to $98.9k."
+        "mae": 107055.69,
+        "rmse": 170481.30,
+        "r2": 0.5943,
+        "note": "metrics in $/unit. v4: augmented base with 56 de-duplicated raw rolling-sales class 07 rows (ppu P5-P95 filter + PLUTO inner join); dataset 1308->1359 rows. R2 0.580->0.594. Further improvement to 0.65 requires multi-year rolling sales or external data beyond public NYC sources."
     }
 }

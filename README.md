@@ -261,16 +261,17 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 |---|---|---|---|---|---|---|---|
 | `condo_coop` | Condos & co-ops | **0.80** | $289k | $493k | 1.70 | sales_price | v4 |
 | `one_family` | One family dwellings | 0.74 | **$140k** | **$203k** | 1.45 | sales_price | v2 |
-| `multi_family` | Two & three family | 0.64 | **$216k** | **$320k** | 1.48 | sales_price | v2 |
+| `multi_family` | Two & three family | 0.641 | **$214k** | **$318k** | 1.48 | sales_price | v3 |
 | `rental_elevator` | Elevator rental buildings (08) | 0.59 | $78k/unit | $150k/unit | 1.92 | price_per_unit | v2 |
-| `rental_walkup` | Walkup rental buildings (07) | 0.58 | $99k/unit | $174k/unit | 1.76 | price_per_unit | v3 |
+| `rental_walkup` | Walkup rental buildings (07) | 0.594 | $107k/unit | $170k/unit | 1.59 | price_per_unit | v4 |
 | `global` | All residential fallback | 0.61 | $350k | $842k | 2.40 | sales_price | v1 |
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
 
 **v4 improvements (Phase 3 — feature engineering):**
 - `condo_coop` **R² 0.55 → 0.80** (biggest single-session jump): root cause was a BBL mismatch — NYC condo unit lots (1001+) were not matching PLUTO's building lots (0001). Fixed by deriving the parent lot before the join, unlocking 4,599 individual condo elevator transaction records that were previously dropped. Training dataset grew from 12k → 18k rows. Added `numfloors` (floor count = prestige signal) and `lot_coverage` (FAR proxy = density signal) from PLUTO. Higher MAE/RMSE reflects the expanded price range now including condos up to $7.5M (vs co-op-only $4.5M cap before).
-- `rental_walkup` **v3**: added PLUTO density features via 150 m spatial BallTree join — `numfloors`, `units_per_floor` (#1 feature at 17.4% importance), `lot_coverage`; added `subway_dist_km` from MTA station data (BallTree haversine). Tuned hyperparameters for expanded feature set. MAE improved $103k → $99k.
+- `rental_walkup` **v4** R² 0.58 → 0.594: deduplicated 56 genuinely new class 07 rows from rolling sales (P5–P95 ppu filter + PLUTO inner join) appended to the housing_data base; further augmentation limited by the fact that `housing_data` was already built from the same rolling sales source. Reaching 0.65+ requires multi-year rolling sales or external data beyond public NYC sources.
+- `multi_family` **v3** R² 0.636 → 0.641: added `neighborhood_median_ppsf` (median $/sqft by neighbourhood), direct borough × size interaction signal that ranks #4 feature at 4.7% importance. 0.641 is the practical ceiling with this dataset; dominant borough effects leave limited room for additional feature gains.
 
 **v2/v3 improvements (Phase 2 + outlier hardening):**
 - `one_family` + `multi_family`: per-class 97th-pct price cap + price/sqft P2–P98 anomaly filter — MAE reduced by 43% / 31%, RMSE by 67% / 49%.
@@ -284,7 +285,7 @@ Each subtype model is trained on its own feature set. Top features vary by segme
 |---|---|
 | `global` | `gross_sqft`, `land_sqft`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
 | `one_family` | same as global + `neighborhood_median_price` |
-| `multi_family` | same as global + `neighborhood_median_price` |
+| `multi_family` | same as global + `neighborhood_median_price`, `neighborhood_median_ppsf` |
 | `condo_coop` | `assess_per_unit`, `numfloors`, `lot_coverage`, `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
 | `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit`, `numfloors`, `units_per_floor`, `lot_coverage`, `subway_dist_km`, `stabilization_ratio` |
 | `rental_elevator` | same as rental_walkup minus density/subway features (separate model, stronger regularization for smaller dataset) |

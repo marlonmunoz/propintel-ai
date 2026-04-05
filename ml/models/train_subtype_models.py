@@ -49,7 +49,8 @@ SUBTYPE_XGB_PARAMS = {
         "reg_lambda": 1.0,
     },
     "multi_family": {
-        # Shallower trees for the 2+3-family building mix.
+        # Shallower trees for the 2+3-family building mix; borough and
+        # neighborhood_median_ppsf dominate — deep trees would overfit.
         "n_estimators": 500,
         "learning_rate": 0.05,
         "max_depth": 5,
@@ -143,10 +144,14 @@ SUBTYPE_FEATURES = {
         "require_gross_sqft": True,
     },
     "multi_family": {
+        # neighborhood_median_ppsf = median(sales_price / gross_sqft) by neighbourhood.
+        # Encodes the borough × size interaction directly: a sqft of building in
+        # Flatbush trades at a very different rate than in Manhattan or Staten Island.
         "numeric": [
             "gross_sqft",
             "land_sqft",
             "neighborhood_median_price",
+            "neighborhood_median_ppsf",
             "year_built",
             "property_age",
             "latitude",
@@ -418,7 +423,23 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
         "global_median": global_median,
     }
 
+    # neighborhood_median_ppsf: median price per sqft by neighbourhood.
+    # Encodes the borough × size interaction — "what does a sqft of building
+    # cost here?" — as a single pre-computed feature rather than leaving the
+    # model to discover the interaction through sequential splits on gross_sqft
+    # and lat/lon.  Only computed when gross_sqft is required and present.
     numeric_features = feature_config["numeric"]
+    if "neighborhood_median_ppsf" in numeric_features and "gross_sqft" in subset.columns:
+        has_sqft = subset["gross_sqft"].notna() & (subset["gross_sqft"] > 0)
+        ppsf = (subset.loc[has_sqft, "sales_price"] / subset.loc[has_sqft, "gross_sqft"])
+        ppsf_medians = ppsf.groupby(subset.loc[has_sqft, "neighborhood"]).median()
+        global_ppsf  = float(ppsf.median())
+        subset["neighborhood_median_ppsf"] = (
+            subset["neighborhood"].map(ppsf_medians).fillna(global_ppsf)
+        )
+        neighborhood_stats["neighborhood_median_ppsf_neighborhoods"] = ppsf_medians.to_dict()
+        neighborhood_stats["neighborhood_median_ppsf_global_median"]  = global_ppsf
+
     categorical_features = feature_config["categorical"]
 
     # For assess_per_unit: store neighborhood-level medians so the predictor
@@ -579,10 +600,17 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
     }
 
 
-def main():
-    df_standard     = load_data("standard")
-    df_rental_stab  = load_data("rental_stab") if INPUT_FILE_RENTAL_STAB.exists() else None
-    df_condo        = load_data("condo")        if INPUT_FILE_CONDO.exists()        else None
+def main(only_subtypes: set | None = None):
+    """Train subtype models.
+
+    Args:
+        only_subtypes: When provided, train only the named subtypes and skip
+                       all others. Existing model artifacts for skipped subtypes
+                       are left untouched. Pass None to train all subtypes.
+    """
+    df_standard    = load_data("standard")
+    df_rental_stab = load_data("rental_stab") if INPUT_FILE_RENTAL_STAB.exists() else None
+    df_condo       = load_data("condo")        if INPUT_FILE_CONDO.exists()        else None
 
     if df_rental_stab is not None:
         print(f"Phase 2b rental-stab data available ({len(df_rental_stab):,} rows).")
@@ -594,6 +622,10 @@ def main():
     else:
         print("No enriched condo data found — condo_coop will use standard data.")
 
+    if only_subtypes:
+        print(f"\nSelective training — only: {', '.join(sorted(only_subtypes))}")
+        print("All other models are left untouched.\n")
+
     # Route each subtype to its best available dataset.
     # "enriched_data: True" means prefer the specialised CSV over the DB-based fallback.
     DATASET_MAP = {
@@ -604,6 +636,9 @@ def main():
 
     results = []
     for subtype_name, building_classes in SUBTYPE_GROUPS.items():
+        if only_subtypes and subtype_name not in only_subtypes:
+            print(f"Skipping {subtype_name} (not in --subtypes list)")
+            continue
         use_enriched = SUBTYPE_FEATURES[subtype_name].get("enriched_data", False)
         specialised  = DATASET_MAP.get(subtype_name)
         df = (specialised if (use_enriched and specialised is not None) else df_standard)
@@ -625,4 +660,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Train subtype property valuation models.")
+    parser.add_argument(
+        "--subtypes",
+        nargs="+",
+        choices=list(SUBTYPE_GROUPS.keys()),
+        metavar="SUBTYPE",
+        help=(
+            "Train only the listed subtypes. Omit to train all. "
+            f"Available: {', '.join(SUBTYPE_GROUPS.keys())}"
+        ),
+    )
+    args = parser.parse_args()
+    main(only_subtypes=set(args.subtypes) if args.subtypes else None)

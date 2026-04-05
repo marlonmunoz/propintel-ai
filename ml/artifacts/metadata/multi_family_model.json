@@ -1,12 +1,13 @@
 {
     "name": "multi_family",
-    "version": "v2",
+    "version": "v3",
     "segment": "multi_family",
     "artifact_path": "ml/artifacts/subtype_models/multi_family_price_model.pkl",
     "feature_columns": [
         "gross_sqft",
         "land_sqft",
         "neighborhood_median_price",
+        "neighborhood_median_ppsf",
         "year_built",
         "property_age",
         "latitude",
@@ -16,9 +17,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 215611.65,
-        "rmse": 319644.84,
-        "r2": 0.6363,
-        "note": "v2: per-class 97th-pct price cap + price/sqft P2-P98 filter reduced MAE by 31% and RMSE by 49%"
+        "mae": 214483.55,
+        "rmse": 317522.33,
+        "r2": 0.6411,
+        "note": "v3: added neighborhood_median_ppsf (median $/sqft by neighbourhood) as a direct borough-size interaction signal — ranks #4 feature at 4.7% importance. MAE -0.5%, RMSE -0.7%, R2 0.636→0.641."
     }
 }
