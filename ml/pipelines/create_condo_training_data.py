@@ -113,10 +113,21 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["latitude"].notna() & df["longitude"].notna()]
     print(f"After basic filters: {before} → {len(df)} rows")
 
-    # Global 99th-pct price cap
-    p99 = df["sales_price"].quantile(0.99)
-    df = df[df["sales_price"] <= p99]
-    print(f"After 99th pct price cap (≤ ${p99:,.0f}): {len(df)} rows")
+    # Per-class 95th-pct cap — tighter than the old global 99th.
+    # Co-op elevator units (class 10) span $50k Bronx studios to $15M+ Fifth
+    # Ave penthouses; the luxury tail inflates RMSE without improving typical
+    # predictions. Per-class capping preserves the full walkup range while
+    # cutting the luxury elevator outliers independently.
+    capped = []
+    for bc in df["building_class"].unique():
+        rows = df[df["building_class"] == bc]
+        cap  = rows["sales_price"].quantile(0.95)
+        capped.append(rows[rows["sales_price"] <= cap])
+    df = pd.concat(capped).reset_index(drop=True) if capped else df
+    print(f"After per-class 95th pct cap: {len(df)} rows")
+    for bc in df["building_class"].unique():
+        g = df[df["building_class"] == bc]
+        print(f"  {bc}: {len(g):,} rows  max=${g['sales_price'].max():,.0f}")
 
     df = df.drop_duplicates()
     print(f"After dedup: {len(df)} rows")

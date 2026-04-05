@@ -257,20 +257,21 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 ### Subtype model results
 
-| Model | Segment | R² | MAE | RMSE | Target | Ver |
-|---|---|---|---|---|---|---|
-| `one_family` | One family dwellings | 0.72 | $245,436 | $621,771 | sales_price | v1 |
-| `multi_family` | Two & three family | 0.61 | $314,305 | $626,465 | sales_price | v1 |
-| `condo_coop` | Condos & co-ops | **0.65** | $518,968 | $1,468,431 | sales_price | v2 |
-| `rental_walkup` | Walkup rental buildings (07) | **0.58** | $102,673/unit | $173,589/unit | price_per_unit | v2 |
-| `rental_elevator` | Elevator rental buildings (08) | 0.59 | $78,175/unit | $150,448/unit | price_per_unit | v2 |
-| `global` | All residential fallback | 0.61 | $350,456 | $841,711 | sales_price | v1 |
+| Model | Segment | R² | MAE | RMSE | RMSE/MAE | Target | Ver |
+|---|---|---|---|---|---|---|---|
+| `one_family` | One family dwellings | 0.74 | **$140k** | **$203k** | 1.45 | sales_price | v2 |
+| `multi_family` | Two & three family | 0.64 | **$216k** | **$320k** | 1.48 | sales_price | v2 |
+| `condo_coop` | Condos & co-ops | 0.55 | **$221k** | **$369k** | 1.67 | sales_price | v3 |
+| `rental_walkup` | Walkup rental buildings (07) | 0.58 | $103k/unit | $174k/unit | 1.69 | price_per_unit | v2 |
+| `rental_elevator` | Elevator rental buildings (08) | 0.59 | $78k/unit | $150k/unit | 1.92 | price_per_unit | v2 |
+| `global` | All residential fallback | 0.61 | $350k | $842k | 2.40 | sales_price | v1 |
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
 
-**v2 improvements (Phase 2):**
-- `condo_coop` R² improved from 0.52 → 0.65 (+25% relative) by adding `assess_per_unit` (PLUTO assesstot/unitsres) as a building quality proxy via BBL join on raw rolling sales data
-- Rental models gained `stabilization_ratio` (DHCR rent-stabilized units / total_units) as a regulatory cash-flow signal; looked up from neighbourhood stats at inference time
+**v2/v3 improvements (Phase 2 + outlier hardening):**
+- `one_family` + `multi_family`: per-class 97th-pct price cap + price/sqft P2–P98 anomaly filter — MAE reduced by 43% / 31%, RMSE by 67% / 49%. RMSE/MAE ratio dropped from 2.5 → 1.45 and 2.0 → 1.48.
+- `condo_coop`: per-class 95th-pct cap removed Manhattan luxury elevator co-op outliers (class 10 capped at \.6M vs \.9M previously); MAE reduced by 57%, RMSE by 75%. RMSE/MAE ratio dropped from 2.83 → 1.67. `assess_per_unit` (PLUTO BBL join) added as building quality proxy.
+- Rental models: `stabilization_ratio` (DHCR rent-stabilized units / total_units) added as a regulatory cash-flow signal.
 
 ### Explainability
 Each subtype model is trained on its own feature set. Top features vary by segment:
@@ -806,12 +807,12 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - Residential-only dataset filtering
 - Log-transformed target training (`log1p` / `expm1`)
 - Global XGBoost residential valuation model
-- 5 trained subtype XGBoost models (v2):
-  - `one_family` (R²=0.72)
-  - `multi_family` (R²=0.61)
-  - `condo_coop` (R²=0.65) — +25% improvement via PLUTO assess_per_unit
-  - `rental_walkup` (R²=0.58) — walkup rentals, price/unit + stabilization_ratio
-  - `rental_elevator` (R²=0.59) — elevator rentals, price/unit + stabilization_ratio
+- 5 trained subtype XGBoost models (v2/v3 — outlier-hardened):
+  - `one_family` (R²=0.74, MAE=$140k) — per-class price cap + price/sqft filter
+  - `multi_family` (R²=0.64, MAE=$216k) — same outlier hardening
+  - `condo_coop` (R²=0.55, MAE=$221k) — luxury cap + PLUTO assess_per_unit
+  - `rental_walkup` (R²=0.58, MAE=$103k/unit) — stabilization_ratio
+  - `rental_elevator` (R²=0.59, MAE=$78k/unit) — stabilization_ratio
 - Full building-class routing via `ModelRegistry.get_model_key()`
 - Feature importance artifact persisted and cached at runtime
 - All 6 models registered with version metadata JSONs
@@ -848,6 +849,7 @@ Current constraints of the valuation models:
 
 - Trained only on **NYC residential properties** — not applicable to commercial
 - `rental_walkup` (R²=0.58) and `rental_elevator` (R²=0.59) models predict **price per unit** and require `total_units` — falls back to the global model when not provided
+- All models are trained on the filtered (non-luxury) price range; very-high-end properties (above 95th–97th pct per class) should use the global model or be interpreted as directional estimates
 - No temporal features — does not capture market cycles or seasonality
 - No macroeconomic indicators
 - Sensitive to data quality in source NYC datasets
