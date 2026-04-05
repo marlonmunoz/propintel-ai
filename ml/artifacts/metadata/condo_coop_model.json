@@ -1,9 +1,10 @@
 {
     "name": "condo_coop",
-    "version": "v1",
+    "version": "v2",
     "segment": "condo_coop",
     "artifact_path": "ml/artifacts/subtype_models/condo_coop_price_model.pkl",
     "feature_columns": [
+        "assess_per_unit",
         "neighborhood_median_price",
         "year_built",
         "property_age",
@@ -14,8 +15,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 424950.51,
-        "rmse": 1006601.88,
-        "r2": 0.5236
+        "mae": 518968.47,
+        "rmse": 1468431.15,
+        "r2": 0.6499,
+        "note": "assess_per_unit (PLUTO assesstot/unitsres) added in v2 — trained on raw rolling sales + PLUTO BBL join"
     }
 }

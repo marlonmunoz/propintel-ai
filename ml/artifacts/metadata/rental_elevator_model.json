@@ -1,6 +1,6 @@
 {
     "name": "rental_elevator",
-    "version": "v1",
+    "version": "v2",
     "segment": "rental_elevator",
     "artifact_path": "ml/artifacts/subtype_models/rental_elevator_price_model.pkl",
     "target": "price_per_unit",
@@ -10,6 +10,7 @@
         "sqft_per_unit",
         "total_units",
         "residential_units",
+        "stabilization_ratio",
         "neighborhood_median_price",
         "year_built",
         "property_age",
@@ -20,9 +21,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 75327.85,
-        "rmse": 145129.73,
-        "r2": 0.6207,
-        "note": "metrics are in $/unit — model predicts price_per_unit, multiplied by total_units at inference"
+        "mae": 78174.53,
+        "rmse": 150448.01,
+        "r2": 0.5924,
+        "note": "metrics in $/unit — stabilization_ratio (DHCR/PLUTO) added in v2; price_per_unit multiplied by total_units at inference; small test set (n=31) makes R² volatile"
     }
 }

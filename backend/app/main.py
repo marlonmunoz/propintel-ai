@@ -75,9 +75,13 @@ app.add_exception_handler(Exception, internal_error_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
+# Include both localhost and 127.0.0.1 — the browser treats them as different
+# origins; Vite may use either, and the API URL may use the other.
+_cors_default = "http://localhost:5174,http://127.0.0.1:5174"
 cors_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5174").split(",")
+    for origin in os.getenv("CORS_ORIGINS", _cors_default).split(",")
+    if origin.strip()
 ]
 
 app.add_middleware(

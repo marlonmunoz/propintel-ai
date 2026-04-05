@@ -1,6 +1,6 @@
 {
     "name": "rental_walkup",
-    "version": "v1",
+    "version": "v2",
     "segment": "rental_walkup",
     "artifact_path": "ml/artifacts/subtype_models/rental_walkup_price_model.pkl",
     "target": "price_per_unit",
@@ -10,6 +10,7 @@
         "sqft_per_unit",
         "total_units",
         "residential_units",
+        "stabilization_ratio",
         "neighborhood_median_price",
         "year_built",
         "property_age",
@@ -20,9 +21,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 103052.82,
-        "rmse": 176578.70,
-        "r2": 0.5688,
-        "note": "metrics are in $/unit — model predicts price_per_unit, multiplied by total_units at inference"
+        "mae": 102672.98,
+        "rmse": 173589.24,
+        "r2": 0.5833,
+        "note": "metrics in $/unit — stabilization_ratio (DHCR/PLUTO) added in v2; price_per_unit multiplied by total_units at inference"
     }
 }

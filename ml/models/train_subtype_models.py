@@ -19,10 +19,12 @@ from xgboost import XGBRegressor
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 INPUT_FILE = BASE_DIR / "ml/data/processed/nyc_subtype_training_data.csv"
-# Phase 2a: enriched rental CSV (Rolling Sales + PLUTO join).
-# When this file exists, rental subtypes use it instead of INPUT_FILE
-# to gain the assess_per_unit feature and more complete training rows.
+# Phase 2a (deprecated): enriched rental CSV from Rolling Sales + PLUTO BBL join.
 INPUT_FILE_RENTAL = BASE_DIR / "ml/data/processed/nyc_rental_enriched_training_data.csv"
+# Phase 2b: rental training data with stabilization_ratio from raw Excel + PLUTO + DHCR rentstab.
+INPUT_FILE_RENTAL_STAB = BASE_DIR / "ml/data/processed/nyc_rental_stab_training_data.csv"
+# Condo/co-op training data with assess_per_unit from raw Excel + PLUTO BBL join.
+INPUT_FILE_CONDO = BASE_DIR / "ml/data/processed/nyc_condo_training_data.csv"
 ARTIFACTS_DIR = BASE_DIR / "ml/artifacts/subtype_models"
 METRICS_FILE = ARTIFACTS_DIR / "subtype_model_metrics.csv"
 
@@ -156,8 +158,11 @@ SUBTYPE_FEATURES = {
     "condo_coop": {
         # NYC co-op transactions record share sales, not physical units,
         # so gross_sqft and land_sqft are almost universally null in the
-        # rolling sales data. We rely on location + age + categorical signals.
+        # rolling sales data. We rely on location + age + categorical signals,
+        # plus assess_per_unit (PLUTO assesstot/unitsres) as a proxy for unit
+        # size and building quality — 97%+ coverage via BBL join.
         "numeric": [
+            "assess_per_unit",
             "neighborhood_median_price",
             "year_built",
             "property_age",
@@ -170,6 +175,7 @@ SUBTYPE_FEATURES = {
             "neighborhood",
         ],
         "require_gross_sqft": False,
+        "enriched_data": True,
     },
     # Rental walkup (07) and elevator (08) are trained as separate models because
     # they serve different buyer profiles and price levels.
@@ -185,12 +191,16 @@ SUBTYPE_FEATURES = {
     # create_enriched_rental_data.py pipeline and lookup_assess_per_unit() in
     # predictor.py are ready for activation once that join is reliable.
     "rental_walkup": {
+        # stabilization_ratio = rent-stabilized units / total_units (from DHCR rentstab).
+        # Buildings not in rentstab get ratio = 0 (assumed non-regulated).
+        # At inference, a neighborhood-level median is looked up from saved stats.
         "numeric": [
             "gross_sqft",
             "land_sqft",
             "sqft_per_unit",
             "total_units",
             "residential_units",
+            "stabilization_ratio",
             "neighborhood_median_price",
             "year_built",
             "property_age",
@@ -204,6 +214,7 @@ SUBTYPE_FEATURES = {
         ],
         "require_gross_sqft": True,
         "target": "price_per_unit",
+        "enriched_data": True,
     },
     "rental_elevator": {
         "numeric": [
@@ -212,6 +223,7 @@ SUBTYPE_FEATURES = {
             "sqft_per_unit",
             "total_units",
             "residential_units",
+            "stabilization_ratio",
             "neighborhood_median_price",
             "year_built",
             "property_age",
@@ -226,19 +238,25 @@ SUBTYPE_FEATURES = {
         "require_gross_sqft": True,
         "target": "price_per_unit",
         "min_rows": 100,
+        "enriched_data": True,
     },
 }
 
 
-def load_data(enriched: bool = False) -> pd.DataFrame:
+def load_data(source: str = "standard") -> pd.DataFrame:
     """Load the appropriate training CSV.
 
-    When enriched=True and the Phase 2a enriched rental CSV exists, load that.
-    Otherwise fall back to the standard subtype training data.
+    source:
+      "standard"     – DB-based subtype training data (fallback for all models)
+      "rental_stab"  – Phase 2b raw Excel + PLUTO + rentstab (rental models)
+      "condo"        – raw Excel + PLUTO assess_per_unit (condo_coop model)
     """
-    if enriched and INPUT_FILE_RENTAL.exists():
-        print(f"Loading enriched rental dataset: {INPUT_FILE_RENTAL.name}")
-        return pd.read_csv(INPUT_FILE_RENTAL, low_memory=False)
+    if source == "rental_stab" and INPUT_FILE_RENTAL_STAB.exists():
+        print(f"Loading rental-stab dataset: {INPUT_FILE_RENTAL_STAB.name}")
+        return pd.read_csv(INPUT_FILE_RENTAL_STAB, low_memory=False)
+    if source == "condo" and INPUT_FILE_CONDO.exists():
+        print(f"Loading condo dataset: {INPUT_FILE_CONDO.name}")
+        return pd.read_csv(INPUT_FILE_CONDO, low_memory=False)
     print(f"Loading standard subtype dataset: {INPUT_FILE.name}")
     return pd.read_csv(INPUT_FILE, low_memory=False)
 
@@ -315,20 +333,27 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
     numeric_features = feature_config["numeric"]
     categorical_features = feature_config["categorical"]
 
-    # For subtypes that use assess_per_unit, also store neighborhood-level
-    # medians so the predictor can look up a reasonable value at inference time
-    # (the user never provides assesstot directly).
+    # For assess_per_unit: store neighborhood-level medians so the predictor
+    # can look up a reasonable value at inference time (the user never
+    # provides assesstot directly).
     if "assess_per_unit" in numeric_features and "assess_per_unit" in subset.columns:
         apu_medians = subset.groupby("neighborhood")["assess_per_unit"].median()
         apu_global = float(subset["assess_per_unit"].median())
-        subset["assess_per_unit"] = (
-            subset["neighborhood"].map(apu_medians).where(
-                subset["assess_per_unit"].isna(),
-                subset["assess_per_unit"],
-            )
+        subset["assess_per_unit"] = subset["assess_per_unit"].fillna(
+            subset["neighborhood"].map(apu_medians).fillna(apu_global)
         )
         neighborhood_stats["assess_per_unit_neighborhoods"] = apu_medians.to_dict()
         neighborhood_stats["assess_per_unit_global_median"] = apu_global
+
+    # For stabilization_ratio: store neighborhood-level medians so the predictor
+    # can look up a neighbourhood stabilization rate at inference time
+    # (the user doesn't submit a BBL).
+    if "stabilization_ratio" in numeric_features and "stabilization_ratio" in subset.columns:
+        stab_medians = subset.groupby("neighborhood")["stabilization_ratio"].median()
+        stab_global = float(subset["stabilization_ratio"].median())
+        subset["stabilization_ratio"] = subset["stabilization_ratio"].fillna(stab_global)
+        neighborhood_stats["stabilization_ratio_neighborhoods"] = stab_medians.to_dict()
+        neighborhood_stats["stabilization_ratio_global_median"] = stab_global
 
     # Derived features for rental subtypes that use price_per_unit as target.
     target = feature_config.get("target", "sales_price")
@@ -443,18 +468,33 @@ def train_subtype_model(df: pd.DataFrame, subtype_name: str, building_classes: l
 
 
 def main():
-    df_standard = load_data(enriched=False)
-    df_enriched  = load_data(enriched=True) if INPUT_FILE_RENTAL.exists() else None
+    df_standard     = load_data("standard")
+    df_rental_stab  = load_data("rental_stab") if INPUT_FILE_RENTAL_STAB.exists() else None
+    df_condo        = load_data("condo")        if INPUT_FILE_CONDO.exists()        else None
 
-    if df_enriched is not None:
-        print(f"Phase 2a enriched rental data available ({len(df_enriched):,} rows).")
+    if df_rental_stab is not None:
+        print(f"Phase 2b rental-stab data available ({len(df_rental_stab):,} rows).")
     else:
-        print("No enriched rental data found — rental subtypes will use standard data.")
+        print("No rental-stab data found — rental subtypes will use standard data.")
+
+    if df_condo is not None:
+        print(f"Enriched condo data available ({len(df_condo):,} rows).")
+    else:
+        print("No enriched condo data found — condo_coop will use standard data.")
+
+    # Route each subtype to its best available dataset.
+    # "enriched_data: True" means prefer the specialised CSV over the DB-based fallback.
+    DATASET_MAP = {
+        "rental_walkup":   df_rental_stab,
+        "rental_elevator": df_rental_stab,
+        "condo_coop":      df_condo,
+    }
 
     results = []
     for subtype_name, building_classes in SUBTYPE_GROUPS.items():
         use_enriched = SUBTYPE_FEATURES[subtype_name].get("enriched_data", False)
-        df = df_enriched if (use_enriched and df_enriched is not None) else df_standard
+        specialised  = DATASET_MAP.get(subtype_name)
+        df = (specialised if (use_enriched and specialised is not None) else df_standard)
         result = train_subtype_model(df, subtype_name, building_classes)
         if result:
             results.append(result)
