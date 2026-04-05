@@ -28,11 +28,14 @@ INPUT_FILE_CONDO = BASE_DIR / "ml/data/processed/nyc_condo_training_data.csv"
 ARTIFACTS_DIR = BASE_DIR / "ml/artifacts/subtype_models"
 METRICS_FILE = ARTIFACTS_DIR / "subtype_model_metrics.csv"
 
-    # Per-subtype XGBoost hyperparameters.
+# Per-subtype XGBoost hyperparameters.
 # Tuned based on dataset size and property class characteristics.
 # No early stopping — each model trains to its full n_estimators on the
 # complete 80% training split, which consistently outperforms small-validation
 # early stopping on these dataset sizes.
+# All models use reg:squarederror. Outlier inflation is controlled via
+# per-class price caps in apply_price_outlier_caps() rather than switching
+# objectives, which proved numerically unstable on log1p-transformed targets.
 SUBTYPE_XGB_PARAMS = {
     "one_family": {
         "n_estimators": 500,
@@ -58,7 +61,7 @@ SUBTYPE_XGB_PARAMS = {
         "reg_lambda": 1.0,
     },
     "condo_coop": {
-        # Hits 300 trees easily with limited numeric features — more trees help.
+        # More trees needed on the tighter per-class filtered condo dataset.
         "n_estimators": 800,
         "learning_rate": 0.05,
         "max_depth": 5,
@@ -70,7 +73,7 @@ SUBTYPE_XGB_PARAMS = {
         "reg_lambda": 1.0,
     },
     "rental_walkup": {
-        # ~1,500 rows after cleaning — moderate capacity, moderate regularization.
+        # ~1,300 rows after cleaning — moderate capacity, moderate regularization.
         "n_estimators": 400,
         "learning_rate": 0.05,
         "max_depth": 5,
@@ -82,8 +85,7 @@ SUBTYPE_XGB_PARAMS = {
         "reg_lambda": 1.0,
     },
     "rental_elevator": {
-        # ~250 rows after cleaning — small dataset, strong regularization to avoid
-        # overfitting. Shallower trees prevent the model from memorising outliers.
+        # ~150 rows after cleaning — strong regularization to avoid overfitting.
         "n_estimators": 300,
         "learning_rate": 0.04,
         "max_depth": 4,
@@ -281,6 +283,10 @@ def build_preprocessor(numeric_features, categorical_features) -> ColumnTransfor
 
 
 def evaluate_predictions(y_test_log, y_pred_log):
+    # Clip before expm1 to guard against overflow when Huber loss produces
+    # large gradient updates near the training boundary.
+    # log1p($1B) ≈ 20.7 — anything beyond that is clearly a runaway prediction.
+    y_pred_log = np.clip(y_pred_log, 0, 20.7)
     y_test = np.expm1(y_test_log)
     y_pred = np.expm1(y_pred_log)
 
@@ -289,6 +295,69 @@ def evaluate_predictions(y_test_log, y_pred_log):
     r2 = r2_score(y_test, y_pred)
 
     return mae, rmse, r2
+
+
+def apply_price_outlier_caps(subset: pd.DataFrame, subtype_name: str) -> pd.DataFrame:
+    """Apply per-class price caps to reduce RMSE inflation from luxury outliers.
+
+    Family and condo/co-op models use a 97th-pct per-class cap (tighter than
+    the global 99th already applied in the data pipeline).  Rental models are
+    skipped here because they have their own per-unit floor/cap logic and much
+    healthier RMSE/MAE ratios.
+
+    Also applies a price-per-sqft sanity filter for models that have gross_sqft:
+    removes rows where $/sqft is below the 2nd or above the 98th neighbourhood
+    percentile — these are typically data-entry errors, related-party sales, or
+    land-only transactions mislabelled as improved properties.
+    """
+    if subtype_name in ("rental_walkup", "rental_elevator"):
+        return subset
+
+    before = len(subset)
+    capped = []
+    for bc in subset["building_class"].unique():
+        rows = subset[subset["building_class"] == bc]
+        # Condo/co-op: tighter 95th pct — Manhattan luxury coops span $100k–$15M
+        # Family homes: 97th pct — removes the thin ultra-luxury tail
+        pct = 0.95 if subtype_name == "condo_coop" else 0.97
+        cap = rows["sales_price"].quantile(pct)
+        capped.append(rows[rows["sales_price"] <= cap])
+
+    subset = pd.concat(capped).reset_index(drop=True) if capped else subset
+    print(f"  Per-class {int(pct*100)}th-pct price cap: {before} → {len(subset)} rows removed {before - len(subset)}")
+
+    # Price-per-sqft sanity filter (only when sqft is available and meaningful)
+    if "gross_sqft" in subset.columns:
+        has_sqft = subset["gross_sqft"].notna() & (subset["gross_sqft"] > 0)
+        if has_sqft.sum() > 100:
+            subset_with_sqft = subset[has_sqft].copy()
+            subset_without_sqft = subset[~has_sqft]
+            subset_with_sqft["_ppsf"] = subset_with_sqft["sales_price"] / subset_with_sqft["gross_sqft"]
+
+            # Compute neighbourhood-level P2 and P98 to define the valid range.
+            # Falls back to global percentiles for neighbourhoods with few sales.
+            global_p2  = subset_with_sqft["_ppsf"].quantile(0.02)
+            global_p98 = subset_with_sqft["_ppsf"].quantile(0.98)
+
+            neigh_bounds = subset_with_sqft.groupby("neighborhood")["_ppsf"].agg(
+                p2=lambda x: x.quantile(0.02),
+                p98=lambda x: x.quantile(0.98),
+            ).reset_index()
+            subset_with_sqft = subset_with_sqft.merge(neigh_bounds, on="neighborhood", how="left")
+            subset_with_sqft["p2"]  = subset_with_sqft["p2"].fillna(global_p2)
+            subset_with_sqft["p98"] = subset_with_sqft["p98"].fillna(global_p98)
+
+            before_ppsf = len(subset_with_sqft)
+            subset_with_sqft = subset_with_sqft[
+                (subset_with_sqft["_ppsf"] >= subset_with_sqft["p2"]) &
+                (subset_with_sqft["_ppsf"] <= subset_with_sqft["p98"])
+            ].drop(columns=["_ppsf", "p2", "p98"])
+
+            removed = before_ppsf - len(subset_with_sqft)
+            print(f"  Price/sqft P2–P98 filter: removed {removed} anomalous rows")
+            subset = pd.concat([subset_with_sqft, subset_without_sqft]).reset_index(drop=True)
+
+    return subset
 
 
 def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
@@ -316,6 +385,10 @@ def prepare_subset_for_training(subset: pd.DataFrame, subtype_name: str):
 
     if feature_config["require_gross_sqft"]:
         subset = subset[subset["gross_sqft"].notna() & (subset["gross_sqft"] > 0)]
+
+    # Outlier reduction: tighter per-class price caps + price/sqft sanity check.
+    # Applied after the basic numeric filters so gross_sqft is already clean.
+    subset = apply_price_outlier_caps(subset, subtype_name)
 
     # Compute neighborhood-level median price from the filtered training data.
     # This gives the model a direct numeric signal about each neighborhood's

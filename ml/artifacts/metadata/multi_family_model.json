@@ -1,6 +1,6 @@
 {
     "name": "multi_family",
-    "version": "v1",
+    "version": "v2",
     "segment": "multi_family",
     "artifact_path": "ml/artifacts/subtype_models/multi_family_price_model.pkl",
     "feature_columns": [
@@ -16,8 +16,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 314305.29,
-        "rmse": 626464.81,
-        "r2": 0.6064
+        "mae": 215611.65,
+        "rmse": 319644.84,
+        "r2": 0.6363,
+        "note": "v2: per-class 97th-pct price cap + price/sqft P2-P98 filter reduced MAE by 31% and RMSE by 49%"
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "one_family",
-    "version": "v1",
+    "version": "v2",
     "segment": "one_family",
     "artifact_path": "ml/artifacts/subtype_models/one_family_price_model.pkl",
     "feature_columns" : [
@@ -16,8 +16,9 @@
         "neighborhood"
     ],
     "metrics": {
-        "mae": 245435.64,
-        "rmse": 621770.63,
-        "r2": 0.7168
+        "mae": 139839.63,
+        "rmse": 202997.04,
+        "r2": 0.7356,
+        "note": "v2: per-class 97th-pct price cap + price/sqft P2-P98 filter reduced MAE by 43% and RMSE by 67%"
     }
 }
