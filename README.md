@@ -39,7 +39,7 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - Deterministic `deal_label` classification: `Buy`, `Hold`, `Avoid`
 - LLM-generated investment narrative via OpenAI gpt-5.4-mini (Responses API)
 - Per-model-key warning system for low-confidence predictions
-- API key authentication on all endpoints via `X-API-Key` header (timing-safe comparison)
+- **Unified authentication** on API routes: Supabase **JWT** (`Authorization: Bearer`) or legacy **`X-API-Key`** (timing-safe comparison) — same `get_current_user` dependency for prediction, properties, and auth
 - Per-IP rate limiting with consistent JSON error envelope (slowapi)
 - CORS locked to explicit allowed origins, methods, and headers via environment variable
 - Unified error response envelope `{ error, status_code, message, detail }` for all error types
@@ -55,10 +55,11 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 
 🟢 **Active — Production-Hardened Full-Stack AI Platform**
 
-All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (auth, rate limiting, CORS, error handling, structured logging). Portfolio page redesigned to save and display analysis results.
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (authentication, rate limiting, CORS, error handling, structured logging). Portfolio page redesigned to save and display analysis results.
 
 **Current milestone:**
 - Full-stack platform live: React 19 frontend talking to FastAPI backend
+- **Supabase Auth** integrated: register / login, JWT sessions, `GET`/`PATCH /auth/me` profiles, per-user saved properties; optional **admin** via `profiles.role` and/or `ADMIN_USER_IDS` in server env (full portfolio visibility for admins)
 - Real NYC Rolling Sales + PLUTO ingestion pipeline implemented
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
@@ -109,6 +110,8 @@ New frontend work should target **v2 only**. Legacy routes are not the primary c
 
 ```text
         React Frontend (Vite + TailwindCSS)
+                      │
+         Supabase Auth (email/password, JWT)
                       │
                       ▼
               FastAPI REST API
@@ -399,6 +402,14 @@ For analysis requests, `PredictionService.analyze()` additionally:
 | `GET` | `/health` | Liveness check — confirms process is alive |
 | `GET` | `/ready` | Readiness check — confirms DB is reachable |
 
+### Auth (JWT or API key)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/auth/me` | Current user profile (creates `profiles` row on first call) |
+| `PATCH` | `/auth/me` | Update display name and marketing preferences |
+
+Send `Authorization: Bearer <supabase_access_token>` from the React app after login, or `X-API-Key` for scripts and OpenAPI testing.
+
 ### Properties
 | Method | Endpoint | Description |
 |---|---|---|
@@ -407,6 +418,7 @@ For analysis requests, `PredictionService.analyze()` additionally:
 | `GET` | `/properties/{id}` | Retrieve a specific property |
 | `PATCH` | `/properties/{id}` | Partially update a property |
 | `DELETE` | `/properties/{id}` | Delete a property |
+| `GET` | `/housing/lookup` | Nearest `housing_data` match by lat/lng (optional borough filter) — used by Analyze autocomplete |
 
 **Filtering and pagination:**
 ```
@@ -416,6 +428,8 @@ GET /properties?min_price=500000&max_price=900000
 ```
 
 ### Prediction & Analysis (v2 — Primary)
+All prediction routes require the same auth as above (**Bearer JWT** or **`X-API-Key`**).
+
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/predict-price-v2` | Property valuation with model metadata |
@@ -440,7 +454,10 @@ GET /properties?min_price=500000&max_price=900000
     "predicted_price": 1185000.0,
     "market_price": 1250000.0,
     "price_difference": -65000.0,
-    "price_difference_pct": -5.2
+    "price_difference_pct": -5.2,
+    "price_low": 980000.0,
+    "price_high": 1390000.0,
+    "valuation_interval_note": "Typical error band from training MAE (not a formal confidence interval)."
   },
   "investment_analysis": {
     "roi_estimate": -5.2,
@@ -494,25 +511,27 @@ GET /properties?min_price=500000&max_price=900000
 propintel-ai/
 │
 ├── frontend/                        # React 19 + Vite + TailwindCSS 4
-│   ├── src/
+│   ├── src/                         # pages, components, context (Auth), services, lib/supabase.js
 │   ├── public/
 │   ├── package.json
-│   └── .env                         # VITE_API_BASE_URL, VITE_API_KEY
+│   └── .env                         # VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY; optional VITE_API_KEY for non-session API calls
 │
 ├── backend/
 │   └── app/
 │       ├── api/
-│       │   ├── prediction.py        # All prediction/analysis endpoints
-│       │   └── properties.py        # Property CRUD endpoints
+│       │   ├── prediction.py        # All prediction/analysis endpoints (JWT or API key)
+│       │   ├── properties.py        # Property CRUD + housing lookup
+│       │   └── auth_router.py       # GET/PATCH /auth/me
 │       ├── core/
 │       │   ├── config.py            # Path configuration
-│       │   ├── security.py          # API key auth (timing-safe)
+│       │   ├── auth.py              # JWT (Supabase HS256/RS256) + API key → UserContext
+│       │   ├── security.py          # Legacy API-key helper (optional single-purpose routes)
 │       │   ├── limiter.py           # slowapi rate limiter instance
 │       │   └── error_handlers.py    # Unified error response handlers
 │       ├── db/
 │       │   ├── database.py          # SQLAlchemy engine + session
 │       │   ├── init_db.py           # Table creation script
-│       │   └── models.py            # ORM models (Property, HousingData)
+│       │   └── models.py            # ORM models (Property, Profile, HousingData)
 │       ├── schemas/
 │       │   ├── prediction.py        # All prediction request/response schemas
 │       │   └── property.py          # Property request/response schemas
@@ -523,6 +542,8 @@ propintel-ai/
 │       ├── scripts/
 │       │   └── load_data.py         # Bulk load housing CSV into PostgreSQL
 │       └── main.py                  # FastAPI app entry point
+│
+├── backend/migrations/              # SQL for Supabase (profiles, user_id on properties, RLS notes)
 │
 ├── ml/
 │   ├── artifacts/
@@ -564,8 +585,8 @@ propintel-ai/
 │
 ├── tests/
 │   ├── conftest.py
-│   ├── test_prediction_api.py       # 9 prediction/analysis tests with mocking
-│   └── test_property_api.py         # 7 property CRUD + auth-negative tests
+│   ├── test_prediction_api.py       # Prediction v1/v2, feature importance; overrides get_current_user
+│   └── test_property_api.py         # Property CRUD, housing lookup, filters; UserContext mocks
 │
 ├── .github/
 │   └── workflows/
@@ -585,7 +606,7 @@ propintel-ai/
 |---|---|
 | `frontend/` | React 19 UI — Home, Analyze (with Save to Portfolio), and Portfolio (saved analyses) pages |
 | `api/` | FastAPI route handlers |
-| `core/` | Auth, rate limiting, error handlers, path config |
+| `core/` | JWT + API-key auth (`auth.py`), rate limiting, error handlers, path config |
 | `db/` | Database engine, session, and ORM models |
 | `schemas/` | Pydantic v2 request/response validation |
 | `services/` | ML prediction, investment scoring, LLM explanation |
@@ -608,7 +629,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file at the project root:
+Create a `.env` file at the project root (see also `.env.example`):
 
 ```
 DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
@@ -616,6 +637,13 @@ OPENAI_API_KEY=sk-...
 API_KEY=your-secret-api-key-here
 CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174
 LLM_TEMPERATURE=0.3
+
+# Supabase Auth — backend verifies access tokens (RS256 via JWKS or HS256 via secret)
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_JWT_SECRET=your-jwt-secret-from-supabase-dashboard
+
+# Optional: comma-separated Supabase user UUIDs treated as app admins (full portfolio + role in /auth/me)
+ADMIN_USER_IDS=00000000-0000-0000-0000-000000000000
 ```
 
 ### Frontend
@@ -629,10 +657,11 @@ Create a `frontend/.env` file:
 
 ```
 VITE_API_BASE_URL=http://127.0.0.1:8000
-VITE_API_KEY=your-secret-api-key-here
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
-> `VITE_API_KEY` must match the `API_KEY` value in your backend `.env`.
+Optional: `VITE_API_KEY` — same value as backend `API_KEY` — only needed for calling the API **without** a logged-in session (e.g. local scripts). The logged-in app uses the Supabase **Bearer** token for all protected routes.
 
 ---
 
@@ -680,7 +709,8 @@ python -m backend.app.db.init_db
 
 | Table | Model | Description |
 |---|---|---|
-| `properties` | `Property` | Saved property analyses — includes `analysis` JSONB column storing the full `POST /analyze-property-v2` response |
+| `profiles` | `Profile` | One row per Supabase user: `id` (UUID), `email`, `display_name`, `role` (`user` / `admin`), `marketing_opt_in` |
+| `properties` | `Property` | Saved property analyses — `user_id` links to owner; `analysis` JSONB stores the full `POST /analyze-property-v2` response |
 | `housing_data` | `HousingData` | NYC training data loaded from CSV pipeline |
 
 ---
@@ -697,18 +727,18 @@ pytest
 
 | Test file | Tests | Coverage |
 |---|---|---|
-| `test_property_api.py` | 7 | Full CRUD: create, list, get by ID, 404, update, delete, auth-negative (401) |
+| `test_property_api.py` | 15 | CRUD, filters, housing lookup, `UserContext` mocks |
 | `test_prediction_api.py` | 9 | All prediction/analysis endpoints, model routing, validation, mock service |
 
-**Total: 16 tests**
+**Total: 24 tests** (`pytest` from repo root)
 
 ### Patterns used
 - `monkeypatch` for mocking legacy inference functions
-- `app.dependency_overrides` for mocking `PredictionService` and `verify_api_key`
-- Targeted `dependency_overrides.pop()` to preserve auth bypass across tests
+- `app.dependency_overrides` for mocking `PredictionService` and `get_current_user` (returns a stub `UserContext`)
+- Targeted `dependency_overrides.pop()` to isolate service mocks across tests
 - SQLite test database for full test isolation
 - Validation error tests for coordinate and year bounds
-- Auth-negative tests (401 when no API key)
+- Auth exercised via dependency overrides; API key path still available for integration tests outside pytest overrides
 
 ### CI Pipeline
 
@@ -779,11 +809,12 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 ### Frontend
 - React 19 + Vite 8 + TailwindCSS 4 + React Router 7
 - Live and integrated with FastAPI backend
-- Tested with sample data across prediction and analysis endpoints
+- **Supabase Auth** — `Login` / `Register`, `ProtectedRoute` for Analyze, Portfolio, and Profile
 - **Home page** — hero section with feature highlights
-- **Analyze page** — full property analysis form with presets, v2 results display, and "Save to Portfolio" button
-- **Portfolio page** — saved analysis cards showing score badge, predicted vs market price, ROI estimate, deal label, and expandable AI explanation panels (Summary, Opportunity, Risks)
-- Fixed Navbar with active link highlighting across all pages
+- **Analyze page** — property form, Mapbox address autocomplete, v2 analysis, MAE-based valuation band (`price_low` / `price_high`), color-coded deal label badge, "Save to Portfolio"
+- **Portfolio page** — saved analyses with deal labels and valuation range
+- **Profile page** — display name and marketing preferences (`PATCH /auth/me`)
+- **Navbar** — theme toggle, account menu, **Admin** badge when `profile.role === 'admin'`
 
 ### Backend and Database
 - FastAPI backend with modular architecture
@@ -832,14 +863,14 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - LLM-based investment narrative generation
 
 ### Engineering and Reliability
-- **API key authentication** on all endpoints — `X-API-Key` header, timing-safe `secrets.compare_digest()`
+- **Authentication** — `Authorization: Bearer` (Supabase JWT) or `X-API-Key` on protected routes; shared `get_current_user` dependency
 - **Per-IP rate limiting** — 10–60 req/min per endpoint via slowapi
 - **CORS hardening** — allowed origins from `CORS_ORIGINS` env var, explicit methods and headers
 - **Unified error envelope** — `{ error, status_code, message, detail }` for all error types (401, 422, 429, 500)
 - **JSON structured logging** — every request logged with method, path, status, duration, IP, and request UUID
 - **Request ID tracing** — `X-Request-ID` header returned on every response for log correlation
 - **Liveness + readiness endpoints** — `/health` (instant) and `/ready` (DB connectivity check)
-- **16 automated tests** — full property CRUD, auth-negative, model routing, validation, mock service
+- **24 automated tests** — property CRUD, housing lookup, prediction v1/v2, mock `PredictionService`
 - GitHub Actions CI workflow passing on push/PR to `main`
 - Test isolation: SQLite `test.db`, `DATABASE_URL` set before app import
 - Dockerfile for containerized API deployment
@@ -864,8 +895,6 @@ Current constraints of the valuation models:
 - Add time-series features for market trend awareness
 - Add macroeconomic indicators
 - Expand SHAP per-property explainability
-- Prediction confidence intervals (`price_low` / `price_high`)
 - Batch prediction endpoint for portfolio analysis
 - Portfolio sorting and filtering (by score, deal label, borough)
-- User authentication via Supabase Auth for multi-user portfolio isolation
-- Light/dark mode toggle
+- Optional admin tools (e.g. impersonation / “view as user”) with audit logging
