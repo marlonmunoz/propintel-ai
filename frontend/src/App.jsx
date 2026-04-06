@@ -6,6 +6,7 @@ import Analyze from './pages/Analyze'
 import Portfolio from './pages/Portfolio'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Profile from './pages/Profile'
 
 export default function App() {
   return (
@@ -30,6 +31,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Portfolio />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           }
         />

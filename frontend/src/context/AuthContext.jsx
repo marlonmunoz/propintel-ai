@@ -1,12 +1,13 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ensureBackendProfile } from '../services/authApi'
+import { fetchProfile } from '../services/authApi'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,18 +24,40 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Create `profiles` row on the FastAPI side on first login (GET /auth/me).
-  useEffect(() => {
-    if (!session?.access_token) return
-    ensureBackendProfile()
+  const refreshProfile = useCallback(async () => {
+    if (!session?.access_token) {
+      setProfile(null)
+      return
+    }
+    try {
+      const data = await fetchProfile()
+      setProfile(data)
+    } catch {
+      setProfile(null)
+    }
   }, [session?.access_token])
 
+  // Load FastAPI `profiles` row (creates on first GET /auth/me).
+  useEffect(() => {
+    refreshProfile()
+  }, [refreshProfile])
+
   const signOut = async () => {
+    setProfile(null)
     await supabase.auth.signOut()
   }
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, signOut, loading }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user: session?.user ?? null,
+        profile,
+        refreshProfile,
+        signOut,
+        loading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

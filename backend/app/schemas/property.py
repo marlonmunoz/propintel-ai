@@ -45,3 +45,8 @@ class UserProfileResponse(BaseModel):
     marketing_opt_in: bool
 
     model_config = {"from_attributes": True}
+
+
+class UserProfileUpdate(BaseModel):
+    display_name: Optional[str] = Field(default=None, max_length=200)
+    marketing_opt_in: Optional[bool] = None

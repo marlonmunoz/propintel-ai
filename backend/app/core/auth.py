@@ -139,6 +139,8 @@ class UserContext:
     email: str | None
     auth_method: str       # "jwt" | "api_key"
     role: str = "user"     # updated by require_admin / /auth/me profile lookup
+    # From Supabase JWT (`user_metadata` claim) — e.g. display_name from sign-up.
+    user_metadata: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -159,10 +161,12 @@ async def get_current_user(
         scheme, _, token = authorization.partition(" ")
         if scheme.lower() == "bearer" and token:
             payload = _decode_supabase_access_token(token)
+            meta = payload.get("user_metadata")
             return UserContext(
                 user_id=payload.get("sub"),
                 email=payload.get("email"),
                 auth_method="jwt",
+                user_metadata=meta if isinstance(meta, dict) else None,
             )
 
     # ── API-key path ──────────────────────────────────────────────────────────
@@ -177,6 +181,7 @@ async def get_current_user(
             email=None,
             auth_method="api_key",
             role="admin",
+            user_metadata=None,
         )
 
     # ── Nothing provided ─────────────────────────────────────────────────────
