@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { updateProfile } from '../services/authApi'
 
@@ -96,6 +98,14 @@ export default function Profile() {
           >
             {saving ? 'Saving…' : 'Save changes'}
           </button>
+
+          <Link
+            to="/analyze"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+            Back to Analyze
+          </Link>
         </form>
       </div>
     </div>
