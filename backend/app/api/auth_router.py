@@ -8,7 +8,7 @@ PATCH /auth/me  — update display name and marketing preferences.
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.core.auth import UserContext, get_current_user
+from backend.app.core.auth import UserContext, get_current_user, get_profile_for_jwt_user
 from backend.app.core.limiter import limiter
 from backend.app.db.database import get_db
 from backend.app.db.models import Profile
@@ -51,7 +51,7 @@ def get_me(
             marketing_opt_in=False,
         )
 
-    profile = db.query(Profile).filter(Profile.id == user.user_id).first()
+    profile = get_profile_for_jwt_user(db, user)
     meta = user.user_metadata or {}
 
     if not profile:
@@ -89,7 +89,7 @@ def get_me(
         user_id=profile.id,
         email=profile.email,
         display_name=profile.display_name,
-        role=profile.role,
+        role=(profile.role or "user").strip().lower(),
         marketing_opt_in=profile.marketing_opt_in,
     )
 
@@ -109,7 +109,7 @@ def patch_me(
     if user.auth_method == "api_key":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cannot patch service account profile.")
 
-    profile = db.query(Profile).filter(Profile.id == user.user_id).first()
+    profile = get_profile_for_jwt_user(db, user)
     if not profile:
         # Create minimal row then apply patch
         meta = user.user_metadata or {}
@@ -141,6 +141,6 @@ def patch_me(
         user_id=profile.id,
         email=profile.email,
         display_name=profile.display_name,
-        role=profile.role,
+        role=(profile.role or "user").strip().lower(),
         marketing_opt_in=profile.marketing_opt_in,
     )

@@ -3,6 +3,7 @@ import { BarChart3, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import DealLabelBadge from '../components/DealLabelBadge'
+import { useAuth } from '../context/AuthContext'
 import { getProperties, deleteProperty } from '../services/propertiesApi'
 
 function formatCurrency(value) {
@@ -44,6 +45,7 @@ function filterChipClasses(label, active) {
 }
 
 export default function Portfolio() {
+  const { refreshProfile } = useAuth()
   const [properties, setProperties] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -60,6 +62,7 @@ export default function Portfolio() {
     setIsLoading(true)
     setError('')
     try {
+      await refreshProfile()
       const data = await getProperties({ limit: 50 })
       setProperties(data)
     } catch (err) {

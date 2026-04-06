@@ -11,3 +11,9 @@
 UPDATE public.profiles
 SET role = 'admin'
 WHERE id = 'YOUR_SUPABASE_USER_UUID';
+
+-- If admin still does not apply in the API, check:
+-- 1) The id above must match JWT `sub` (see jwt.io / browser devtools → access token payload).
+-- 2) Row Level Security: the FastAPI server uses a direct Postgres connection that
+--    normally bypasses RLS. If you added strict policies, ensure SELECT on public.profiles
+--    is allowed for that connection, or temporarily disable RLS on `profiles` for debugging.
