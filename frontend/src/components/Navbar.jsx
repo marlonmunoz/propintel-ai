@@ -46,8 +46,8 @@ export default function Navbar() {
   const navLinkClass = (to) =>
     `block rounded-lg px-3 py-2.5 text-sm font-medium transition md:inline-block md:rounded-none md:px-0 md:py-0 md:hover:bg-transparent ${
       location.pathname === to
-        ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white md:bg-transparent md:text-slate-900 dark:md:text-white'
-        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white md:text-slate-500 md:hover:text-slate-900 dark:md:text-slate-400 dark:md:hover:text-white'
+        ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white md:bg-transparent dark:md:bg-transparent md:font-semibold md:text-cyan-600 dark:md:text-cyan-400'
+        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white md:text-slate-500 md:hover:bg-transparent dark:md:hover:bg-transparent md:hover:text-slate-900 dark:md:text-slate-400 dark:md:hover:text-white'
     }`
 
   const navLink = (to, label) => (
