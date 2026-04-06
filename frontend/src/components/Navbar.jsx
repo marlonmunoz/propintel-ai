@@ -104,6 +104,11 @@ export default function Navbar() {
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 dark:text-slate-200">
                   {primaryLabel}
                 </span>
+                {profile?.role === 'admin' && (
+                  <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+                    Admin
+                  </span>
+                )}
                 <ChevronDown
                   className={`h-4 w-4 shrink-0 text-slate-400 transition ${menuOpen ? 'rotate-180' : ''}`}
                 />
@@ -118,6 +123,11 @@ export default function Navbar() {
                       </div>
                     )}
                     <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</div>
+                    {profile?.role === 'admin' && (
+                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
+                        Administrator — full portfolio access
+                      </div>
+                    )}
                   </div>
                   <Link
                     to="/profile"

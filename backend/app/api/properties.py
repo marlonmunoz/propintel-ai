@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 
-from backend.app.core.auth import UserContext, get_current_user
+from backend.app.core.auth import UserContext, get_current_user, is_app_admin
 from backend.app.db.database import get_db
 from backend.app.db.models import Property, HousingData
 from backend.app.schemas.property import (
@@ -61,8 +61,8 @@ def get_properties(
 ):
     query = db.query(Property)
 
-    # JWT users only see their own rows; API-key callers see all (service mode).
-    if user.auth_method == "jwt" and user.user_id:
+    # JWT users see only their rows; admins (profiles.role='admin') see all; API-key sees all.
+    if user.auth_method == "jwt" and user.user_id and not is_app_admin(db, user):
         query = query.filter(Property.user_id == user.user_id)
 
     if zipcode:
@@ -92,8 +92,13 @@ def get_property(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    # JWT users can only read their own properties.
-    if user.auth_method == "jwt" and user.user_id and property_obj.user_id != user.user_id:
+    # JWT users can only read their own properties (admins: any row).
+    if (
+        user.auth_method == "jwt"
+        and user.user_id
+        and property_obj.user_id != user.user_id
+        and not is_app_admin(db, user)
+    ):
         raise HTTPException(status_code=404, detail="Property not found")
 
     return property_obj
@@ -115,7 +120,12 @@ def update_property(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    if user.auth_method == "jwt" and user.user_id and property_obj.user_id != user.user_id:
+    if (
+        user.auth_method == "jwt"
+        and user.user_id
+        and property_obj.user_id != user.user_id
+        and not is_app_admin(db, user)
+    ):
         raise HTTPException(status_code=404, detail="Property not found")
 
     update_data = property_update.model_dump(exclude_unset=True)
@@ -149,9 +159,14 @@ def delete_property(
             detail="Property not found",
         )
 
-    if user.auth_method == "jwt" and user.user_id and property_obj.user_id != user.user_id:
+    if (
+        user.auth_method == "jwt"
+        and user.user_id
+        and property_obj.user_id != user.user_id
+        and not is_app_admin(db, user)
+    ):
         raise HTTPException(status_code=404, detail="Property not found")
-        
+
     db.delete(property_obj)
     try:
         db.commit()

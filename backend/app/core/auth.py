@@ -216,3 +216,15 @@ async def require_admin(
         )
     user.role = "admin"
     return user
+
+
+def is_app_admin(db: Session, user: UserContext) -> bool:
+    """True for API-key callers or JWT users with profiles.role == 'admin'."""
+    if user.auth_method == "api_key":
+        return True
+    if user.auth_method != "jwt" or not user.user_id:
+        return False
+    from backend.app.db.models import Profile  # noqa: PLC0415
+
+    profile = db.query(Profile).filter(Profile.id == user.user_id).first()
+    return profile is not None and profile.role == "admin"
