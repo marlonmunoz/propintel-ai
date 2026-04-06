@@ -8,7 +8,7 @@ PATCH /auth/me  — update display name and marketing preferences.
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.core.auth import UserContext, get_current_user, get_profile_for_jwt_user
+from backend.app.core.auth import UserContext, get_current_user, get_profile_for_jwt_user, is_app_admin
 from backend.app.core.limiter import limiter
 from backend.app.db.database import get_db
 from backend.app.db.models import Profile
@@ -85,11 +85,12 @@ def get_me(
                 raise
             db.refresh(profile)
 
+    effective_role = "admin" if is_app_admin(db, user) else (profile.role or "user").strip().lower()
     return UserProfileResponse(
         user_id=profile.id,
         email=profile.email,
         display_name=profile.display_name,
-        role=(profile.role or "user").strip().lower(),
+        role=effective_role,
         marketing_opt_in=profile.marketing_opt_in,
     )
 
@@ -137,10 +138,11 @@ def patch_me(
     db.commit()
     db.refresh(profile)
 
+    effective_role = "admin" if is_app_admin(db, user) else (profile.role or "user").strip().lower()
     return UserProfileResponse(
         user_id=profile.id,
         email=profile.email,
         display_name=profile.display_name,
-        role=(profile.role or "user").strip().lower(),
+        role=effective_role,
         marketing_opt_in=profile.marketing_opt_in,
     )

@@ -9,9 +9,12 @@ Both produce a UserContext.  Routes use Depends(get_current_user).
 Admin-only routes additionally call require_admin(user, db).
 """
 
+import logging
 import os
 import secrets
 from dataclasses import dataclass
+
+logger = logging.getLogger("propintel")
 
 import jwt
 from jwt import PyJWKClient
@@ -251,10 +254,29 @@ async def require_admin(
 
 
 def is_app_admin(db: Session, user: UserContext) -> bool:
-    """True for API-key callers or JWT users with profiles.role == 'admin'."""
+    """
+    True for:
+    1. API-key callers (service / CI).
+    2. JWT users whose UUID is in ADMIN_USER_IDS env var — checked first,
+       no DB round-trip, no RLS dependency.
+    3. JWT users with profiles.role == 'admin' in the DB (fallback).
+    """
     if user.auth_method == "api_key":
         return True
-    if user.auth_method != "jwt":
+    if user.auth_method != "jwt" or not user.user_id:
         return False
+
+    # ── Env-var fast path (bypasses RLS entirely) ────────────────────────────
+    admin_ids = {
+        uid.strip().lower()
+        for uid in os.getenv("ADMIN_USER_IDS", "").split(",")
+        if uid.strip()
+    }
+    logger.info("ADMIN CHECK | jwt_sub=%s | admin_ids=%s | match=%s",
+                user.user_id, admin_ids, user.user_id.lower() in admin_ids)
+    if admin_ids and user.user_id.lower() in admin_ids:
+        return True
+
+    # ── DB fallback ──────────────────────────────────────────────────────────
     profile = get_profile_for_jwt_user(db, user)
     return _profile_is_admin(profile)
