@@ -32,7 +32,6 @@ export async function ensureBackendProfile() {
   try {
     await fetchProfile()
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('[PropIntel] ensureBackendProfile:', e)
   }
 }

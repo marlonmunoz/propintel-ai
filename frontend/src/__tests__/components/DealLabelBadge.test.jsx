@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import DealLabelBadge, { dealLabelBadgeClasses } from '../../components/DealLabelBadge'
+import DealLabelBadge from '../../components/DealLabelBadge'
+import { dealLabelBadgeClasses } from '../../utils/dealLabelBadge'
 
 // --- Pure function unit tests ---
 
