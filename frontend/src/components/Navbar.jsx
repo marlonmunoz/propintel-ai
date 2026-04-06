@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, Moon, Sun, User } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, Moon, Sun, User, X } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 
@@ -10,7 +10,27 @@ export default function Navbar() {
   const { theme, toggleTheme } = useTheme()
   const { user, profile, signOut } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const menuRef = useRef(null)
+
+  // Close mobile sheet when the route changes (browser back/forward or any navigation).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional UI reset on pathname change
+    setMobileNavOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+      if (mobileNavOpen && !e.target.closest('[data-mobile-nav]')) {
+        setMobileNavOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [mobileNavOpen])
 
   // Login and Register pages render their own full-screen layout — hide Navbar there.
   const hideOn = ['/login', '/register']
@@ -23,48 +43,42 @@ export default function Navbar() {
     null
   const primaryLabel = displayName || user?.email?.split('@')[0] || 'Account'
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  const navLinkClass = (to) =>
+    `block rounded-lg px-3 py-2.5 text-sm font-medium transition md:inline-block md:rounded-none md:px-0 md:py-0 md:hover:bg-transparent ${
+      location.pathname === to
+        ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white md:bg-transparent md:text-slate-900 dark:md:text-white'
+        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white md:text-slate-500 md:hover:text-slate-900 dark:md:text-slate-400 dark:md:hover:text-white'
+    }`
 
   const navLink = (to, label) => (
-    <Link
-      to={to}
-      className={`text-sm font-medium transition ${
-        location.pathname === to
-          ? 'text-slate-900 dark:text-white'
-          : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-      }`}
-    >
+    <Link to={to} className={navLinkClass(to)} onClick={() => setMobileNavOpen(false)}>
       {label}
     </Link>
   )
 
   async function handleSignOut() {
     setMenuOpen(false)
+    setMobileNavOpen(false)
     await signOut()
     navigate('/login', { replace: true })
   }
 
+  const apiDocsHref = `${import.meta.env.VITE_API_BASE_URL}/docs`
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500">
+    <header className="relative z-50 border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+        <Link to="/" className="flex min-w-0 items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500">
             <span className="text-sm font-black text-slate-950">P</span>
           </div>
-          <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+          <span className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">
             PropIntel <span className="text-cyan-500">AI</span>
           </span>
         </Link>
 
-        <nav className="flex items-center gap-6">
+        {/* Desktop / tablet — horizontal nav */}
+        <nav className="hidden items-center gap-6 md:flex">
           {navLink('/', 'Home')}
 
           {user && (
@@ -75,7 +89,7 @@ export default function Navbar() {
           )}
 
           <a
-            href={`${import.meta.env.VITE_API_BASE_URL}/docs`}
+            href={apiDocsHref}
             target="_blank"
             rel="noreferrer"
             className="text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
@@ -84,6 +98,7 @@ export default function Navbar() {
           </a>
 
           <button
+            type="button"
             onClick={toggleTheme}
             aria-label="Toggle theme"
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-white"
@@ -164,7 +179,107 @@ export default function Navbar() {
             </div>
           )}
         </nav>
+
+        {/* Mobile — compact controls; full menu opens in panel below */}
+        <div
+          className="flex items-center gap-2 md:hidden"
+          data-mobile-nav
+        >
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-white"
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen((o) => !o)}
+            aria-expanded={mobileNavOpen}
+            aria-controls="mobile-nav-panel"
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile full-width panel (screens below md breakpoint) */}
+      {mobileNavOpen && (
+        <div
+          id="mobile-nav-panel"
+          className="border-t border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-950 md:hidden"
+          data-mobile-nav
+        >
+          <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 sm:px-6">
+            {navLink('/', 'Home')}
+            {user && (
+              <>
+                {navLink('/analyze', 'Analyze')}
+                {navLink('/portfolio', 'Portfolio')}
+              </>
+            )}
+            <a
+              href={apiDocsHref}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              API Docs
+            </a>
+
+            {user ? (
+              <div className="mt-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+                <p className="px-3 text-xs font-medium uppercase tracking-wide text-slate-400">Account</p>
+                {displayName && (
+                  <p className="px-3 pt-2 text-sm font-semibold text-slate-900 dark:text-white">{displayName}</p>
+                )}
+                <p className="px-3 pb-2 text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
+                {(profile?.role || '').toLowerCase() === 'admin' && (
+                  <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
+                    Admin — full portfolio access
+                  </p>
+                )}
+                <Link
+                  to="/profile"
+                  className="mt-1 block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  Profile settings
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 flex flex-col gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+                <Link
+                  to="/login"
+                  className="rounded-lg px-3 py-2.5 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-lg bg-cyan-500 py-2.5 text-center text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  Get started
+                </Link>
+              </div>
+            )}
+          </nav>
+        </div>
+      )}
     </header>
   )
 }
