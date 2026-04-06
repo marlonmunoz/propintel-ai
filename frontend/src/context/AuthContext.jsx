@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { ensureBackendProfile } from '../services/authApi'
 
 const AuthContext = createContext(null)
 
@@ -21,6 +22,12 @@ export function AuthProvider({ children }) {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Create `profiles` row on the FastAPI side on first login (GET /auth/me).
+  useEffect(() => {
+    if (!session?.access_token) return
+    ensureBackendProfile()
+  }, [session?.access_token])
 
   const signOut = async () => {
     await supabase.auth.signOut()
