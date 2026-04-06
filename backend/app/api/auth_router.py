@@ -70,13 +70,17 @@ def get_me(
             raise
         db.refresh(profile)
     else:
-        # Backfill display name from JWT metadata if DB still empty (e.g. row created before sync).
+        # Backfill display name and role from env/metadata if DB is stale.
         changed = False
         if profile.display_name is None:
             dn = _display_name_from_user_metadata(user.user_metadata)
             if dn:
                 profile.display_name = dn
                 changed = True
+        # Auto-promote role in DB when ADMIN_USER_IDS matches but DB still says 'user'.
+        if is_app_admin(db, user) and (profile.role or "user").strip().lower() != "admin":
+            profile.role = "admin"
+            changed = True
         if changed:
             try:
                 db.commit()
