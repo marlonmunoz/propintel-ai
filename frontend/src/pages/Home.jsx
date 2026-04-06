@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, Brain, ShieldCheck } from 'lucide-react'
+import { BarChart3, Brain, ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react'
 import Navbar from '../components/Navbar'
 
 const features = [
@@ -23,13 +24,205 @@ const features = [
   },
 ]
 
+/** Snapshot from `ml/artifacts/metadata/*.json` — update targets when you retrain. */
+const modelMetrics = [
+  {
+    label: 'Strongest segment',
+    segment: 'Condo & co-op',
+    target: 0.8,
+    decimals: 2,
+    suffix: 'R²',
+    detail: 'Highest explanatory power on NYC residential sales',
+  },
+  {
+    label: 'Multi-family',
+    segment: '2–3 unit buildings',
+    target: 0.75,
+    decimals: 2,
+    suffix: 'R²',
+    detail: 'PLUTO-enriched features + multi-year sales',
+  },
+  {
+    label: 'Subtype models',
+    segment: 'Production routing',
+    target: 5,
+    decimals: 0,
+    suffix: 'models',
+    detail: 'One global fallback + four dedicated segments',
+  },
+]
+
+function easeOutCubic(t) {
+  return 1 - (1 - t) ** 3
+}
+
+/** Fires once when the element intersects the viewport (good for scroll-triggered animations). */
+function useInViewOnce(options = {}) {
+  const { threshold = 0.2, rootMargin = '0px 0px -8% 0px' } = options
+  const ref = useRef(null)
+  const [inView, setInView] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || inView) return undefined
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setInView(true)
+      },
+      { threshold, rootMargin }
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [inView, threshold, rootMargin])
+
+  return [ref, inView]
+}
+
+function CountUpMetric({ target, decimals, suffix, start, staggerMs = 0 }) {
+  const reducedMotion = usePrefersReducedMotion()
+  const [display, setDisplay] = useState(0)
+
+  useEffect(() => {
+    if (!start || reducedMotion) return undefined
+
+    let rafId = 0
+    const delayTimer = window.setTimeout(() => {
+      const durationMs = 1850
+      const t0 = performance.now()
+
+      const tick = (now) => {
+        const elapsed = now - t0
+        const t = Math.min(1, elapsed / durationMs)
+        const eased = easeOutCubic(t)
+        setDisplay(target * eased)
+        if (t < 1) {
+          rafId = requestAnimationFrame(tick)
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }, staggerMs)
+
+    return () => {
+      clearTimeout(delayTimer)
+      cancelAnimationFrame(rafId)
+    }
+  }, [start, target, reducedMotion, staggerMs])
+
+  const raw = !start ? 0 : reducedMotion ? target : display
+  const text = decimals > 0 ? raw.toFixed(decimals) : String(Math.round(raw))
+
+  return (
+    <p className="mt-3 font-mono text-3xl font-bold tabular-nums text-cyan-600 dark:text-cyan-400">
+      {text}
+      <span className="ml-1 text-lg font-semibold text-slate-500 dark:text-slate-400">{suffix}</span>
+    </p>
+  )
+}
+
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+      mq.addEventListener('change', onChange)
+      return () => mq.removeEventListener('change', onChange)
+    },
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    () => false
+  )
+}
+
+function FeatureCard({ icon, title, description, className = '' }) {
+  const Icon = icon
+  return (
+    <div
+      className={`flex h-full flex-col rounded-2xl border border-slate-200 bg-slate-50 p-6 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-600 ${className}`}
+    >
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10">
+        <Icon className="h-5 w-5 text-cyan-500 dark:text-cyan-400" />
+      </div>
+      <h3 className="mb-2 font-semibold text-slate-900 dark:text-white">{title}</h3>
+      <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{description}</p>
+    </div>
+  )
+}
+
+function MobileFeatureCarousel({ items }) {
+  const [index, setIndex] = useState(0)
+  const reducedMotion = usePrefersReducedMotion()
+
+  useEffect(() => {
+    if (reducedMotion || items.length <= 1) return undefined
+    const t = window.setInterval(() => {
+      setIndex((i) => (i + 1) % items.length)
+    }, 6500)
+    return () => window.clearInterval(t)
+  }, [items.length, reducedMotion])
+
+  const go = (delta) => {
+    setIndex((i) => (i + delta + items.length) % items.length)
+  }
+
+  return (
+    <div className="md:hidden">
+      <div className="relative overflow-hidden rounded-2xl">
+        <div
+          className={`flex ${reducedMotion ? '' : 'transition-transform duration-500 ease-out'}`}
+          style={{ transform: `translateX(-${index * 100}%)` }}
+        >
+          {items.map(({ icon, title, description }) => (
+            <div key={title} className="w-full shrink-0 px-0.5">
+              <FeatureCard icon={icon} title={title} description={description} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => go(-1)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="Previous feature"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div className="flex gap-2" role="tablist" aria-label="Feature slides">
+          {items.map(({ title }, i) => (
+            <button
+              key={title}
+              type="button"
+              role="tab"
+              aria-selected={i === index}
+              aria-label={`Show feature: ${title}`}
+              onClick={() => setIndex(i)}
+              className={`h-2 rounded-full transition-all ${
+                i === index ? 'w-8 bg-cyan-500' : 'w-2 bg-slate-300 dark:bg-slate-600'
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => go(1)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="Next feature"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
+  const [metricsRef, metricsInView] = useInViewOnce()
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
-      {/* Hero */}
-      <section className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-6 pt-20 text-center">
+      {/* Hero — top-aligned so metrics/features stay above the fold on more screens */}
+      <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-14 pt-20 text-center sm:px-6 sm:pb-16 sm:pt-24">
         <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
           PropIntel AI
         </p>
@@ -58,20 +251,54 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="mx-auto max-w-6xl px-6 pb-24">
-        <div className="grid gap-6 sm:grid-cols-3">
-          {features.map(({ icon: Icon, title, description }) => (
+      {/* Model metrics — static numbers from training metadata */}
+      <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+        <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
+          Model performance
+        </p>
+        <h2 className="mx-auto mt-2 max-w-2xl text-center text-lg font-semibold text-slate-900 dark:text-white">
+          Built on real NYC sales — segment models, not a single generic fit
+        </h2>
+        <div ref={metricsRef} className="mt-8 grid gap-4 sm:grid-cols-3">
+          {modelMetrics.map((m, index) => (
             <div
-              key={title}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-6 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-600"
+              key={m.label}
+              className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-5 text-center dark:border-slate-800 dark:from-slate-900/80 dark:to-slate-950"
             >
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10">
-                <Icon className="h-5 w-5 text-cyan-500 dark:text-cyan-400" />
-              </div>
-              <h3 className="mb-2 font-semibold text-slate-900 dark:text-white">{title}</h3>
-              <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{description}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                {m.label}
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">{m.segment}</p>
+              <CountUpMetric
+                target={m.target}
+                decimals={m.decimals}
+                suffix={m.suffix}
+                start={metricsInView}
+                staggerMs={index * 180}
+              />
+              <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{m.detail}</p>
             </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features — carousel on small screens, grid from md up */}
+      <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
+        <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+          Product
+        </p>
+        <h2 className="mt-2 text-center text-2xl font-bold text-slate-900 dark:text-white">
+          What you get
+        </h2>
+        <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-500 dark:text-slate-400">
+          On phones, swipe or use the arrows — features rotate automatically unless you prefer reduced motion.
+        </p>
+
+        <MobileFeatureCarousel items={features} />
+
+        <div className="mt-8 hidden gap-6 md:grid md:grid-cols-3">
+          {features.map(({ icon, title, description }) => (
+            <FeatureCard key={title} icon={icon} title={title} description={description} />
           ))}
         </div>
       </section>
