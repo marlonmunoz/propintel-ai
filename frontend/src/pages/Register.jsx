@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -8,7 +8,6 @@ import Footer from '../components/Footer'
 
 export default function Register() {
   const { session } = useAuth()
-  const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
 
   const [displayName, setDisplayName] = useState('')

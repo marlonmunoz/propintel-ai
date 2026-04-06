@@ -57,6 +57,7 @@ export default function Portfolio() {
 
   useEffect(() => {
     fetchProperties()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only load; fetchProperties is stable enough for initial fetch
   }, [])
 
   async function fetchProperties() {

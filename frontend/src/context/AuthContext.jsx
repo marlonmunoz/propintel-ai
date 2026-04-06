@@ -39,7 +39,8 @@ export function AuthProvider({ children }) {
 
   // Load FastAPI `profiles` row (creates on first GET /auth/me).
   useEffect(() => {
-    refreshProfile()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshProfile updates profile from API when session changes
+    void refreshProfile()
   }, [refreshProfile])
 
   const signOut = async () => {
@@ -63,6 +64,7 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- companion hook for AuthProvider
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>')
