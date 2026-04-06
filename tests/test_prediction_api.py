@@ -5,9 +5,14 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 import backend.app.api.prediction as prediction_api
 from backend.app.api.prediction import get_prediction_service
-from backend.app.core.security import verify_api_key
+from backend.app.core.auth import UserContext, get_current_user
 
-app.dependency_overrides[verify_api_key] = lambda: "test_key"
+app.dependency_overrides[get_current_user] = lambda: UserContext(
+    user_id="test-user-id",
+    email="test@propintel.ai",
+    auth_method="api_key",
+    role="admin",
+)
 
 client = TestClient(app)
 
