@@ -7,8 +7,20 @@ body,
   height: 100%;
 }
 
+/* Match app chrome so any sub-pixel horizontal overflow does not show a white strip next to dark UI. */
+html {
+  @apply bg-white dark:bg-slate-950;
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
-  min-width: 320px;
+  /* Never force the layout wider than the viewport (avoids horizontal scroll in narrow DevTools / small phones). */
+  min-width: min(320px, 100%);
+  overflow-x: clip;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+#root {
+  min-width: 0;
 }

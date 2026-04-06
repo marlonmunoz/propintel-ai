@@ -66,7 +66,7 @@ export default function Navbar() {
   const apiDocsHref = `${import.meta.env.VITE_API_BASE_URL}/docs`
 
   return (
-    <header className="relative z-50 border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80">
+    <header className="relative z-50 border-b border-slate-200 bg-slate-50/90 backdrop-blur-sm dark:border-slate-800 dark:bg-gradient-to-b dark:from-slate-900/80 dark:to-slate-950">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <Link to="/" className="flex min-w-0 items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500">
@@ -210,7 +210,7 @@ export default function Navbar() {
       {mobileNavOpen && (
         <div
           id="mobile-nav-panel"
-          className="border-t border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-950 md:hidden"
+          className="border-t border-slate-200 bg-slate-50/90 shadow-lg dark:border-slate-800 dark:bg-gradient-to-b dark:from-slate-900/80 dark:to-slate-950 md:hidden"
           data-mobile-nav
         >
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 sm:px-6">

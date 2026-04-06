@@ -5,6 +5,7 @@ import { analyzeProperty } from '../services/analysisApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
 import { supabase } from '../lib/supabase'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import DealLabelBadge from '../components/DealLabelBadge'
 
 const boroughOptions = [
@@ -518,8 +519,9 @@ export default function Analyze() {
   const difference = analysisResult?.valuation?.price_difference ?? 0
 
   return (
-    <main className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className="flex min-h-screen flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
+      <main className="flex-1">
       <section className="mx-auto max-w-7xl px-6 pb-12 pt-24">
         <div className="mb-10 flex items-center justify-between gap-4">
           <div>
@@ -1100,6 +1102,8 @@ export default function Analyze() {
           </div>
         </div>
       </section>
-    </main>
+      </main>
+      <Footer />
+    </div>
   )
 }

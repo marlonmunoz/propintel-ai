@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import { useAuth } from '../context/AuthContext'
 import { updateProfile } from '../services/authApi'
 
@@ -40,10 +41,10 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
-      <div className="mx-auto max-w-lg px-6 pb-24 pt-24">
+      <div className="mx-auto flex-1 max-w-lg px-6 pb-24 pt-24">
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-cyan-500">Account</p>
         <h1 className="mb-2 text-2xl font-bold text-slate-900 dark:text-white">Profile</h1>
         <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
@@ -111,6 +112,8 @@ export default function Profile() {
           </Link>
         </form>
       </div>
+
+      <Footer />
     </div>
   )
 }

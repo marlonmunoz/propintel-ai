@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Moon, Sun } from 'lucide-react'
+import Footer from '../components/Footer'
 
 export default function Login() {
   const { session } = useAuth()
@@ -36,16 +37,17 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
+    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
       {/* Theme toggle */}
       <button
         onClick={toggleTheme}
         aria-label="Toggle theme"
-        className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
+        className="absolute right-6 top-6 z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
       >
         {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
 
+      <div className="flex flex-1 flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <Link to="/" className="mb-8 flex items-center justify-center gap-2">
@@ -120,6 +122,9 @@ export default function Login() {
           </p>
         </div>
       </div>
+      </div>
+
+      <Footer />
     </div>
   )
 }

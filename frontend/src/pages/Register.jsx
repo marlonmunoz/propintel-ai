@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Moon, Sun } from 'lucide-react'
+import Footer from '../components/Footer'
 
 export default function Register() {
   const { session } = useAuth()
@@ -59,38 +60,42 @@ export default function Register() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
-        <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-            <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-1 flex-col items-center justify-center px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+              <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="mb-2 text-lg font-bold text-slate-900 dark:text-white">Check your email</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
+              account, then{' '}
+              <Link to="/login" className="text-cyan-500 hover:underline">
+                sign in
+              </Link>
+              .
+            </p>
           </div>
-          <h1 className="mb-2 text-lg font-bold text-slate-900 dark:text-white">Check your email</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
-            account, then{' '}
-            <Link to="/login" className="text-cyan-500 hover:underline">
-              sign in
-            </Link>
-            .
-          </p>
         </div>
+        <Footer />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12 dark:bg-slate-950">
+    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
       {/* Theme toggle */}
       <button
         onClick={toggleTheme}
         aria-label="Toggle theme"
-        className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
+        className="absolute right-6 top-6 z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white"
       >
         {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
 
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <Link to="/" className="mb-8 flex items-center justify-center gap-2">
@@ -209,6 +214,9 @@ export default function Register() {
           </p>
         </div>
       </div>
+      </div>
+
+      <Footer />
     </div>
   )
 }

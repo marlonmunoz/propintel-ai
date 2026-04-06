@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, Brain, ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 
 const features = [
   {
@@ -162,15 +163,29 @@ function MobileFeatureCarousel({ items }) {
     setIndex((i) => (i + delta + items.length) % items.length)
   }
 
+  const n = items.length
+  /* Track is n× viewport width; each slide is 1/n of the track so translateX(-index/n * 100%) moves exactly one card (CSS % on translate is relative to the track, not each slide). */
+  const trackStyle =
+    n <= 0
+      ? undefined
+      : {
+          width: `${n * 100}%`,
+          transform: `translateX(-${(index * 100) / n}%)`,
+        }
+
   return (
     <div className="md:hidden">
-      <div className="relative overflow-hidden rounded-2xl">
+      <div className="relative min-w-0 overflow-hidden rounded-2xl">
         <div
           className={`flex ${reducedMotion ? '' : 'transition-transform duration-500 ease-out'}`}
-          style={{ transform: `translateX(-${index * 100}%)` }}
+          style={trackStyle}
         >
           {items.map(({ icon, title, description }) => (
-            <div key={title} className="w-full shrink-0 px-0.5">
+            <div
+              key={title}
+              className="shrink-0"
+              style={{ width: n > 0 ? `${100 / n}%` : undefined }}
+            >
               <FeatureCard icon={icon} title={title} description={description} />
             </div>
           ))}
@@ -218,16 +233,17 @@ export default function Home() {
   const [metricsRef, metricsInView] = useInViewOnce()
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className="flex min-h-screen min-w-0 flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* Hero — top-aligned so metrics/features stay above the fold on more screens */}
       <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-14 pt-20 text-center sm:px-6 sm:pb-16 sm:pt-24">
         <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
           PropIntel AI
         </p>
         <h1 className="max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-          AI-powered property valuation and investment analysis
+          AI-Powered property valuation and investment analysis
         </h1>
         <p className="mt-6 max-w-2xl text-base text-slate-500 sm:text-lg dark:text-slate-300">
           Analyze NYC residential properties with a production-ready AI workflow.
@@ -240,14 +256,14 @@ export default function Home() {
           >
             Analyze Property
           </Link>
-          <a
+          {/* <a
             href={`${import.meta.env.VITE_API_BASE_URL}/docs`}
             target="_blank"
             rel="noreferrer"
             className="rounded-xl border border-slate-200 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
           >
             View API Docs
-          </a>
+          </a> */}
         </div>
       </section>
 
@@ -284,11 +300,11 @@ export default function Home() {
 
       {/* Features — carousel on small screens, grid from md up */}
       <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
-        <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+        <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
           Product
         </p>
         <h2 className="mt-2 text-center text-2xl font-bold text-slate-900 dark:text-white">
-          What you get
+          What You Get
         </h2>
         <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-500 dark:text-slate-400">
           On phones, swipe or use the arrows — features rotate automatically unless you prefer reduced motion.
@@ -302,6 +318,9 @@ export default function Home() {
           ))}
         </div>
       </section>
+      </div>
+
+      <Footer />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { BarChart3, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import DealLabelBadge from '../components/DealLabelBadge'
 import { useAuth } from '../context/AuthContext'
 import { getProperties, deleteProperty } from '../services/propertiesApi'
@@ -137,10 +138,10 @@ export default function Portfolio() {
   const isFiltered = filterLabel !== 'All'
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className="flex min-h-screen flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
-      <section className="mx-auto max-w-6xl px-6 pb-16 pt-24">
+      <section className="mx-auto flex-1 max-w-6xl px-6 pb-16 pt-24">
 
         {/* Header */}
         <div className="mb-6">
@@ -402,6 +403,8 @@ export default function Portfolio() {
           </div>
         )}
       </section>
+
+      <Footer />
     </div>
   )
 }
