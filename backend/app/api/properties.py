@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 
-from backend.app.core.security import verify_api_key
+from backend.app.core.auth import UserContext, get_current_user
 from backend.app.db.database import get_db
 from backend.app.db.models import Property, HousingData
 from backend.app.schemas.property import (
@@ -24,9 +24,14 @@ def create_property(
     request: Request,
     property: PropertyCreate,
     db: Session = Depends(get_db),
-    _: str = Depends(verify_api_key),
+    user: UserContext = Depends(get_current_user),
 ):
-    db_property = Property(**property.model_dump()) # automatically maps fields
+    data = property.model_dump()
+    # Attach the authenticated user's ID so each property belongs to its owner.
+    # API-key callers (scripts / CI) leave user_id null (service mode).
+    if user.auth_method == "jwt" and user.user_id:
+        data["user_id"] = user.user_id
+    db_property = Property(**data)
 
     db.add(db_property)
     
@@ -52,9 +57,13 @@ def get_properties(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: str = Depends(verify_api_key),
+    user: UserContext = Depends(get_current_user),
 ):
     query = db.query(Property)
+
+    # JWT users only see their own rows; API-key callers see all (service mode).
+    if user.auth_method == "jwt" and user.user_id:
+        query = query.filter(Property.user_id == user.user_id)
 
     if zipcode:
         query = query.filter(Property.zipcode == zipcode)
@@ -76,11 +85,15 @@ def get_property(
     request: Request,
     property_id: int, 
     db: Session = Depends(get_db),
-    _: str = Depends(verify_api_key),
+    user: UserContext = Depends(get_current_user),
 ):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
 
     if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    # JWT users can only read their own properties.
+    if user.auth_method == "jwt" and user.user_id and property_obj.user_id != user.user_id:
         raise HTTPException(status_code=404, detail="Property not found")
 
     return property_obj
@@ -95,11 +108,14 @@ def update_property(
     property_id: int,
     property_update: PropertyUpdate,
     db: Session = Depends(get_db),
-    _: str = Depends(verify_api_key),
+    user: UserContext = Depends(get_current_user),
 ):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
 
     if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    if user.auth_method == "jwt" and user.user_id and property_obj.user_id != user.user_id:
         raise HTTPException(status_code=404, detail="Property not found")
 
     update_data = property_update.model_dump(exclude_unset=True)
@@ -123,7 +139,7 @@ def delete_property(
     request: Request,
     property_id: int,
     db: Session = Depends(get_db),
-    _: str = Depends(verify_api_key),
+    user: UserContext = Depends(get_current_user),
 ):
     property_obj = db.query(Property).filter(Property.id == property_id).first()
     
@@ -132,6 +148,9 @@ def delete_property(
             status_code=404, 
             detail="Property not found",
         )
+
+    if user.auth_method == "jwt" and user.user_id and property_obj.user_id != user.user_id:
+        raise HTTPException(status_code=404, detail="Property not found")
         
     db.delete(property_obj)
     try:
@@ -158,7 +177,7 @@ def lookup_housing(
     lng: float = Query(...),
     borough: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     distance = func.sqrt(
         func.power(HousingData.latitude - lat, 2) +

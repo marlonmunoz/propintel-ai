@@ -5,9 +5,10 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.db.database import Base, engine, SessionLocal
 from backend.app.db.models import HousingData
-from backend.app.core.security import verify_api_key
+from backend.app.core.auth import UserContext, get_current_user
 
-app.dependency_overrides[verify_api_key] = lambda: "test_key"
+_MOCK_USER = UserContext(user_id=None, email=None, auth_method="api_key", role="admin")
+app.dependency_overrides[get_current_user] = lambda: _MOCK_USER
 
 Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -77,9 +78,9 @@ def test_delete_property():
 
 
 def test_create_property_missing_api_key():
-    app.dependency_overrides.pop(verify_api_key, None)
+    app.dependency_overrides.pop(get_current_user, None)
     response = client.post("/properties/", json=PROPERTY_PAYLOAD)
-    app.dependency_overrides[verify_api_key] = lambda: "test_key"
+    app.dependency_overrides[get_current_user] = lambda: _MOCK_USER
     assert response.status_code == 401
     assert response.json()["error"] is True
 

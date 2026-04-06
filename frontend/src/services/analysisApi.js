@@ -1,29 +1,39 @@
+import { supabase } from '../lib/supabase'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
-const API_KEY = import.meta.env.VITE_API_KEY
+
+async function getAuthHeaders() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const token = session?.access_token
+  return {
+    'Content-Type': 'application/json',
+    ...(token
+      ? { Authorization: `Bearer ${token}` }
+      : { 'X-API-Key': import.meta.env.VITE_API_KEY }),
+  }
+}
 
 export async function analyzeProperty(payload) {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${API_BASE_URL}/analyze-property-v2`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
-    },
+    headers,
     body: JSON.stringify(payload),
   })
 
   if (!response.ok) {
     let errorMessage = 'Failed to analyze property'
-
     try {
       const errorData = await response.json()
-      errorMessage = errorData.message || errorMessage
+      errorMessage = errorData.detail || errorData.message || errorMessage
     } catch {
-      // Keep fallback message if response is not valid JSON
+      // Keep fallback message
     }
-
     throw new Error(errorMessage)
   }
 
-  const data = await response.json()
-  return data
+  return await response.json()
 }

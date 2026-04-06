@@ -271,3 +271,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Un-ignore frontend source folders that match generic Python venv rules above
+!frontend/src/lib/
+!frontend/src/lib/**

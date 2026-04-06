@@ -30,7 +30,18 @@ class PropertyResponse(PropertyBase):
     id: int
     analysis: Optional[Any] = None
     created_at: Optional[datetime] = None
+    user_id: Optional[str] = None
 
     model_config = {
         "from_attributes": True
     }
+
+
+class UserProfileResponse(BaseModel):
+    user_id: str
+    email: str
+    display_name: Optional[str] = None
+    role: str
+    marketing_opt_in: bool
+
+    model_config = {"from_attributes": True}
