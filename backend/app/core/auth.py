@@ -17,6 +17,7 @@ import jwt
 from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.db.database import get_db
@@ -192,6 +193,40 @@ async def get_current_user(
 
 
 # ---------------------------------------------------------------------------
+# Profile lookup — tolerant of UUID string casing and manual SQL edits
+# ---------------------------------------------------------------------------
+def get_profile_for_jwt_user(db: Session, user: UserContext):
+    """Load `profiles` row for a JWT user: match id (case-insensitive), else email."""
+    from backend.app.db.models import Profile  # noqa: PLC0415
+
+    if user.auth_method != "jwt":
+        return None
+
+    uid = (user.user_id or "").strip()
+    if uid:
+        profile = (
+            db.query(Profile)
+            .filter(func.lower(Profile.id) == uid.lower())
+            .first()
+        )
+        if profile is not None:
+            return profile
+
+    email = (user.email or "").strip().lower()
+    if email:
+        return (
+            db.query(Profile)
+            .filter(func.lower(Profile.email) == email)
+            .first()
+        )
+    return None
+
+
+def _profile_is_admin(profile) -> bool:
+    return profile is not None and (profile.role or "").strip().lower() == "admin"
+
+
+# ---------------------------------------------------------------------------
 # Admin guard — use as an additional Depends on admin-only routes
 # ---------------------------------------------------------------------------
 async def require_admin(
@@ -205,11 +240,8 @@ async def require_admin(
     if user.auth_method == "api_key":
         return user
 
-    # Late import avoids circular dependency with models
-    from backend.app.db.models import Profile  # noqa: PLC0415
-
-    profile = db.query(Profile).filter(Profile.id == user.user_id).first()
-    if not profile or profile.role != "admin":
+    profile = get_profile_for_jwt_user(db, user)
+    if not _profile_is_admin(profile):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Admin access required.",
@@ -222,9 +254,7 @@ def is_app_admin(db: Session, user: UserContext) -> bool:
     """True for API-key callers or JWT users with profiles.role == 'admin'."""
     if user.auth_method == "api_key":
         return True
-    if user.auth_method != "jwt" or not user.user_id:
+    if user.auth_method != "jwt":
         return False
-    from backend.app.db.models import Profile  # noqa: PLC0415
-
-    profile = db.query(Profile).filter(Profile.id == user.user_id).first()
-    return profile is not None and profile.role == "admin"
+    profile = get_profile_for_jwt_user(db, user)
+    return _profile_is_admin(profile)
