@@ -15,7 +15,7 @@ from backend.app.schemas.prediction import (
 )
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
-from backend.app.core.security import verify_api_key
+from backend.app.core.auth import UserContext, get_current_user
 from backend.app.core.limiter import limiter
 from ml.inference.predict import (
     predict_price,
@@ -43,7 +43,7 @@ router = APIRouter(tags=["Prediction"])
 def predict_property_price(
     request: Request,
     payload: PredictionRequest,
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     result = predict_price(payload.model_dump())
     return result
@@ -64,7 +64,7 @@ def predict_property_price(
 def analyze_property_investment(
     request: Request,
     payload: AnalyzerPropertyRequest,
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     result = analyze_property(payload.model_dump())
     return result
@@ -84,7 +84,7 @@ def analyze_property_investment(
 def predict_property_price_public(
     request: Request,
     payload: PublicPredictionRequest,
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     result = predict_price_public(payload.model_dump())
     return result
@@ -106,7 +106,7 @@ def predict_property_price_public(
 def analyze_property_public_endpoint(
     request: Request,
     payload: PublicAnalyzeRequest,
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     result = analyze_property_public(payload.model_dump())
     return result
@@ -126,7 +126,7 @@ def analyze_property_public_endpoint(
 def get_feature_importance(
     request: Request,
     top_n: int = 10,
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     result = load_feature_importance(top_n=top_n)
     return result
@@ -158,7 +158,7 @@ def predict_property_price_v2(
     request: Request,
     payload: ProductionPredictionRequest,
     service: PredictionService = Depends(get_prediction_service),
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ) -> ProductionPredictionResponse:
     result = service.predict(payload)
     return ProductionPredictionResponse(**result)
@@ -180,7 +180,7 @@ def analyze_property_v2(
     request: Request,
     payload: ProductionAnalyzeRequest,
     service: PredictionService = Depends(get_prediction_service),
-    _: str = Depends(verify_api_key),
+    _: UserContext = Depends(get_current_user),
 ):
     result = service.analyze(payload)
     return result

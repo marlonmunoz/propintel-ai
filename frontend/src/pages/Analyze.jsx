@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
+import { supabase } from '../lib/supabase'
 import Navbar from '../components/Navbar'
 import DealLabelBadge from '../components/DealLabelBadge'
 
@@ -384,14 +385,17 @@ export default function Analyze() {
   // On failure or no match: silently does nothing — fields stay blank for manual entry.
   async function fetchPropertyDetails(lat, lng, borough) {
     const baseUrl = import.meta.env.VITE_API_BASE_URL
-    const apiKey  = import.meta.env.VITE_API_KEY
     if (!baseUrl) return
     setIsFetchingProperty(true)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const authHeader = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : { 'X-API-Key': import.meta.env.VITE_API_KEY }
       const params = new URLSearchParams({ lat, lng })
       if (borough) params.set('borough', borough)
       const url = `${baseUrl}/housing/lookup?${params}`
-      const res = await fetch(url, { headers: { 'X-API-Key': apiKey } })
+      const res = await fetch(url, { headers: authHeader })
       if (!res.ok) return
       const data = await res.json()
 
