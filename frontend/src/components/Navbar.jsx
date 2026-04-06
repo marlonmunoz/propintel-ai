@@ -125,7 +125,7 @@ export default function Navbar() {
                     <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</div>
                     {(profile?.role || '').toLowerCase() === 'admin' && (
                       <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
-                        Administrator — full portfolio access
+                        Admin — full portfolio access
                       </div>
                     )}
                   </div>
