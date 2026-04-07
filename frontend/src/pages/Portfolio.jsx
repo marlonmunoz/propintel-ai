@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
-import { BarChart3, Trash2 } from 'lucide-react'
+import { BarChart3, FileDown, FileSpreadsheet, Printer, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import DealLabelBadge from '../components/DealLabelBadge'
 import { useAuth } from '../context/AuthContext'
 import { getProperties, deleteProperty } from '../services/propertiesApi'
+import { downloadPropertyCsv, downloadPropertyPdf } from '../utils/portfolioReportExport'
+import { printPortfolioReport } from '../utils/portfolioReportPrint'
 
 function formatCurrency(value) {
   if (value == null) return '—'
@@ -323,14 +325,47 @@ export default function Portfolio() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {a && (
-                        <button
-                          onClick={() => setExpandedId(isExpanded ? null : property.id)}
-                          className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
-                        >
-                          {isExpanded ? 'Collapse' : 'Details'}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => printPortfolioReport(property)}
+                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            aria-label="Print report"
+                            title="Print report"
+                          >
+                            <Printer className="h-3.5 w-3.5 shrink-0" />
+                            Print
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void downloadPropertyPdf(property)}
+                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            aria-label="Download PDF"
+                            title="Download PDF"
+                          >
+                            <FileDown className="h-3.5 w-3.5 shrink-0" />
+                            PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => downloadPropertyCsv(property)}
+                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            aria-label="Download CSV"
+                            title="Download CSV"
+                          >
+                            <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                            CSV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(isExpanded ? null : property.id)}
+                            className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                          >
+                            {isExpanded ? 'Collapse' : 'Details'}
+                          </button>
+                        </>
                       )}
                       {confirmDeleteId === property.id ? (
                         <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5">
