@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '../../context/ThemeContext'
 
@@ -44,8 +44,16 @@ describe('Home page', () => {
   it('renders the hero heading', () => {
     renderHome()
     expect(
-      screen.getByRole('heading', { name: /AI-Powered property valuation/i })
+      screen.getByRole('heading', {
+        name: /Buy, hold, or sell—with NYC sales data behind your instinct/i,
+      })
     ).toBeInTheDocument()
+  })
+
+  it('renders consolidated hero copy (dual audience and crystal ball)', () => {
+    renderHome()
+    expect(screen.getByText(/buying a home or sizing an investment/i)).toBeInTheDocument()
+    expect(screen.getByText(/not a crystal ball/i)).toBeInTheDocument()
   })
 
   it('renders the "Analyze Property" CTA link', () => {
@@ -73,6 +81,9 @@ describe('Home page', () => {
 
   it('renders the Footer disclaimer', () => {
     renderHome()
-    expect(screen.getByText(/not financial, legal, or investment advice/i)).toBeInTheDocument()
+    const footer = screen.getByRole('contentinfo')
+    expect(
+      within(footer).getByText(/not financial, legal, or investment advice/i)
+    ).toBeInTheDocument()
   })
 })
