@@ -331,7 +331,7 @@ export default function Portfolio() {
                           <button
                             type="button"
                             onClick={() => printPortfolioReport(property)}
-                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            className="flex items-center gap-1.5 rounded-xl border border-sky-400/60 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-800 transition hover:border-sky-500 hover:bg-sky-500/15 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:border-sky-300 dark:hover:bg-sky-400/20"
                             aria-label="Print report"
                             title="Print report"
                           >
@@ -341,7 +341,7 @@ export default function Portfolio() {
                           <button
                             type="button"
                             onClick={() => void downloadPropertyPdf(property)}
-                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            className="flex items-center gap-1.5 rounded-xl border border-rose-400/60 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-800 transition hover:border-rose-500 hover:bg-rose-500/15 dark:border-rose-400/50 dark:bg-rose-400/10 dark:text-rose-200 dark:hover:border-rose-300 dark:hover:bg-rose-400/20"
                             aria-label="Download PDF"
                             title="Download PDF"
                           >
@@ -351,7 +351,7 @@ export default function Portfolio() {
                           <button
                             type="button"
                             onClick={() => downloadPropertyCsv(property)}
-                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            className="flex items-center gap-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:border-emerald-500 hover:bg-emerald-500/15 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:border-emerald-300 dark:hover:bg-emerald-400/20"
                             aria-label="Download CSV"
                             title="Download CSV"
                           >
@@ -361,7 +361,7 @@ export default function Portfolio() {
                           <button
                             type="button"
                             onClick={() => setExpandedId(isExpanded ? null : property.id)}
-                            className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+                            className="rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-900 transition hover:border-cyan-500 hover:bg-cyan-500/15 dark:border-cyan-400/50 dark:bg-cyan-400/10 dark:text-cyan-300 dark:hover:border-cyan-300 dark:hover:bg-cyan-400/20"
                           >
                             {isExpanded ? 'Collapse' : 'Details'}
                           </button>
