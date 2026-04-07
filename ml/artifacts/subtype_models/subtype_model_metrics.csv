@@ -1,2 +1,2 @@
 subtype,rows,mae,rmse,r2,model_path
-multi_family,26931,205427.34618062002,320764.81689574406,0.7465315428615331,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/multi_family_price_model.pkl
+condo_coop,17496,289840.37615625,492465.4768629856,0.8010888779629213,/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/subtype_models/condo_coop_price_model.pkl
