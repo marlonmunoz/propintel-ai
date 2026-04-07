@@ -257,107 +257,116 @@ export default function Portfolio() {
                   className="rounded-2xl border border-slate-200 bg-slate-50 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-600"
                 >
                   {/* Card header — always visible */}
-                  <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-                    <div className="flex items-center gap-4">
-                      <span className="flex h-7 min-w-[28px] flex-shrink-0 items-center justify-center rounded-lg bg-slate-200 px-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                        {property.id}
-                      </span>
-                      <div>
-                        <p className="font-semibold text-slate-900 dark:text-white">{property.address}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          {inv?.deal_label ? <DealLabelBadge label={inv.deal_label} size="sm" /> : null}
-                          {inv?.investment_score != null ? (
-                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                              Score {inv.investment_score}/100
-                            </span>
-                          ) : null}
-                          {property.created_at && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">
-                              Saved {new Date(property.created_at).toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          )}
+                  <div className="space-y-4 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <span className="flex h-7 min-w-[28px] flex-shrink-0 items-center justify-center rounded-lg bg-slate-200 px-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          {property.id}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 dark:text-white">{property.address}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            {inv?.deal_label ? <DealLabelBadge label={inv.deal_label} size="sm" /> : null}
+                            {inv?.investment_score != null ? (
+                              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                Score {inv.investment_score}/100
+                              </span>
+                            ) : null}
+                            {property.created_at && (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
+                                Saved {new Date(property.created_at).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-6 text-sm">
+                        {valuation && (
+                          <>
+                            <div className="text-right">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">Predicted</p>
+                              <p className="font-semibold text-cyan-600 dark:text-cyan-400">
+                                {formatCurrency(valuation.predicted_price)}
+                              </p>
+                              {valuation.price_low != null && valuation.price_high != null ? (
+                                <p className="mt-0.5 max-w-[11rem] text-right text-[10px] leading-tight text-slate-400 dark:text-slate-500">
+                                  Range {formatCurrency(valuation.price_low)} –{' '}
+                                  {formatCurrency(valuation.price_high)}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">Market</p>
+                              <p className="font-semibold text-slate-900 dark:text-white">
+                                {formatCurrency(valuation.market_price)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">Difference</p>
+                              <p className={`font-semibold ${valuation.price_difference >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                {formatPercent(valuation.price_difference_pct)}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                        {inv && (
+                          <div className="text-right">
+                            <p className="text-xs text-slate-400 dark:text-slate-500">ROI Est.</p>
+                            <p className="font-semibold text-slate-900 dark:text-white">
+                              {formatPercent(inv.roi_estimate)}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-6 text-sm">
-                      {valuation && (
-                        <>
-                          <div className="text-right">
-                            <p className="text-xs text-slate-400 dark:text-slate-500">Predicted</p>
-                            <p className="font-semibold text-cyan-600 dark:text-cyan-400">
-                              {formatCurrency(valuation.predicted_price)}
-                            </p>
-                            {valuation.price_low != null && valuation.price_high != null ? (
-                              <p className="mt-0.5 max-w-[11rem] text-right text-[10px] leading-tight text-slate-400 dark:text-slate-500">
-                                Range {formatCurrency(valuation.price_low)} –{' '}
-                                {formatCurrency(valuation.price_high)}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-slate-400 dark:text-slate-500">Market</p>
-                            <p className="font-semibold text-slate-900 dark:text-white">
-                              {formatCurrency(valuation.market_price)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-slate-400 dark:text-slate-500">Difference</p>
-                            <p className={`font-semibold ${valuation.price_difference >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                              {formatPercent(valuation.price_difference_pct)}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      {inv && (
-                        <div className="text-right">
-                          <p className="text-xs text-slate-400 dark:text-slate-500">ROI Est.</p>
-                          <p className="font-semibold text-slate-900 dark:text-white">
-                            {formatPercent(inv.roi_estimate)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {a && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => printPortfolioReport(property)}
+                              className="flex items-center gap-1.5 rounded-xl border border-sky-400/60 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-800 transition hover:border-sky-500 hover:bg-sky-500/15 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:border-sky-300 dark:hover:bg-sky-400/20"
+                              aria-label="Print report"
+                              title="Print report"
+                            >
+                              <Printer className="h-3.5 w-3.5 shrink-0" />
+                              Print
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void downloadPropertyPdf(property)}
+                              className="flex items-center gap-1.5 rounded-xl border border-rose-400/60 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-800 transition hover:border-rose-500 hover:bg-rose-500/15 dark:border-rose-400/50 dark:bg-rose-400/10 dark:text-rose-200 dark:hover:border-rose-300 dark:hover:bg-rose-400/20"
+                              aria-label="Download PDF"
+                              title="Download PDF"
+                            >
+                              <FileDown className="h-3.5 w-3.5 shrink-0" />
+                              PDF
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadPropertyCsv(property)}
+                              className="flex items-center gap-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:border-emerald-500 hover:bg-emerald-500/15 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:border-emerald-300 dark:hover:bg-emerald-400/20"
+                              aria-label="Download CSV"
+                              title="Download CSV"
+                            >
+                              <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                              CSV
+                            </button>
+                          </>
+                        )}
+                      </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      {a && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => printPortfolioReport(property)}
-                            className="flex items-center gap-1.5 rounded-xl border border-sky-400/60 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-800 transition hover:border-sky-500 hover:bg-sky-500/15 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:border-sky-300 dark:hover:bg-sky-400/20"
-                            aria-label="Print report"
-                            title="Print report"
-                          >
-                            <Printer className="h-3.5 w-3.5 shrink-0" />
-                            Print
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void downloadPropertyPdf(property)}
-                            className="flex items-center gap-1.5 rounded-xl border border-rose-400/60 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-800 transition hover:border-rose-500 hover:bg-rose-500/15 dark:border-rose-400/50 dark:bg-rose-400/10 dark:text-rose-200 dark:hover:border-rose-300 dark:hover:bg-rose-400/20"
-                            aria-label="Download PDF"
-                            title="Download PDF"
-                          >
-                            <FileDown className="h-3.5 w-3.5 shrink-0" />
-                            PDF
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => downloadPropertyCsv(property)}
-                            className="flex items-center gap-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:border-emerald-500 hover:bg-emerald-500/15 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:border-emerald-300 dark:hover:bg-emerald-400/20"
-                            aria-label="Download CSV"
-                            title="Download CSV"
-                          >
-                            <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-                            CSV
-                          </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {a && (
                           <button
                             type="button"
                             onClick={() => setExpandedId(isExpanded ? null : property.id)}
@@ -365,33 +374,36 @@ export default function Portfolio() {
                           >
                             {isExpanded ? 'Collapse' : 'Details'}
                           </button>
-                        </>
-                      )}
-                      {confirmDeleteId === property.id ? (
-                        <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5">
-                          <span className="text-sm text-rose-600 dark:text-rose-300">Delete?</span>
+                        )}
+                        {confirmDeleteId === property.id ? (
+                          <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5">
+                            <span className="text-sm text-rose-600 dark:text-rose-300">Delete?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(property.id)}
+                              className="text-sm font-semibold text-rose-500 transition hover:text-rose-400 dark:text-rose-400 dark:hover:text-rose-300"
+                            >
+                              Yes
+                            </button>
+                            <span className="text-slate-300 dark:text-slate-600">·</span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-sm font-semibold text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
                           <button
-                            onClick={() => handleDelete(property.id)}
-                            className="text-sm font-semibold text-rose-500 transition hover:text-rose-400 dark:text-rose-400 dark:hover:text-rose-300"
+                            type="button"
+                            onClick={() => setConfirmDeleteId(property.id)}
+                            className="flex items-center gap-1 rounded-xl border border-rose-500/30 px-3 py-1.5 text-sm text-rose-500 transition hover:bg-rose-500/10 dark:text-rose-400"
                           >
-                            Yes
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
                           </button>
-                          <span className="text-slate-300 dark:text-slate-600">·</span>
-                          <button
-                            onClick={() => setConfirmDeleteId(null)}
-                            className="text-sm font-semibold text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmDeleteId(property.id)}
-                          className="flex items-center gap-1 rounded-xl border border-rose-500/30 px-3 py-1.5 text-sm text-rose-500 transition hover:bg-rose-500/10 dark:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </button>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
 
