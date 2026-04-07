@@ -238,18 +238,19 @@ export default function Home() {
 
       <div className="flex min-w-0 flex-1 flex-col">
       {/* Hero — top-aligned so metrics/features stay above the fold on more screens */}
-      <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-14 pt-20 text-center sm:px-6 sm:pb-16 sm:pt-24">
-        <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
+      <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-12 pt-16 text-center sm:px-6 sm:pb-14 sm:pt-20">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-cyan-600 dark:text-cyan-400">
           PropIntel AI
         </p>
-        <h1 className="max-w-4xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-          AI-Powered property valuation and investment analysis
+        <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+          Buy, hold, or sell—with NYC sales data behind your instinct
         </h1>
-        <p className="mt-6 max-w-2xl text-base text-slate-500 sm:text-lg dark:text-slate-300">
-          Analyze NYC residential properties with a production-ready AI workflow.
-          Get valuations, investment scores, and LLM-generated deal narratives in seconds.
+        <p className="mt-5 max-w-xl text-sm leading-relaxed text-slate-500 sm:text-base dark:text-slate-400">
+          Valuations, deal signals, and plain language—whether you are buying a home or sizing an
+          investment—grounded in NYC residential sales. Decision support, not a crystal ball. Not
+          financial, legal, or investment advice.
         </p>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <Link
             to="/analyze"
             className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
@@ -306,7 +307,7 @@ export default function Home() {
         <h2 className="mt-2 text-center text-2xl font-bold text-slate-900 dark:text-white">
           What You Get
         </h2>
-        <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-500 dark:text-slate-400">
+        <p className="mx-auto mt-2 mb-6 max-w-xl text-center text-sm text-slate-500 md:mb-0 dark:text-slate-400">
           On phones, swipe or use the arrows — features rotate automatically unless you prefer reduced motion.
         </p>
 
