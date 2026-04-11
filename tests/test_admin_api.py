@@ -2,6 +2,11 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 
+import backend.app.db.models  # noqa: F401 — register MapboxUsage on Base
+from backend.app.db.database import Base, engine
+
+Base.metadata.create_all(bind=engine)
+
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -27,6 +32,14 @@ def test_admin_overview_ok_with_api_key():
         assert "today_total_calls" in data["llm"]
         assert "last_7_days_by_date" in data["llm"]
         assert "top_users_last_7_days" in data["llm"]
+        assert "mapbox" in data
+        assert "today_total_requests" in data["mapbox"]
+        assert "requests_last_7_days_total" in data["mapbox"]
+        assert "requests_month_to_date_utc" in data["mapbox"]
+        assert "monthly_free_requests_cap" in data["mapbox"]
+        assert "month_utc_label" in data["mapbox"]
+        assert "last_7_days_by_date" in data["mapbox"]
+        assert "top_users_last_7_days" in data["mapbox"]
         assert "as_of" in data
     finally:
         if prev is not None:
