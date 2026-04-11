@@ -153,19 +153,6 @@ const QUOTA_EXHAUSTED_RESULT = {
   metadata: { model_version: 'v2' },
 }
 
-async function fillAndSubmitMinimalForm(user) {
-  await user.selectOptions(screen.getByRole('combobox', { name: /borough/i }), 'Brooklyn')
-  await user.type(screen.getByPlaceholderText(/neighborhood/i), 'Park Slope')
-  await user.selectOptions(screen.getAllByRole('combobox')[1], '02 TWO FAMILY DWELLINGS')
-  await user.type(screen.getByPlaceholderText(/e\.g\. 1925|year/i), '1925')
-  await user.type(screen.getByPlaceholderText(/e\.g\. 2000|gross sq/i), '2000')
-  await user.type(screen.getByPlaceholderText(/e\.g\. 1500|land sq/i), '1500')
-  await user.type(screen.getByPlaceholderText(/40\./), '40.6720')
-  await user.type(screen.getByPlaceholderText(/-73\./), '-73.9778')
-  await user.type(screen.getByPlaceholderText(/1250000|market price/i), '1250000')
-  await user.click(screen.getByRole('button', { name: /Run Analysis/i }))
-}
-
 describe('Analyze page — quota-exceeded explanation card', () => {
   it('renders upgrade card instead of explanation panels when backend returns quota text', async () => {
     mockAnalyzeProperty.mockResolvedValueOnce(QUOTA_EXHAUSTED_RESULT)
