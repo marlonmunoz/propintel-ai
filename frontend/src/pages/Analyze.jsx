@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import DealLabelBadge from '../components/DealLabelBadge'
+import PropertyLocationMap from '../components/PropertyLocationMap'
 
 const boroughOptions = [
   'Bronx',
@@ -657,6 +658,12 @@ export default function Analyze() {
                   )}
                 </div>
               </div>
+
+              {/* Location preview map — only shown once lat/lng are confirmed via geocode */}
+              <PropertyLocationMap
+                lat={Number(formData.latitude) || null}
+                lng={Number(formData.longitude) || null}
+              />
 
               {/* Loading banner — shown while backend housing/lookup is in flight.
                   Appears between the search box and the form fields so the user knows
