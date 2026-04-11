@@ -86,19 +86,6 @@ export default function Navbar() {
             <>
               {navLink('/analyze', 'Analyze')}
               {navLink('/portfolio', 'Portfolio')}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className={`inline-flex items-center gap-1.5 text-sm font-medium transition md:inline-flex ${
-                    location.pathname === '/admin'
-                      ? 'font-semibold text-cyan-600 dark:text-cyan-400'
-                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                  }`}
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Admin
-                </Link>
-              )}
             </>
           )}
 
@@ -243,20 +230,6 @@ export default function Navbar() {
               <>
                 {navLink('/analyze', 'Analyze')}
                 {navLink('/portfolio', 'Portfolio')}
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                      location.pathname === '/admin'
-                        ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white'
-                    }`}
-                    onClick={() => setMobileNavOpen(false)}
-                  >
-                    <LayoutDashboard className="h-4 w-4 shrink-0" />
-                    Admin
-                  </Link>
-                )}
               </>
             )}
             <a
