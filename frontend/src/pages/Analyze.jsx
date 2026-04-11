@@ -287,7 +287,10 @@ export default function Analyze() {
   function handleUsePreset(presetName) {
     const preset = samplePresets[presetName]
     if (!preset) return
-    setFormData(preset)
+    // Merge into initialForm so every key stays defined (strings, never undefined).
+    // Presets omit total_units; replacing the whole object would make controlled
+    // inputs switch from defined → undefined and trigger React warnings.
+    setFormData({ ...initialForm, ...preset })
     setFormErrors({})
     setError('')
     setAnalysisResult(null)
