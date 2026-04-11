@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { BookmarkPlus, CheckCircle2, MapPin, Sparkles } from 'lucide-react'
+import { BookmarkPlus, CheckCircle2, Crown, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
 import { recordMapboxGeocodeUsage } from '../services/geocodeUsageApi'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import DealLabelBadge from '../components/DealLabelBadge'
@@ -246,6 +247,7 @@ function validateForm(formData) {
 }
 
 export default function Analyze() {
+  const { quota, refreshQuota } = useAuth()
   const [formData, setFormData] = useState(initialForm)
   const [formErrors, setFormErrors] = useState({})
   const [analysisResult, setAnalysisResult] = useState(null)
@@ -476,6 +478,7 @@ export default function Analyze() {
       const payload = buildPayload()
       const result = await analyzeProperty(payload)
       setAnalysisResult(result)
+      void refreshQuota()
     } catch (err) {
       setError(err.message || 'Something went wrong while analyzing.')
     } finally {
@@ -869,7 +872,7 @@ export default function Analyze() {
                 </div>
               </div>
 
-              <div className="flex justify-center">
+              <div className="flex flex-col items-center gap-3">
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -877,6 +880,26 @@ export default function Analyze() {
                 >
                   {isLoading ? 'Running Analysis...' : 'Run Analysis'}
                 </button>
+                {quota && quota.daily_limit !== null && (
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                    quota.remaining === 0
+                      ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-400'
+                      : quota.remaining <= 3
+                        ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                        : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
+                  }`}>
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      quota.remaining === 0
+                        ? 'bg-rose-500'
+                        : quota.remaining <= 3
+                          ? 'bg-amber-500'
+                          : 'bg-cyan-500'
+                    }`} />
+                    {quota.remaining === 0
+                      ? 'Daily AI quota reached — upgrade for more'
+                      : `${quota.remaining} of ${quota.daily_limit} AI analyses left today`}
+                  </span>
+                )}
               </div>
 
               {error ? (
@@ -1072,22 +1095,52 @@ export default function Analyze() {
                       AI Explanation
                     </h3>
                   </div>
-                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                    {[
-                      { label: 'Summary', text: analysisResult.explanation.summary },
-                      { label: 'Opportunity', text: analysisResult.explanation.opportunity },
-                      { label: 'Risks', text: analysisResult.explanation.risks },
-                    ].map(({ label, text }) => (
-                      <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          {label}
-                        </p>
-                        <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                          {text}
-                        </p>
+                  {analysisResult.explanation.summary?.startsWith('Daily AI explanation quota reached') ? (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800/50 dark:bg-amber-950/20">
+                      <div className="flex items-start gap-3">
+                        <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                        <div>
+                          <p className="font-semibold text-slate-900 dark:text-white">
+                            Daily AI quota reached
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                            You&apos;ve used all your AI-powered explanation calls for today. The
+                            valuation, score, and drivers above are still accurate — only the
+                            narrative explanation is unavailable until your quota resets.
+                          </p>
+                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <Link
+                              to="/profile"
+                              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+                            >
+                              <Crown className="h-4 w-4" />
+                              Upgrade on Profile page
+                            </Link>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                              Quota resets daily at midnight UTC
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                      {[
+                        { label: 'Summary', text: analysisResult.explanation.summary },
+                        { label: 'Opportunity', text: analysisResult.explanation.opportunity },
+                        { label: 'Risks', text: analysisResult.explanation.risks },
+                      ].map(({ label, text }) => (
+                        <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            {label}
+                          </p>
+                          <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                            {text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">

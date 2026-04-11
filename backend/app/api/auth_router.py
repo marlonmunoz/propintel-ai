@@ -5,14 +5,16 @@ GET   /auth/me  — returns the current user's profile, creating it on first cal
 PATCH /auth/me  — update display name and marketing preferences.
 """
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.core.auth import UserContext, get_current_user, get_profile_for_jwt_user, is_app_admin
+from backend.app.core.auth import UserContext, get_current_user, get_current_user_with_role, get_profile_for_jwt_user, is_app_admin
 from backend.app.core.limiter import limiter
 from backend.app.db.database import get_db
-from backend.app.db.models import Profile
-from backend.app.schemas.property import UserProfileResponse, UserProfileUpdate
+from backend.app.db.models import LLMUsage, Profile
+from backend.app.schemas.property import QuotaResponse, UserProfileResponse, UserProfileUpdate
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -149,4 +151,48 @@ def patch_me(
         display_name=profile.display_name,
         role=effective_role,
         marketing_opt_in=profile.marketing_opt_in,
+    )
+
+
+@limiter.limit("60/minute")
+@router.get(
+    "/quota",
+    response_model=QuotaResponse,
+    summary="Get current user's daily LLM quota status",
+    description=(
+        "Returns the caller's tier, daily LLM call limit, usage for today, "
+        "remaining calls, and the UTC date when the counter resets. "
+        "Admins and API-key callers receive daily_limit=null (unlimited)."
+    ),
+)
+def get_quota(
+    request: Request,
+    user: UserContext = Depends(get_current_user_with_role),
+    db: Session = Depends(get_db),
+) -> QuotaResponse:
+    from backend.app.services.explainer import _resolve_quota_limit
+
+    today = date.today().isoformat()
+    resets_at = (date.today() + timedelta(days=1)).isoformat()
+
+    limit = _resolve_quota_limit(user.role, user.auth_method)
+
+    used_today = 0
+    if user.user_id and limit is not None:
+        row = (
+            db.query(LLMUsage)
+            .filter(LLMUsage.user_id == user.user_id, LLMUsage.period_date == today)
+            .first()
+        )
+        if row:
+            used_today = row.call_count
+
+    remaining = None if limit is None else max(0, limit - used_today)
+
+    return QuotaResponse(
+        role=user.role,
+        daily_limit=limit,
+        used_today=used_today,
+        remaining=remaining,
+        resets_at=resets_at,
     )

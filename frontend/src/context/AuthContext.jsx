@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchProfile } from '../services/authApi'
+import { fetchProfile, fetchQuota } from '../services/authApi'
 
 const AuthContext = createContext(null)
 
@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState(null)
+  const [quota, setQuota] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -37,14 +38,34 @@ export function AuthProvider({ children }) {
     }
   }, [session?.access_token])
 
+  const refreshQuota = useCallback(async () => {
+    if (!session?.access_token) {
+      setQuota(null)
+      return
+    }
+    try {
+      const data = await fetchQuota()
+      setQuota(data)
+    } catch {
+      setQuota(null)
+    }
+  }, [session?.access_token])
+
   // Load FastAPI `profiles` row (creates on first GET /auth/me).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshProfile updates profile from API when session changes
     void refreshProfile()
   }, [refreshProfile])
 
+  // Fetch quota whenever the session changes (login / logout / token refresh).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshQuota updates quota from API when session changes
+    void refreshQuota()
+  }, [refreshQuota])
+
   const signOut = async () => {
     setProfile(null)
+    setQuota(null)
     await supabase.auth.signOut()
   }
 
@@ -55,6 +76,8 @@ export function AuthProvider({ children }) {
         user: session?.user ?? null,
         profile,
         refreshProfile,
+        quota,
+        refreshQuota,
         signOut,
         loading,
       }}

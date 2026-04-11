@@ -36,6 +36,14 @@ export async function ensureBackendProfile() {
   }
 }
 
+/** Fetches the current user's daily LLM quota status from GET /auth/quota. */
+export async function fetchQuota() {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/auth/quota`, { headers })
+  if (!res.ok) return null
+  return await res.json()
+}
+
 export async function updateProfile(payload) {
   const headers = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/auth/me`, {
