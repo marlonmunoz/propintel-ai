@@ -16,7 +16,7 @@ class Profile(Base):
     id = Column(Text, primary_key=True, index=True)        # Supabase auth UUID
     email = Column(String, nullable=False, default="")
     display_name = Column(String, nullable=True)
-    role = Column(String, nullable=False, default="user")  # "user" | "admin"
+    role = Column(String, nullable=False, default="user")  # "user" | "paid" | "admin"
     marketing_opt_in = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
 

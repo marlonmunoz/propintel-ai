@@ -8,7 +8,7 @@ import logging
 import os
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from backend.app.core.auth import UserContext, require_admin
 from backend.app.core.limiter import limiter
 from backend.app.db.database import get_db
 from backend.app.db.models import LLMUsage, MapboxUsage, Profile, Property
+from backend.app.schemas.property import AdminRoleUpdate
 
 logger = logging.getLogger("propintel")
 
@@ -178,3 +179,39 @@ def admin_overview(
         "mapbox": mapbox_payload,
         "as_of": today,
     }
+
+
+@limiter.limit("30/minute")
+@router.patch("/users/{user_id}/role", summary="Set a user's role (admin only)")
+def set_user_role(
+    request: Request,
+    user_id: str,
+    body: AdminRoleUpdate,
+    _: UserContext = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Update the role of any user profile.  Valid values are "user", "paid",
+    and "admin".  This is the authoritative way to grant paid-tier LLM quota
+    or admin privileges without touching the database directly.
+    """
+    profile = (
+        db.query(Profile)
+        .filter(func.lower(Profile.id) == user_id.strip().lower())
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User profile not found.")
+
+    previous_role = profile.role
+    profile.role = body.role
+    db.commit()
+    db.refresh(profile)
+
+    logger.info(
+        "admin role update | user_id=%s | %s -> %s",
+        profile.id,
+        previous_role,
+        profile.role,
+    )
+    return {"user_id": profile.id, "role": profile.role}

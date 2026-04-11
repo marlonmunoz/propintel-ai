@@ -436,6 +436,12 @@ All prediction routes require the same auth as above (**Bearer JWT** or **`X-API
 | `POST` | `/analyze-property-v2` | Full investment analysis with LLM explanation |
 | `GET` | `/model/feature-importance` | Top global feature importances |
 
+### Admin (admin JWT or API key)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/admin/overview` | Aggregate counts: profiles, properties, LLM usage, Mapbox usage |
+| `PATCH` | `/admin/users/{user_id}/role` | Set a user's role (`user`, `paid`, `admin`) |
+
 ### Legacy Routes (compatibility only)
 | Method | Endpoint |
 |---|---|
@@ -586,7 +592,10 @@ propintel-ai/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_prediction_api.py       # Prediction v1/v2, feature importance; overrides get_current_user
-│   └── test_property_api.py         # Property CRUD, housing lookup, filters; UserContext mocks
+│   ├── test_property_api.py         # Property CRUD, housing lookup, filters; UserContext mocks
+│   ├── test_llm_guardrails.py       # LLM schema validation, per-user quota, admin/api_key exemption
+│   ├── test_admin_api.py            # Admin overview, role PATCH, role enrichment logic
+│   └── test_geocode_usage_api.py    # Mapbox usage recording
 │
 ├── .github/
 │   └── workflows/
@@ -709,8 +718,10 @@ python -m backend.app.db.init_db
 
 | Table | Model | Description |
 |---|---|---|
-| `profiles` | `Profile` | One row per Supabase user: `id` (UUID), `email`, `display_name`, `role` (`user` / `admin`), `marketing_opt_in` |
+| `profiles` | `Profile` | One row per Supabase user: `id` (UUID), `email`, `display_name`, `role` (`user` / `paid` / `admin`), `marketing_opt_in` |
 | `properties` | `Property` | Saved property analyses — `user_id` links to owner; `analysis` JSONB stores the full `POST /analyze-property-v2` response |
+| `llm_usage` | `LLMUsage` | Per-user daily LLM call counter — enforces `LLM_QUOTA_FREE` / `LLM_QUOTA_PAID` limits |
+| `mapbox_usage` | `MapboxUsage` | Per-user daily Mapbox geocode request counter — reported by the frontend, shown in admin dashboard |
 | `housing_data` | `HousingData` | NYC training data loaded from CSV pipeline |
 
 ---
@@ -729,8 +740,11 @@ pytest
 |---|---|---|
 | `test_property_api.py` | 15 | CRUD, filters, housing lookup, `UserContext` mocks |
 | `test_prediction_api.py` | 9 | All prediction/analysis endpoints, model routing, validation, mock service |
+| `test_llm_guardrails.py` | 22 | Schema validation, per-user quota, quota fallback, admin/api_key exemption |
+| `test_admin_api.py` | 9 | Admin overview, role PATCH (promote/demote/invalid/403/404), role enrichment |
+| `test_geocode_usage_api.py` | 1 | Mapbox usage recording |
 
-**Total: 24 tests** (`pytest` from repo root)
+**Total: 56 tests** (`pytest` from repo root)
 
 ### Patterns used
 - `monkeypatch` for mocking legacy inference functions
@@ -870,7 +884,7 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - **JSON structured logging** — every request logged with method, path, status, duration, IP, and request UUID
 - **Request ID tracing** — `X-Request-ID` header returned on every response for log correlation
 - **Liveness + readiness endpoints** — `/health` (instant) and `/ready` (DB connectivity check)
-- **24 automated tests** — property CRUD, housing lookup, prediction v1/v2, mock `PredictionService`
+- **56 automated tests** — property CRUD, housing lookup, prediction v1/v2, LLM guardrails, admin role management, mock `PredictionService`
 - GitHub Actions CI workflow passing on push/PR to `main`
 - Test isolation: SQLite `test.db`, `DATABASE_URL` set before app import
 - Dockerfile for containerized API deployment
@@ -896,5 +910,4 @@ Current constraints of the valuation models:
 - Add macroeconomic indicators
 - Expand SHAP per-property explainability
 - Batch prediction endpoint for portfolio analysis
-- Portfolio sorting and filtering (by score, deal label, borough)
 - Optional admin tools (e.g. impersonation / “view as user”) with audit logging

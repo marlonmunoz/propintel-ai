@@ -19,7 +19,7 @@ from backend.app.schemas.prediction import (
 )
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
-from backend.app.core.auth import UserContext, get_current_user
+from backend.app.core.auth import UserContext, get_current_user, get_current_user_with_role
 from backend.app.core.limiter import limiter
 from slowapi.util import get_remote_address
 from ml.inference.predict import (
@@ -186,7 +186,7 @@ def analyze_property_v2(
     request: Request,
     payload: ProductionAnalyzeRequest,
     service: PredictionService = Depends(get_prediction_service),
-    user: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user_with_role),
     db: Session = Depends(get_db),
 ):
     result = service.analyze(
