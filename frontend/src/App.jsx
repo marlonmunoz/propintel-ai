@@ -7,6 +7,7 @@ import Portfolio from './pages/Portfolio'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Profile from './pages/Profile'
+import AdminDashboard from './pages/AdminDashboard'
 
 export default function App() {
   return (
@@ -39,6 +40,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />

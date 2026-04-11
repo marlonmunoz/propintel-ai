@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, Menu, Moon, Sun, User, X } from 'lucide-react'
+import { ChevronDown, LayoutDashboard, LogOut, Menu, Moon, Sun, User, X } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 
@@ -42,6 +42,7 @@ export default function Navbar() {
     user?.user_metadata?.full_name ||
     null
   const primaryLabel = displayName || user?.email?.split('@')[0] || 'Account'
+  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
 
   const navLinkClass = (to) =>
     `block rounded-lg px-3 py-2.5 text-sm font-medium transition md:inline-block md:rounded-none md:px-0 md:py-0 md:hover:bg-transparent ${
@@ -85,6 +86,19 @@ export default function Navbar() {
             <>
               {navLink('/analyze', 'Analyze')}
               {navLink('/portfolio', 'Portfolio')}
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className={`inline-flex items-center gap-1.5 text-sm font-medium transition md:inline-flex ${
+                    location.pathname === '/admin'
+                      ? 'font-semibold text-cyan-600 dark:text-cyan-400'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Admin
+                </Link>
+              )}
             </>
           )}
 
@@ -119,7 +133,7 @@ export default function Navbar() {
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 dark:text-slate-200">
                   {primaryLabel}
                 </span>
-                {(profile?.role || '').toLowerCase() === 'admin' && (
+                {isAdmin && (
                   <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
                     Admin
                   </span>
@@ -138,12 +152,22 @@ export default function Navbar() {
                       </div>
                     )}
                     <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</div>
-                    {(profile?.role || '').toLowerCase() === 'admin' && (
+                    {isAdmin && (
                       <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
                         Admin — full portfolio access
                       </div>
                     )}
                   </div>
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <LayoutDashboard className="h-4 w-4 text-slate-400" />
+                      Admin dashboard
+                    </Link>
+                  )}
                   <Link
                     to="/profile"
                     className="block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -219,6 +243,20 @@ export default function Navbar() {
               <>
                 {navLink('/analyze', 'Analyze')}
                 {navLink('/portfolio', 'Portfolio')}
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                      location.pathname === '/admin'
+                        ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white'
+                    }`}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <LayoutDashboard className="h-4 w-4 shrink-0" />
+                    Admin
+                  </Link>
+                )}
               </>
             )}
             <a
@@ -238,10 +276,20 @@ export default function Navbar() {
                   <p className="px-3 pt-2 text-sm font-semibold text-slate-900 dark:text-white">{displayName}</p>
                 )}
                 <p className="px-3 pb-2 text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
-                {(profile?.role || '').toLowerCase() === 'admin' && (
+                {isAdmin && (
                   <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
                     Admin — full portfolio access
                   </p>
+                )}
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    Admin dashboard
+                  </Link>
                 )}
                 <Link
                   to="/profile"

@@ -237,20 +237,20 @@ async def require_admin(
     db: Session = Depends(get_db),
 ) -> UserContext:
     """
-    Allow only users with role='admin' in the profiles table.
-    API-key callers are always treated as admin (service/CI access).
+    Allow only app admins — same rules as is_app_admin (API key, ADMIN_USER_IDS,
+    or profiles.role='admin'). Keeps /auth/me and admin-only routes consistent.
     """
     if user.auth_method == "api_key":
         return user
 
-    profile = get_profile_for_jwt_user(db, user)
-    if not _profile_is_admin(profile):
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-    user.role = "admin"
-    return user
+    if is_app_admin(db, user):
+        user.role = "admin"
+        return user
+
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        detail="Admin access required.",
+    )
 
 
 def is_app_admin(db: Session, user: UserContext) -> bool:
