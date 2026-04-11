@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
+import { recordMapboxGeocodeUsage } from '../services/geocodeUsageApi'
 import { supabase } from '../lib/supabase'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -338,6 +339,14 @@ export default function Analyze() {
       const res = await fetch(url)
       const data = await res.json()
       setSuggestions(data.features || [])
+      if (res.ok) {
+        void recordMapboxGeocodeUsage().catch((err) => {
+          if (import.meta.env.DEV) {
+            // Admin mapbox charts stay empty if this fails (auth, CORS, or missing DB table).
+            console.warn('[PropIntel] Geocode usage not recorded:', err?.message ?? err)
+          }
+        })
+      }
     } catch {
       setSuggestions([])
     } finally {

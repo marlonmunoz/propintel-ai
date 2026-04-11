@@ -71,6 +71,35 @@ class LLMUsage(Base):
     call_count  = Column(Integer, nullable=False, default=0)
 
 
+class MapboxUsage(Base):
+    """
+    Per-user daily Mapbox Geocoding forward-search request counter.
+
+    One row per (user_id, period_date). Incremented when the frontend reports a
+    successful autocomplete call (same pattern as LLMUsage — trusted client).
+
+    user_id — Supabase Auth UUID for JWT callers; 'api_key:service' for X-API-Key.
+
+    Postgres migration (run once on existing deployments):
+        CREATE TABLE IF NOT EXISTS mapbox_usage (
+            id          SERIAL PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            period_date VARCHAR(10) NOT NULL,
+            call_count  INTEGER NOT NULL DEFAULT 0,
+            CONSTRAINT  uq_mapbox_usage_user_date UNIQUE (user_id, period_date)
+        );
+    """
+    __tablename__ = "mapbox_usage"
+    __table_args__ = (
+        UniqueConstraint("user_id", "period_date", name="uq_mapbox_usage_user_date"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Text, nullable=False, index=True)
+    period_date = Column(String(10), nullable=False)
+    call_count = Column(Integer, nullable=False, default=0)
+
+
 class HousingData(Base):
     __tablename__ = "housing_data"
     
