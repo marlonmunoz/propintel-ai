@@ -95,9 +95,9 @@ export default function AdminDashboard() {
           <div>
             <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400">
               <LayoutDashboard className="h-6 w-6" />
-              <span className="text-sm font-semibold uppercase tracking-wide">Internal</span>
+              <span className="text-sm font-semibold uppercase tracking-wide text-[rgb(0,211,243)]">Internal</span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">Admin overview</h1>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">Admin Overview</h1>
             <p className="mt-1 max-w-xl text-sm text-slate-600 dark:text-slate-400">
               High-level counts plus LLM and Mapbox geocode usage from your database. OpenAI and Mapbox consoles remain the billing sources of truth.
             </p>
@@ -236,7 +236,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <h2 className="mb-3 mt-12 text-base font-semibold text-slate-900 dark:text-white">Mapbox geocoding</h2>
+            <h2 className="mb-3 mt-12 text-base font-semibold text-slate-900 dark:text-[rgb(0,211,243)]">Mapbox Geocoding</h2>
             <p className="mb-4 max-w-3xl text-sm text-slate-600 dark:text-slate-400">
               Geocoding on Mapbox’s pay-as-you-go plan is billed in{' '}
               <span className="font-medium text-slate-800 dark:text-slate-200">requests</span>, not LLM-style tokens.
