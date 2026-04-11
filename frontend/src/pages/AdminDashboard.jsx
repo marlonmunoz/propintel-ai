@@ -65,8 +65,6 @@ export default function AdminDashboard() {
       return
     }
     let cancelled = false
-    setLoading(true)
-    setError('')
     fetchAdminOverview()
       .then((json) => {
         if (!cancelled) setData(json)
