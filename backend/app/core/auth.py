@@ -253,6 +253,29 @@ async def require_admin(
     )
 
 
+async def get_current_user_with_role(
+    user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserContext:
+    """
+    Enriches UserContext.role from the profiles table for JWT callers.
+
+    API-key users already carry role="admin" from get_current_user and are
+    skipped. For JWT users the check order mirrors is_app_admin: ADMIN_USER_IDS
+    env-var first (no DB round-trip), then profiles.role as fallback.  This
+    means admins and paid-tier users get the correct quota treatment on
+    /analyze-property-v2 without any extra route changes.
+    """
+    if user.auth_method == "jwt":
+        if is_app_admin(db, user):
+            user.role = "admin"
+        else:
+            profile = get_profile_for_jwt_user(db, user)
+            if profile and profile.role:
+                user.role = profile.role.strip().lower()
+    return user
+
+
 def is_app_admin(db: Session, user: UserContext) -> bool:
     """
     True for:
