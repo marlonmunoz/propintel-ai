@@ -40,12 +40,14 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - LLM-generated investment narrative via OpenAI gpt-5.4-mini (Responses API)
 - Per-model-key warning system for low-confidence predictions
 - **Unified authentication** on API routes: Supabase **JWT** (`Authorization: Bearer`) or legacy **`X-API-Key`** (timing-safe comparison) — same `get_current_user` dependency for prediction, properties, and auth
+- **Role-based access tiers**: `user` (free, 10 AI analyses/day), `paid` (200/day), `admin` (unlimited) — enforced at the LLM service layer and surfaced via `GET /auth/quota`
+- **Mapbox server-side monthly cap** — `POST /geocode/usage` returns 429 when org-wide monthly usage hits `MAPBOX_MONTHLY_FREE_REQUEST_CAP`
 - Per-IP rate limiting with consistent JSON error envelope (slowapi)
 - CORS locked to explicit allowed origins, methods, and headers via environment variable
 - Unified error response envelope `{ error, status_code, message, detail }` for all error types
 - JSON structured logging with per-request UUID tracing and `X-Request-ID` response header
 - `/health` (liveness) and `/ready` (DB connectivity readiness) endpoints
-- Automated tests with pytest, monkeypatch, and `app.dependency_overrides`
+- **74 backend + 112 frontend automated tests** — pytest, monkeypatch, `app.dependency_overrides`; Vitest + React Testing Library
 - GitHub Actions CI pipeline running tests on push and PR to `main`
 - Docker + Docker Compose for containerized local and cloud deployment
 
@@ -55,11 +57,12 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 
 🟢 **Active — Production-Hardened Full-Stack AI Platform**
 
-All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (authentication, rate limiting, CORS, error handling, structured logging). Portfolio page redesigned to save and display analysis results.
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (authentication, rate limiting, CORS, error handling, structured logging). Paid tier feature implemented end-to-end. 186 total automated tests (74 backend, 112 frontend).
 
 **Current milestone:**
 - Full-stack platform live: React 19 frontend talking to FastAPI backend
 - **Supabase Auth** integrated: register / login, JWT sessions, `GET`/`PATCH /auth/me` profiles, per-user saved properties; optional **admin** via `profiles.role` and/or `ADMIN_USER_IDS` in server env (full portfolio visibility for admins)
+- **Paid tier feature** complete: `user` / `paid` / `admin` roles enforced on LLM quota; `GET /auth/quota` endpoint; quota pill on Analyze page; Paid badge in Navbar; tier card + quota bar + Stripe placeholder on Profile page
 - Real NYC Rolling Sales + PLUTO ingestion pipeline implemented
 - Residential-only feature engineering pipeline implemented
 - XGBoost pricing model trained on real NYC residential sales data
@@ -407,8 +410,14 @@ For analysis requests, `PredictionService.analyze()` additionally:
 |---|---|---|
 | `GET` | `/auth/me` | Current user profile (creates `profiles` row on first call) |
 | `PATCH` | `/auth/me` | Update display name and marketing preferences |
+| `GET` | `/auth/quota` | Daily LLM quota status — role, limit, used today, remaining, reset date |
 
 Send `Authorization: Bearer <supabase_access_token>` from the React app after login, or `X-API-Key` for scripts and OpenAPI testing.
+
+### Geocode usage
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/geocode/usage` | Record one Mapbox forward-geocode request. Returns 429 when org-wide monthly cap is exceeded |
 
 ### Properties
 | Method | Endpoint | Description |
@@ -527,24 +536,26 @@ propintel-ai/
 │       ├── api/
 │       │   ├── prediction.py        # All prediction/analysis endpoints (JWT or API key)
 │       │   ├── properties.py        # Property CRUD + housing lookup
-│       │   └── auth_router.py       # GET/PATCH /auth/me
+│       │   ├── auth_router.py       # GET/PATCH /auth/me, GET /auth/quota
+│       │   ├── admin.py             # GET /admin/overview, PATCH /admin/users/{id}/role
+│       │   └── geocode_usage.py     # POST /geocode/usage (Mapbox request counter + cap gate)
 │       ├── core/
 │       │   ├── config.py            # Path configuration
 │       │   ├── auth.py              # JWT (Supabase HS256/RS256) + API key → UserContext
-│       │   ├── security.py          # Legacy API-key helper (optional single-purpose routes)
 │       │   ├── limiter.py           # slowapi rate limiter instance
 │       │   └── error_handlers.py    # Unified error response handlers
 │       ├── db/
 │       │   ├── database.py          # SQLAlchemy engine + session
 │       │   ├── init_db.py           # Table creation script
-│       │   └── models.py            # ORM models (Property, Profile, HousingData)
+│       │   └── models.py            # ORM models (Property, Profile, LLMUsage, MapboxUsage, HousingData)
 │       ├── schemas/
 │       │   ├── prediction.py        # All prediction request/response schemas
-│       │   └── property.py          # Property request/response schemas
+│       │   └── property.py          # Property + auth schemas (UserProfileResponse, QuotaResponse, …)
 │       ├── services/
 │       │   ├── model_registry.py    # Metadata-driven model loader + routing
 │       │   ├── predictor.py         # PredictionService: predict + analyze
-│       │   └── explainer.py         # OpenAI LLM explanation generation
+│       │   ├── explainer.py         # OpenAI LLM explanation + per-role quota enforcement
+│       │   └── mapbox_usage.py      # Mapbox daily counter + org-wide monthly cap check
 │       ├── scripts/
 │       │   └── load_data.py         # Bulk load housing CSV into PostgreSQL
 │       └── main.py                  # FastAPI app entry point
@@ -595,7 +606,9 @@ propintel-ai/
 │   ├── test_property_api.py         # Property CRUD, housing lookup, filters; UserContext mocks
 │   ├── test_llm_guardrails.py       # LLM schema validation, per-user quota, admin/api_key exemption
 │   ├── test_admin_api.py            # Admin overview, role PATCH, role enrichment logic
-│   └── test_geocode_usage_api.py    # Mapbox usage recording
+│   ├── test_quota_api.py            # GET /auth/quota — all role/usage combinations
+│   ├── test_auth_me_api.py          # GET/PATCH /auth/me — profile creation, backfill, admin promo
+│   └── test_geocode_usage_api.py    # Mapbox usage recording + monthly cap 429
 │
 ├── .github/
 │   └── workflows/
@@ -613,12 +626,12 @@ propintel-ai/
 
 | Folder | Purpose |
 |---|---|
-| `frontend/` | React 19 UI — Home, Analyze (with Save to Portfolio), and Portfolio (saved analyses) pages |
-| `api/` | FastAPI route handlers |
+| `frontend/` | React 19 UI — Home, Analyze (quota pill, save to Portfolio), Portfolio, Profile (tier + quota bar), Admin Dashboard |
+| `api/` | FastAPI route handlers — prediction, properties, auth (`/me`, `/quota`), admin, geocode usage |
 | `core/` | JWT + API-key auth (`auth.py`), rate limiting, error handlers, path config |
-| `db/` | Database engine, session, and ORM models |
-| `schemas/` | Pydantic v2 request/response validation |
-| `services/` | ML prediction, investment scoring, LLM explanation |
+| `db/` | Database engine, session, and ORM models (`Profile`, `LLMUsage`, `MapboxUsage`, …) |
+| `schemas/` | Pydantic v2 request/response validation — includes `QuotaResponse`, `UserProfileResponse` |
+| `services/` | ML prediction, investment scoring, LLM explanation (with role-based quota), Mapbox usage + cap |
 | `ml/artifacts/` | Serialized model PKLs, metadata JSONs, feature importance |
 | `ml/data/` | Dataset ingestion and processing |
 | `ml/features/` | Feature engineering logic |
@@ -653,6 +666,13 @@ SUPABASE_JWT_SECRET=your-jwt-secret-from-supabase-dashboard
 
 # Optional: comma-separated Supabase user UUIDs treated as app admins (full portfolio + role in /auth/me)
 ADMIN_USER_IDS=00000000-0000-0000-0000-000000000000
+
+# LLM daily quota limits per role (defaults: free=10, paid=200)
+LLM_QUOTA_FREE=10
+LLM_QUOTA_PAID=200
+
+# Mapbox monthly org-wide geocoding cap (default: 100000)
+MAPBOX_MONTHLY_FREE_REQUEST_CAP=100000
 ```
 
 ### Frontend
@@ -734,7 +754,7 @@ Automated tests live in `tests/`.
 pytest
 ```
 
-### Test coverage
+### Backend test coverage
 
 | Test file | Tests | Coverage |
 |---|---|---|
@@ -742,9 +762,26 @@ pytest
 | `test_prediction_api.py` | 9 | All prediction/analysis endpoints, model routing, validation, mock service |
 | `test_llm_guardrails.py` | 22 | Schema validation, per-user quota, quota fallback, admin/api_key exemption |
 | `test_admin_api.py` | 9 | Admin overview, role PATCH (promote/demote/invalid/403/404), role enrichment |
-| `test_geocode_usage_api.py` | 1 | Mapbox usage recording |
+| `test_quota_api.py` | 7 | GET /auth/quota — free/paid/admin/api_key roles, usage states, 401 |
+| `test_auth_me_api.py` | 11 | GET/PATCH /auth/me — auto-creation, display-name backfill, admin promo, 400/401 |
+| `test_geocode_usage_api.py` | 1 | Mapbox usage recording + monthly cap 429 |
 
-**Total: 56 tests** (`pytest` from repo root)
+**Total backend: 74 tests** (`pytest` from repo root)
+
+### Frontend test coverage
+
+| Test file | Tests | Coverage |
+|---|---|---|
+| `adminApi.test.js` | 4 | Auth header, 403 FORBIDDEN code, error detail, fallback message |
+| `geocodeUsageApi.test.js` | 4 | POST method, 204 resolve, 429 throw, JSON body |
+| `AuthContext.test.jsx` | 8 | Loading, profile/quota fetch, no-session skip, sign-out clears both |
+| `Analyze.test.jsx` | 10 | Quota pill states (null/unlimited/remaining/exhausted), quota-exceeded card, form validation |
+| `Register.test.jsx` | 6 | Heading, inputs, password mismatch, min-length, success screen, Supabase error |
+| `Portfolio.test.jsx` | 4 | Heading, empty state, property card, sort dropdown |
+| `AdminDashboard.test.jsx` | 5 | Heading, stat labels, error message, Refresh button |
+| Other (Login, Profile, authApiQuota, …) | 71 | Sign-in form, tier card, quota bar, profile service calls |
+
+**Total frontend: 112 tests** (`npm run test` from `frontend/`)
 
 ### Patterns used
 - `monkeypatch` for mocking legacy inference functions
@@ -753,6 +790,9 @@ pytest
 - SQLite test database for full test isolation
 - Validation error tests for coordinate and year bounds
 - Auth exercised via dependency overrides; API key path still available for integration tests outside pytest overrides
+- Vitest + React Testing Library for all frontend tests
+- `vi.mock()` + `vi.hoisted()` for module mocking without initialization order issues
+- Mapbox `PropertyLocationMap` mocked in Analyze tests to prevent WebGL errors in jsdom
 
 ### CI Pipeline
 
@@ -825,10 +865,11 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - Live and integrated with FastAPI backend
 - **Supabase Auth** — `Login` / `Register`, `ProtectedRoute` for Analyze, Portfolio, and Profile
 - **Home page** — hero section with feature highlights
-- **Analyze page** — property form, Mapbox address autocomplete, v2 analysis, MAE-based valuation band (`price_low` / `price_high`), color-coded deal label badge, "Save to Portfolio"
-- **Portfolio page** — saved analyses with deal labels and valuation range
-- **Profile page** — display name and marketing preferences (`PATCH /auth/me`)
-- **Navbar** — theme toggle, account menu, **Admin** badge when `profile.role === 'admin'`
+- **Analyze page** — property form, Mapbox address autocomplete, v2 analysis, MAE-based valuation band (`price_low` / `price_high`), color-coded deal label badge, "Save to Portfolio"; quota pill shows remaining AI analyses with color-coded urgency states; quota-exceeded card with upgrade CTA replaces explanation panels when limit hit
+- **Portfolio page** — saved analyses with deal labels, valuation range, sort and filter controls
+- **Profile page** — tier card (Free / Paid / Admin), visual quota usage bar, Stripe upgrade placeholder for free users, display name and marketing preferences (`PATCH /auth/me`)
+- **Navbar** — theme toggle, account menu, **Admin** badge when `profile.role === 'admin'`; **Paid** badge when `profile.role === 'paid'`
+- **AuthContext** — `quota` state and `refreshQuota` hook globally available; auto-refreshed on session change and after each analysis
 
 ### Backend and Database
 - FastAPI backend with modular architecture
@@ -884,7 +925,7 @@ Models are lazy-loaded on first request and cached in memory by the `ModelRegist
 - **JSON structured logging** — every request logged with method, path, status, duration, IP, and request UUID
 - **Request ID tracing** — `X-Request-ID` header returned on every response for log correlation
 - **Liveness + readiness endpoints** — `/health` (instant) and `/ready` (DB connectivity check)
-- **56 automated tests** — property CRUD, housing lookup, prediction v1/v2, LLM guardrails, admin role management, mock `PredictionService`
+- **186 automated tests** (74 backend + 112 frontend) — property CRUD, housing lookup, prediction v1/v2, LLM guardrails, admin role management, auth/me profile lifecycle, quota API, AuthContext, Analyze page quota UI, Register, Portfolio, AdminDashboard
 - GitHub Actions CI workflow passing on push/PR to `main`
 - Test isolation: SQLite `test.db`, `DATABASE_URL` set before app import
 - Dockerfile for containerized API deployment
