@@ -326,7 +326,7 @@ class MockPredictionServiceGlobal:
                 "Using global residential fallback model for this property type."
             ],
         }
-    def analyze(self, payload):
+    def analyze(self, payload, **_kwargs):
         predicted_price = 650980.91
         market_price = payload.market_price
     

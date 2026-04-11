@@ -1,5 +1,9 @@
 from functools import lru_cache
+
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
+
+from backend.app.db.database import get_db
 from backend.app.schemas.prediction import (
     PredictionRequest,
     PredictionResponse,
@@ -17,12 +21,13 @@ from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
 from backend.app.core.auth import UserContext, get_current_user
 from backend.app.core.limiter import limiter
+from slowapi.util import get_remote_address
 from ml.inference.predict import (
     predict_price,
     analyze_property,
     predict_price_public,
     analyze_property_public,
-    load_feature_importance
+    load_feature_importance,
 )
 
 router = APIRouter(tags=["Prediction"])
@@ -165,6 +170,7 @@ def predict_property_price_v2(
 
 
 @limiter.limit("20/minute")
+@limiter.limit("80/minute", key_func=get_remote_address)
 @router.post(
     "/analyze-property-v2",
     response_model=ProductionAnalyzeResponse,
@@ -180,7 +186,14 @@ def analyze_property_v2(
     request: Request,
     payload: ProductionAnalyzeRequest,
     service: PredictionService = Depends(get_prediction_service),
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    result = service.analyze(payload)
+    result = service.analyze(
+        payload,
+        user_id=user.user_id,
+        role=user.role,
+        auth_method=user.auth_method,
+        db=db,
+    )
     return result

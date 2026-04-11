@@ -1,5 +1,6 @@
+from typing import Literal, Optional, Dict
+
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict
 
 class PredictionRequest(BaseModel):
     gross_square_feet: float = Field(..., gt=0)
@@ -227,23 +228,26 @@ class ProductionPredictionResponse(BaseModel):
 class LLMExplanation(BaseModel):
     summary: str = Field(
         ...,
-        description="Short overall explanation of the investment outlook."
+        max_length=600,
+        description="Short overall explanation of the investment outlook.",
     )
     opportunity: str = Field(
         ...,
-        description="Key upside or positive angle identified for the property."
+        max_length=600,
+        description="Key upside or positive angle identified for the property.",
     )
     risks: str = Field(
         ...,
-        description="Main risk factors or concerns associated with the property."
+        max_length=600,
+        description="Main risk factors or concerns associated with the property.",
     )
-    recommendation: str = Field(
+    recommendation: Literal["Buy", "Hold", "Avoid"] = Field(
         ...,
-        description="Human-readable recommendation generated from the analysis."
+        description="Must be exactly 'Buy', 'Hold', or 'Avoid'.",
     )
-    confidence: str = Field(
+    confidence: Literal["Low", "Medium", "High"] = Field(
         ...,
-        description="Qualitative confidence level for the explanation, such as low, medium, or high."
+        description="Must be exactly 'Low', 'Medium', or 'High'.",
     )
 
     model_config = {
@@ -252,8 +256,8 @@ class LLMExplanation(BaseModel):
                 "summary": "The property appears slightly overpriced relative to model-estimated value.",
                 "opportunity": "If acquired below asking price, the valuation gap may create a better entry point.",
                 "risks": "Current asking price reduces margin for upside and weakens near-term return potential.",
-                "recommendation": "Approach cautiously and negotiate closer to model-estimated value.",
-                "confidence": "medium"
+                "recommendation": "Hold",
+                "confidence": "Medium",
             }
         }
     }

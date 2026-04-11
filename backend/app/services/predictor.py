@@ -366,9 +366,13 @@ class PredictionService:
         
         
         
-    def analyze(self, request):
+    def analyze(self, request, *, user_id=None, role="user", auth_method="jwt", db=None):
         """
         Combines ML predictions with investment analysis logic.
+
+        Optional keyword arguments (user_id, role, auth_method, db) are
+        forwarded to generate_explanation for per-user LLM quota enforcement.
+        Callers that omit them get the same behaviour as before this change.
         """
         
         # 1. Run prediciton 
@@ -459,25 +463,19 @@ class PredictionService:
             },
         ]
         
-        try:
-            llm_explanation = generate_explanation({
+        llm_explanation = generate_explanation(
+            {
                 "predicted_price": predicted_price,
                 "market_price": market_price,
                 "roi_estimate": roi_estimate,
                 "investment_score": investment_score,
                 "top_drivers": top_drivers,
-            })
-            if not isinstance(llm_explanation, dict):
-                raise ValueError("Invalid LLM explanation format")
-        except Exception as e:
-            logger.exception("LLM explanation failed")
-            llm_explanation = {
-                "summary": "AI explanation unavailable",
-                "opportunity": "N/A",
-                "risks": "N/A",
-                "recommendation": "Hold",
-                "confidence": "Low"
-            }
+            },
+            user_id=user_id,
+            role=role,
+            auth_method=auth_method,
+            db=db,
+        )
         
         
         price_difference_pct = (price_difference / market_price) * 100 if market_price > 0 else 0.0

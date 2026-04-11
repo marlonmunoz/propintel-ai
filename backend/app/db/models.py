@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, JSON, String, Float, DateTime, Text
+from sqlalchemy import Boolean, Column, Integer, JSON, String, Float, DateTime, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from backend.app.db.database import Base
 
@@ -40,6 +40,37 @@ class Property(Base):
     user_id = Column(Text, nullable=True, index=True)
     
     
+class LLMUsage(Base):
+    """
+    Per-user daily LLM explanation call counter.
+
+    One row per (user_id, period_date).  call_count is incremented before each
+    OpenAI call so quota is enforced without race conditions at low scale.
+
+    user_id  — Supabase Auth UUID for JWT callers; "api_key:service" for
+               X-API-Key callers (they are exempt from quota checks).
+    period_date — ISO-8601 date string (YYYY-MM-DD); resets daily naturally.
+
+    Postgres migration (run once on existing deployments):
+        CREATE TABLE IF NOT EXISTS llm_usage (
+            id          SERIAL PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            period_date VARCHAR(10) NOT NULL,
+            call_count  INTEGER NOT NULL DEFAULT 0,
+            CONSTRAINT  uq_llm_usage_user_date UNIQUE (user_id, period_date)
+        );
+    """
+    __tablename__ = "llm_usage"
+    __table_args__ = (
+        UniqueConstraint("user_id", "period_date", name="uq_llm_usage_user_date"),
+    )
+
+    id          = Column(Integer, primary_key=True, index=True)
+    user_id     = Column(Text, nullable=False, index=True)
+    period_date = Column(String(10), nullable=False)   # YYYY-MM-DD
+    call_count  = Column(Integer, nullable=False, default=0)
+
+
 class HousingData(Base):
     __tablename__ = "housing_data"
     
