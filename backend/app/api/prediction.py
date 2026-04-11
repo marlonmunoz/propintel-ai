@@ -21,7 +21,6 @@ from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
 from backend.app.core.auth import UserContext, get_current_user, get_current_user_with_role
 from backend.app.core.limiter import limiter
-from slowapi.util import get_remote_address
 from ml.inference.predict import (
     predict_price,
     analyze_property,
@@ -170,7 +169,6 @@ def predict_property_price_v2(
 
 
 @limiter.limit("20/minute")
-@limiter.limit("80/minute", key_func=get_remote_address)
 @router.post(
     "/analyze-property-v2",
     response_model=ProductionAnalyzeResponse,

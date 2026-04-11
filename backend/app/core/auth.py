@@ -295,8 +295,8 @@ def is_app_admin(db: Session, user: UserContext) -> bool:
         for uid in os.getenv("ADMIN_USER_IDS", "").split(",")
         if uid.strip()
     }
-    logger.info("ADMIN CHECK | jwt_sub=%s | admin_ids=%s | match=%s",
-                user.user_id, admin_ids, user.user_id.lower() in admin_ids)
+    logger.debug("ADMIN CHECK | jwt_sub=%s | admin_ids=%s | match=%s",
+                 user.user_id, admin_ids, user.user_id.lower() in admin_ids)
     if admin_ids and user.user_id.lower() in admin_ids:
         return True
 
