@@ -43,6 +43,7 @@ export default function Navbar() {
     null
   const primaryLabel = displayName || user?.email?.split('@')[0] || 'Account'
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  const isPaid = (profile?.role || '').toLowerCase() === 'paid'
 
   const navLinkClass = (to) =>
     `block rounded-lg px-3 py-2.5 text-sm font-medium transition md:inline-block md:rounded-none md:px-0 md:py-0 md:hover:bg-transparent ${
@@ -125,6 +126,11 @@ export default function Navbar() {
                     Admin
                   </span>
                 )}
+                {isPaid && !isAdmin && (
+                  <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+                    Paid
+                  </span>
+                )}
                 <ChevronDown
                   className={`h-4 w-4 shrink-0 text-slate-400 transition ${menuOpen ? 'rotate-180' : ''}`}
                 />
@@ -142,6 +148,11 @@ export default function Navbar() {
                     {isAdmin && (
                       <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
                         Admin — full portfolio access
+                      </div>
+                    )}
+                    {isPaid && !isAdmin && (
+                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                        Paid — 200 AI analyses / day
                       </div>
                     )}
                   </div>
@@ -252,6 +263,11 @@ export default function Navbar() {
                 {isAdmin && (
                   <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
                     Admin — full portfolio access
+                  </p>
+                )}
+                {isPaid && !isAdmin && (
+                  <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                    Paid — 200 AI analyses / day
                   </p>
                 )}
                 {isAdmin && (

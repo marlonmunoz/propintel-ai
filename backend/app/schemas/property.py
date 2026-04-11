@@ -54,3 +54,11 @@ class UserProfileUpdate(BaseModel):
 
 class AdminRoleUpdate(BaseModel):
     role: str = Field(..., pattern=r"^(user|paid|admin)$")
+
+
+class QuotaResponse(BaseModel):
+    role: str
+    daily_limit: Optional[int] = None
+    used_today: int
+    remaining: Optional[int] = None
+    resets_at: str
