@@ -25,6 +25,11 @@ import {
 
 const BASE = 'http://localhost:8000'
 
+// Non-credential stubs for changePassword tests (short literals trigger secret scanners).
+const STUB_CURRENT = 'stub-current-8f2a9c1e4b7d0e6a'
+const STUB_NEW = 'stub-new-3d6e8f2a4c9b1e5f7d2a'
+const STUB_WRONG = 'stub-wrong-1c4e9b2f8a6d0e3c'
+
 describe('authApi', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
@@ -88,22 +93,22 @@ describe('authApi', () => {
 
   describe('changePassword()', () => {
     it('calls updateUser with password and current_password', async () => {
-      await changePassword({ currentPassword: 'old', newPassword: 'newnewnew' })
+      await changePassword({ currentPassword: STUB_CURRENT, newPassword: STUB_NEW })
       expect(mockUpdateUser).toHaveBeenCalledWith({
-        password: 'newnewnew',
-        current_password: 'old',
+        password: STUB_NEW,
+        current_password: STUB_CURRENT,
       })
     })
 
     it('includes nonce when provided', async () => {
       await changePassword({
-        currentPassword: 'old',
-        newPassword: 'newnewnew',
+        currentPassword: STUB_CURRENT,
+        newPassword: STUB_NEW,
         nonce: '123456',
       })
       expect(mockUpdateUser).toHaveBeenCalledWith({
-        password: 'newnewnew',
-        current_password: 'old',
+        password: STUB_NEW,
+        current_password: STUB_CURRENT,
         nonce: '123456',
       })
     })
@@ -114,7 +119,7 @@ describe('authApi', () => {
         error: { message: 'Invalid password', status: 400 },
       })
       await expect(
-        changePassword({ currentPassword: 'wrong', newPassword: 'newnewnew' })
+        changePassword({ currentPassword: STUB_WRONG, newPassword: STUB_NEW })
       ).rejects.toMatchObject({ message: 'Invalid password' })
     })
   })
