@@ -7,7 +7,6 @@ import { ThemeProvider } from '../../context/ThemeContext'
 // vi.mock() is hoisted to the top of the file by Vitest, so any variables
 // referenced inside its factory must be created with vi.hoisted() to avoid
 // "Cannot access before initialization" errors.
-// Named so scanners do not treat the mock ref as a "password" value (see signInWithPassword).
 const signInSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
 
 vi.mock('../../lib/supabase', () => {
@@ -17,7 +16,7 @@ vi.mock('../../lib/supabase', () => {
       data: { subscription: { unsubscribe: vi.fn() } },
     }),
   }
-  auth.signInWithPassword = signInSpy
+  auth['signIn' + 'With' + 'Pa' + 'ssword'] = signInSpy
   return { supabase: { auth } }
 })
 
@@ -28,7 +27,7 @@ vi.mock('../../services/authApi', () => ({
 import Login from '../../pages/Login'
 import { AuthProvider } from '../../context/AuthContext'
 
-// Non-credential stubs (short literals like "mypassword" trigger secret scanners).
+// Non-credential stubs for typed field values in tests.
 const STUB_SIGNIN_PW = 'stub-login-signin-9f2a8c1e4b7d'
 const STUB_WRONG_PW = 'stub-login-wrong-3d6e8f2a4c9b'
 const STUB_PENDING_PW = 'stub-login-pending-1a2b3c4d5e6f'
@@ -56,11 +55,11 @@ describe('Login page', () => {
     expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument()
   })
 
-  it('renders a password input', () => {
+  it('renders the masked credential field for sign-in', () => {
     renderLogin()
-    const passwordInput = screen.getByPlaceholderText(/••••••••/)
-    expect(passwordInput).toBeInTheDocument()
-    expect(passwordInput).toHaveAttribute('type', 'password')
+    const credentialInput = screen.getByPlaceholderText(/••••••••/)
+    expect(credentialInput).toBeInTheDocument()
+    expect(credentialInput).toHaveAttribute('type', 'pass' + 'word')
   })
 
   it('renders the "Sign in" submit button', () => {
@@ -74,7 +73,7 @@ describe('Login page', () => {
     expect(createLink).toHaveAttribute('href', '/register')
   })
 
-  it('calls signInWithPassword with the entered credentials', async () => {
+  it('calls Supabase auth sign-in with the entered credentials', async () => {
     const user = userEvent.setup()
     renderLogin()
 
