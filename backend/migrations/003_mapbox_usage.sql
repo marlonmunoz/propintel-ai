@@ -17,3 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_mapbox_usage_user_id
 
 CREATE INDEX IF NOT EXISTS idx_mapbox_usage_period_date
   ON mapbox_usage (period_date);
+
+-- Supabase linter 0013: public tables must have RLS enabled for PostgREST.
+-- Backend uses the DB owner connection and bypasses RLS; no policies needed.
+ALTER TABLE public.mapbox_usage ENABLE ROW LEVEL SECURITY;
