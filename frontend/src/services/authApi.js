@@ -63,3 +63,40 @@ export async function updateProfile(payload) {
   }
   return await res.json()
 }
+
+/**
+ * True when GoTrue rejected a password update because a fresh session or OTP
+ * nonce is required (Secure password change in Supabase Email settings).
+ */
+export function isPasswordChangeReauthRequired(error) {
+  if (!error || typeof error !== 'object') return false
+  const msg = String(error.message ?? '').toLowerCase()
+  const code = String(error.code ?? '')
+  const status = error.status ?? error.statusCode
+  if (code === 'session_not_recent') return true
+  if (status === 401 && msg.includes('reauthentication')) return true
+  if (msg.includes('password update requires reauthentication')) return true
+  return false
+}
+
+/** Sends a one-time code to the user's email for step 2 of password change. */
+export async function requestPasswordReauthNonce() {
+  const { error } = await supabase.auth.reauthenticate()
+  if (error) throw new Error(error.message || 'Could not send verification code.')
+}
+
+/**
+ * Updates the signed-in user's password via Supabase Auth.
+ * Requires "Require current password" in dashboard: pass currentPassword.
+ * If the server asks for reauthentication, call requestPasswordReauthNonce(), then
+ * call again with the same passwords and nonce set to the email OTP.
+ */
+export async function changePassword({ currentPassword, newPassword, nonce }) {
+  const attrs = {
+    password: newPassword,
+    current_password: currentPassword,
+  }
+  if (nonce) attrs.nonce = nonce
+  const { error } = await supabase.auth.updateUser(attrs)
+  if (error) throw error
+}

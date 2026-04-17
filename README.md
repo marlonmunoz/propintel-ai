@@ -562,7 +562,7 @@ propintel-ai/
 │       │   └── load_data.py         # Bulk load housing CSV into PostgreSQL
 │       └── main.py                  # FastAPI app entry point
 │
-├── backend/migrations/              # SQL for Supabase (profiles, user_id on properties, RLS notes)
+├── backend/migrations/              # Supabase SQL: auth, mapbox, RLS (003–005), promote admin
 │
 ├── ml/
 │   ├── artifacts/
@@ -745,6 +745,15 @@ python -m backend.app.db.init_db
 | `llm_usage` | `LLMUsage` | Per-user daily LLM call counter — enforces `LLM_QUOTA_FREE` / `LLM_QUOTA_PAID` limits |
 | `mapbox_usage` | `MapboxUsage` | Per-user daily Mapbox geocode request counter — reported by the frontend, shown in admin dashboard |
 | `housing_data` | `HousingData` | NYC training data loaded from CSV pipeline |
+
+### Row Level Security (Supabase)
+
+The app reads and writes these tables **only through FastAPI** (not PostgREST from the browser). Enable RLS on every `public` app table so the Supabase linter passes and the Data API does not expose rows without policies.
+
+- **`backend/migrations/005_enable_rls_all_public_app_tables.sql`** — enables RLS on `profiles`, `properties`, `housing_data`, `llm_usage`, and `mapbox_usage` if they exist (idempotent).
+- Earlier migrations: **`003_mapbox_usage.sql`** also enables RLS on `mapbox_usage` for new installs; **`004_mapbox_usage_rls.sql`** is a catch-up if you ran an older `003` without RLS.
+
+Your `DATABASE_URL` user should be the **table owner** (typical Supabase `postgres` connection) so the API bypasses RLS; do not add `FORCE ROW LEVEL SECURITY` unless you also add policies for that role.
 
 ---
 

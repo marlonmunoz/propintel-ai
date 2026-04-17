@@ -18,6 +18,9 @@ vi.mock('../../services/authApi', () => ({
   fetchProfile: vi.fn().mockResolvedValue({}),
   fetchQuota: vi.fn().mockResolvedValue(null),
   updateProfile: vi.fn().mockResolvedValue({}),
+  changePassword: vi.fn().mockResolvedValue(undefined),
+  requestPasswordReauthNonce: vi.fn().mockResolvedValue(undefined),
+  isPasswordChangeReauthRequired: vi.fn(() => false),
 }))
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
@@ -96,6 +99,16 @@ describe('Profile page — quota bar', () => {
     renderProfile({ role: 'user' }, null)
     expect(screen.queryByText(/remaining today/)).toBeNull()
     expect(screen.queryByText('Unlimited')).toBeNull()
+  })
+})
+
+describe('Profile page — change password', () => {
+  it('renders the Change password section', () => {
+    renderProfile({ role: 'user' })
+    expect(screen.getByRole('heading', { name: /Change password/i })).toBeTruthy()
+    expect(screen.getByLabelText(/Current password/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^New password$/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Update password/i })).toBeInTheDocument()
   })
 })
 

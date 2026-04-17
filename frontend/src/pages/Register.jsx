@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Moon, Sun } from 'lucide-react'
 import Footer from '../components/Footer'
+import PasswordInput from '../components/PasswordInput'
 
 export default function Register() {
   const { session } = useAuth()
@@ -148,35 +149,25 @@ export default function Register() {
               />
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Password
-              </label>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min. 8 characters"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
-              />
-            </div>
+            <PasswordInput
+              id="register-password"
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              placeholder="Min. 8 characters"
+              required
+            />
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Confirm password
-              </label>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
-              />
-            </div>
+            <PasswordInput
+              id="register-confirm-password"
+              label="Confirm password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              placeholder="••••••••"
+              required
+            />
 
             <label className="flex cursor-pointer items-start gap-3">
               <input

@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Zap, ShieldCheck, Crown } from 'lucide-react'
+import { ArrowLeft, Zap, ShieldCheck, Crown, Lock } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import PasswordInput from '../components/PasswordInput'
 import { useAuth } from '../context/AuthContext'
-import { updateProfile } from '../services/authApi'
+import {
+  updateProfile,
+  changePassword,
+  requestPasswordReauthNonce,
+  isPasswordChangeReauthRequired,
+} from '../services/authApi'
 
 const TIER_CONFIG = {
   admin: {
@@ -158,6 +164,15 @@ export default function Profile() {
   const [message, setMessage] = useState(null)
   const [error, setError] = useState(null)
 
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [reauthNonce, setReauthNonce] = useState('')
+  const [pwAwaitingNonce, setPwAwaitingNonce] = useState(false)
+  const [pwSubmitting, setPwSubmitting] = useState(false)
+  const [pwError, setPwError] = useState(null)
+  const [pwSuccess, setPwSuccess] = useState(null)
+
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name || '')
@@ -181,6 +196,95 @@ export default function Profile() {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
       setSaving(false)
+    }
+  }
+
+  function resetPasswordFieldsOnly() {
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setReauthNonce('')
+    setPwAwaitingNonce(false)
+  }
+
+  function cancelPasswordChange() {
+    resetPasswordFieldsOnly()
+    setPwError(null)
+    setPwSuccess(null)
+  }
+
+  async function handlePasswordSubmit(e) {
+    e.preventDefault()
+    setPwError(null)
+    setPwSuccess(null)
+
+    if (newPassword !== confirmPassword) {
+      setPwError('New passwords do not match.')
+      return
+    }
+    if (newPassword.length < 8) {
+      setPwError('New password must be at least 8 characters.')
+      return
+    }
+    if (newPassword === currentPassword) {
+      setPwError('New password must be different from your current password.')
+      return
+    }
+
+    setPwSubmitting(true)
+    try {
+      if (pwAwaitingNonce) {
+        const code = reauthNonce.trim()
+        if (!code) {
+          setPwError('Enter the verification code from your email.')
+          setPwSubmitting(false)
+          return
+        }
+        await changePassword({
+          currentPassword,
+          newPassword,
+          nonce: code,
+        })
+        setPwError(null)
+        setPwSuccess('Password updated.')
+        resetPasswordFieldsOnly()
+      } else {
+        await changePassword({ currentPassword, newPassword })
+        setPwError(null)
+        setPwSuccess('Password updated.')
+        resetPasswordFieldsOnly()
+      }
+    } catch (err) {
+      if (!pwAwaitingNonce && isPasswordChangeReauthRequired(err)) {
+        try {
+          await requestPasswordReauthNonce()
+          setPwAwaitingNonce(true)
+          setPwError(null)
+          setPwSuccess(
+            `We sent a verification code to ${user?.email ?? 'your email'}. Enter it below to finish.`
+          )
+        } catch (sendErr) {
+          setPwError(sendErr instanceof Error ? sendErr.message : 'Could not send verification code.')
+        }
+      } else {
+        setPwError(err instanceof Error ? err.message : 'Password update failed.')
+      }
+    } finally {
+      setPwSubmitting(false)
+    }
+  }
+
+  async function handleResendReauthCode() {
+    setPwError(null)
+    setPwSuccess(null)
+    setPwSubmitting(true)
+    try {
+      await requestPasswordReauthNonce()
+      setPwSuccess(`A new code was sent to ${user?.email ?? 'your email'}.`)
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : 'Could not resend code.')
+    } finally {
+      setPwSubmitting(false)
     }
   }
 
@@ -285,6 +389,114 @@ export default function Profile() {
               <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
               Back to Analyze
             </Link>
+          </form>
+
+          {/* ── Change password (Supabase: current password + optional reauth nonce) ── */}
+          <form
+            onSubmit={handlePasswordSubmit}
+            className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <Lock className="h-5 w-5 text-slate-400" aria-hidden />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                Change password
+              </h2>
+            </div>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+              Uses your Supabase email provider settings (require current password, secure password
+              change). If your session is older than 24 hours, we will email you a one-time code to
+              complete the update.
+            </p>
+
+            {pwError && (
+              <div className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-900/20 dark:text-rose-400">
+                {pwError}
+              </div>
+            )}
+            {pwSuccess && (
+              <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                {pwSuccess}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <PasswordInput
+                id="profile-current-password"
+                label="Current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <PasswordInput
+                id="profile-new-password"
+                label="New password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder="Min. 8 characters"
+              />
+              <PasswordInput
+                id="profile-confirm-password"
+                label="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder="••••••••"
+              />
+
+              {pwAwaitingNonce && (
+                <div>
+                  <label
+                    htmlFor="profile-reauth-nonce"
+                    className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >
+                    Email verification code
+                  </label>
+                  <input
+                    id="profile-reauth-nonce"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={reauthNonce}
+                    onChange={(e) => setReauthNonce(e.target.value)}
+                    placeholder="Enter code from email"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleResendReauthCode}
+                    disabled={pwSubmitting}
+                    className="mt-2 text-sm font-medium text-cyan-600 hover:text-cyan-500 disabled:opacity-50 dark:text-cyan-400"
+                  >
+                    Resend code
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button
+                type="submit"
+                disabled={pwSubmitting}
+                className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+              >
+                {pwSubmitting
+                  ? 'Updating…'
+                  : pwAwaitingNonce
+                    ? 'Complete password update'
+                    : 'Update password'}
+              </button>
+              {(pwAwaitingNonce || currentPassword || newPassword || confirmPassword || reauthNonce) && (
+                <button
+                  type="button"
+                  onClick={cancelPasswordChange}
+                  disabled={pwSubmitting}
+                  className="text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-200"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </form>
         </div>
       </div>
