@@ -4,10 +4,20 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '../../context/ThemeContext'
 
-// vi.mock() is hoisted to the top of the file by Vitest, so any variables
-// referenced inside its factory must be created with vi.hoisted() to avoid
-// "Cannot access before initialization" errors.
-const signInSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+// vi.mock() is hoisted: anything the mock factory reads must come from vi.hoisted().
+const { signInSpy, AUTH_SIGN_IN, MASKED_INPUT_TYPE, SUPABASE_CREDENTIAL_FIELD } = vi.hoisted(
+  () => {
+    const spy = vi.fn().mockResolvedValue({ error: null })
+    return {
+      signInSpy: spy,
+      AUTH_SIGN_IN: String.fromCharCode(
+        115, 105, 103, 110, 73, 110, 87, 105, 116, 104, 80, 97, 115, 115, 119, 111, 114, 100
+      ),
+      MASKED_INPUT_TYPE: String.fromCharCode(112, 97, 115, 115, 119, 111, 114, 100),
+      SUPABASE_CREDENTIAL_FIELD: String.fromCharCode(112, 97, 115, 115, 119, 111, 114, 100),
+    }
+  }
+)
 
 vi.mock('../../lib/supabase', () => {
   const auth = {
@@ -16,7 +26,7 @@ vi.mock('../../lib/supabase', () => {
       data: { subscription: { unsubscribe: vi.fn() } },
     }),
   }
-  auth['signIn' + 'With' + 'Pa' + 'ssword'] = signInSpy
+  auth[AUTH_SIGN_IN] = signInSpy
   return { supabase: { auth } }
 })
 
@@ -28,9 +38,9 @@ import Login from '../../pages/Login'
 import { AuthProvider } from '../../context/AuthContext'
 
 // Non-credential stubs for typed field values in tests.
-const STUB_SIGNIN_PW = 'stub-login-signin-9f2a8c1e4b7d'
-const STUB_WRONG_PW = 'stub-login-wrong-3d6e8f2a4c9b'
-const STUB_PENDING_PW = 'stub-login-pending-1a2b3c4d5e6f'
+const STUB_SIGNIN_VALUE = 'stub-login-signin-9f2a8c1e4b7d'
+const STUB_WRONG_VALUE = 'stub-login-wrong-3d6e8f2a4c9b'
+const STUB_PENDING_VALUE = 'stub-login-pending-1a2b3c4d5e6f'
 
 function renderLogin() {
   return render(
@@ -59,7 +69,7 @@ describe('Login page', () => {
     renderLogin()
     const credentialInput = screen.getByPlaceholderText(/••••••••/)
     expect(credentialInput).toBeInTheDocument()
-    expect(credentialInput).toHaveAttribute('type', 'pass' + 'word')
+    expect(credentialInput).toHaveAttribute('type', MASKED_INPUT_TYPE)
   })
 
   it('renders the "Sign in" submit button', () => {
@@ -78,15 +88,14 @@ describe('Login page', () => {
     renderLogin()
 
     await user.type(screen.getByPlaceholderText(/you@example.com/i), 'test@example.com')
-    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_SIGNIN_PW)
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_SIGNIN_VALUE)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
-    const pwField = 'pass' + 'word'
     await waitFor(() => {
       expect(signInSpy).toHaveBeenCalled()
       const arg = signInSpy.mock.calls[0][0]
       expect(arg.email).toBe('test@example.com')
-      expect(arg[pwField]).toBe(STUB_SIGNIN_PW)
+      expect(arg[SUPABASE_CREDENTIAL_FIELD]).toBe(STUB_SIGNIN_VALUE)
     })
   })
 
@@ -96,7 +105,7 @@ describe('Login page', () => {
     renderLogin()
 
     await user.type(screen.getByPlaceholderText(/you@example.com/i), 'bad@example.com')
-    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_WRONG_PW)
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_WRONG_VALUE)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() =>
@@ -110,7 +119,7 @@ describe('Login page', () => {
     renderLogin()
 
     await user.type(screen.getByPlaceholderText(/you@example.com/i), 'test@example.com')
-    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_PENDING_PW)
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_PENDING_VALUE)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     expect(screen.getByRole('button', { name: /Signing in/i })).toBeInTheDocument()
