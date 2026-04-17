@@ -28,6 +28,11 @@ vi.mock('../../services/authApi', () => ({
 import Login from '../../pages/Login'
 import { AuthProvider } from '../../context/AuthContext'
 
+// Non-credential stubs (short literals like "mypassword" trigger secret scanners).
+const STUB_SIGNIN_PW = 'stub-login-signin-9f2a8c1e4b7d'
+const STUB_WRONG_PW = 'stub-login-wrong-3d6e8f2a4c9b'
+const STUB_PENDING_PW = 'stub-login-pending-1a2b3c4d5e6f'
+
 function renderLogin() {
   return render(
     <ThemeProvider>
@@ -74,13 +79,13 @@ describe('Login page', () => {
     renderLogin()
 
     await user.type(screen.getByPlaceholderText(/you@example.com/i), 'test@example.com')
-    await user.type(screen.getByPlaceholderText(/••••••••/), 'mypassword')
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_SIGNIN_PW)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() =>
       expect(mockSignIn).toHaveBeenCalledWith({
         email: 'test@example.com',
-        password: 'mypassword',
+        password: STUB_SIGNIN_PW,
       })
     )
   })
@@ -91,7 +96,7 @@ describe('Login page', () => {
     renderLogin()
 
     await user.type(screen.getByPlaceholderText(/you@example.com/i), 'bad@example.com')
-    await user.type(screen.getByPlaceholderText(/••••••••/), 'wrongpass')
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_WRONG_PW)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() =>
@@ -105,7 +110,7 @@ describe('Login page', () => {
     renderLogin()
 
     await user.type(screen.getByPlaceholderText(/you@example.com/i), 'test@example.com')
-    await user.type(screen.getByPlaceholderText(/••••••••/), 'pass')
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_PENDING_PW)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     expect(screen.getByRole('button', { name: /Signing in/i })).toBeInTheDocument()
