@@ -1,7 +1,10 @@
 # https://docs.gitguardian.com/ggshield-docs/configuration
-# Frontend unit tests use mock credentials; Generic Password detector produces noise.
+# Used by ggshield (CLI / hooks). It does NOT clear GitHub “Internal monitoring”
+# incidents — for that, add filepath exclusions in the GitGuardian workspace:
+# https://dashboard.gitguardian.com/settings/secrets/filepath-exclusions
 version: 2
 
 secret:
   ignored_paths:
+    - "**/frontend/src/__tests__/**"
     - "frontend/src/__tests__/**"
