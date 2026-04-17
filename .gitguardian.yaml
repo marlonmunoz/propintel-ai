@@ -1,0 +1,7 @@
+# https://docs.gitguardian.com/ggshield-docs/configuration
+# Frontend unit tests use mock credentials; Generic Password detector produces noise.
+version: 2
+
+secret:
+  ignored_paths:
+    - "frontend/src/__tests__/**"

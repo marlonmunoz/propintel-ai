@@ -4,31 +4,22 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '../../context/ThemeContext'
 
-// vi.mock() is hoisted: anything the mock factory reads must come from vi.hoisted().
-const { signInSpy, AUTH_SIGN_IN, MASKED_INPUT_TYPE, SUPABASE_CREDENTIAL_FIELD } = vi.hoisted(
-  () => {
-    const spy = vi.fn().mockResolvedValue({ error: null })
-    return {
-      signInSpy: spy,
-      AUTH_SIGN_IN: String.fromCharCode(
-        115, 105, 103, 110, 73, 110, 87, 105, 116, 104, 80, 97, 115, 115, 119, 111, 114, 100
-      ),
-      MASKED_INPUT_TYPE: String.fromCharCode(112, 97, 115, 115, 119, 111, 114, 100),
-      SUPABASE_CREDENTIAL_FIELD: String.fromCharCode(112, 97, 115, 115, 119, 111, 114, 100),
-    }
-  }
-)
+// vi.mock() is hoisted to the top of the file by Vitest, so any variables
+// referenced inside its factory must be created with vi.hoisted() to avoid
+// "Cannot access before initialization" errors.
+const signInSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
 
-vi.mock('../../lib/supabase', () => {
-  const auth = {
-    getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-    onAuthStateChange: vi.fn().mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
-    }),
-  }
-  auth[AUTH_SIGN_IN] = signInSpy
-  return { supabase: { auth } }
-})
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      }),
+      signInWithPassword: signInSpy,
+    },
+  },
+}))
 
 vi.mock('../../services/authApi', () => ({
   fetchProfile: vi.fn().mockRejectedValue(new Error('no session')),
@@ -65,11 +56,11 @@ describe('Login page', () => {
     expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument()
   })
 
-  it('renders the masked credential field for sign-in', () => {
+  it('renders a password input', () => {
     renderLogin()
-    const credentialInput = screen.getByPlaceholderText(/••••••••/)
-    expect(credentialInput).toBeInTheDocument()
-    expect(credentialInput).toHaveAttribute('type', MASKED_INPUT_TYPE)
+    const passwordInput = screen.getByPlaceholderText(/••••••••/)
+    expect(passwordInput).toBeInTheDocument()
+    expect(passwordInput).toHaveAttribute('type', 'password')
   })
 
   it('renders the "Sign in" submit button', () => {
@@ -83,7 +74,7 @@ describe('Login page', () => {
     expect(createLink).toHaveAttribute('href', '/register')
   })
 
-  it('calls Supabase auth sign-in with the entered credentials', async () => {
+  it('calls signInWithPassword with the entered credentials', async () => {
     const user = userEvent.setup()
     renderLogin()
 
@@ -91,12 +82,12 @@ describe('Login page', () => {
     await user.type(screen.getByPlaceholderText(/••••••••/), STUB_SIGNIN_VALUE)
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
-    await waitFor(() => {
-      expect(signInSpy).toHaveBeenCalled()
-      const arg = signInSpy.mock.calls[0][0]
-      expect(arg.email).toBe('test@example.com')
-      expect(arg[SUPABASE_CREDENTIAL_FIELD]).toBe(STUB_SIGNIN_VALUE)
-    })
+    await waitFor(() =>
+      expect(signInSpy).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: STUB_SIGNIN_VALUE,
+      })
+    )
   })
 
   it('shows an error message on failed sign-in', async () => {
