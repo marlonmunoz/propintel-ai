@@ -41,6 +41,7 @@ SPINE_FILE  = BASE_DIR / "ml/data/gold/training_spine_v1.parquet"
 GOLD_DOF    = BASE_DIR / "ml/data/gold/gold_dof_assessment_asof.parquet"
 GOLD_ACRIS  = BASE_DIR / "ml/data/gold/gold_acris_features_asof.parquet"
 GOLD_J51    = BASE_DIR / "ml/data/gold/gold_j51_features_asof.parquet"
+GOLD_PLUTO  = BASE_DIR / "ml/data/gold/gold_pluto_features.parquet"
 ARTIFACTS   = BASE_DIR / "ml/artifacts/spine_models"
 METRICS_FILE = ARTIFACTS / "spine_model_metrics.json"
 
@@ -80,14 +81,29 @@ _J51_NUMERIC = [
     "j51_total_abatement",
 ]
 
+# PLUTO geographic / physical features (joined on bbl only, no as-of filter).
+# lat/lon enable the model to learn sub-neighborhood price gradients.
+# subway_dist_km captures transit access beyond neighborhood dummies.
+_PLUTO_NUMERIC = [
+    "pluto_latitude",
+    "pluto_longitude",
+    "subway_dist_km",
+    "pluto_numfloors",
+    "pluto_builtfar",
+    "pluto_bldg_footprint",
+    "pluto_bldgarea",
+    "pluto_lotarea",
+]
+_PLUTO_CAT = ["pluto_bldgclass"]
+
 SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
     "one_family": {
         "target": "sales_price",
         "numeric": [
             "neighborhood_median_price", "property_age",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
         ],
-        "categorical": ["borough_name", "neighborhood", *_DOF_CAT],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
         "min_test":  100,
     },
@@ -95,9 +111,9 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "target": "sales_price",
         "numeric": [
             "neighborhood_median_price", "property_age",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
         ],
-        "categorical": ["borough_name", "neighborhood", *_DOF_CAT],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
         "min_test":  100,
     },
@@ -105,9 +121,9 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "target": "sales_price",
         "numeric": [
             "neighborhood_median_price", "property_age",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
         ],
-        "categorical": ["borough_name", "neighborhood", *_DOF_CAT],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
         "min_test":  100,
     },
@@ -116,9 +132,9 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "numeric": [
             "neighborhood_median_price", "property_age",
             "total_units", "residential_units",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
         ],
-        "categorical": ["borough_name", "neighborhood", *_DOF_CAT],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 200,
         "min_test":  50,
     },
@@ -127,9 +143,9 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "numeric": [
             "neighborhood_median_price", "property_age",
             "total_units", "residential_units",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
         ],
-        "categorical": ["borough_name", "neighborhood", *_DOF_CAT],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 100,
         "min_test":  20,
     },
@@ -141,25 +157,28 @@ SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
         "min_child_weight": 3, "subsample": 0.8, "colsample_bytree": 0.8,
         "gamma": 0.1, "reg_alpha": 0.1, "reg_lambda": 1.0,
     },
+    # Overfit gap was 0.17 — shallower trees + stronger L1/L2 + larger leaf minimum.
     "multi_family": {
-        "n_estimators": 600, "learning_rate": 0.04, "max_depth": 6,
-        "min_child_weight": 3, "subsample": 0.8, "colsample_bytree": 0.7,
-        "gamma": 0.1, "reg_alpha": 0.05, "reg_lambda": 1.0,
+        "n_estimators": 600, "learning_rate": 0.04, "max_depth": 5,
+        "min_child_weight": 5, "subsample": 0.75, "colsample_bytree": 0.7,
+        "gamma": 0.2, "reg_alpha": 0.5, "reg_lambda": 2.0,
     },
     "condo_coop": {
         "n_estimators": 800, "learning_rate": 0.05, "max_depth": 5,
         "min_child_weight": 4, "subsample": 0.8, "colsample_bytree": 0.8,
         "gamma": 0.1, "reg_alpha": 0.3, "reg_lambda": 1.0,
     },
+    # Overfit gap was 0.21 — shallower trees, reduced column sample, strong regularization.
     "rental_walkup": {
-        "n_estimators": 600, "learning_rate": 0.04, "max_depth": 4,
-        "min_child_weight": 4, "subsample": 0.8, "colsample_bytree": 0.6,
-        "gamma": 0.1, "reg_alpha": 0.2, "reg_lambda": 1.5,
+        "n_estimators": 500, "learning_rate": 0.04, "max_depth": 3,
+        "min_child_weight": 6, "subsample": 0.75, "colsample_bytree": 0.6,
+        "gamma": 0.2, "reg_alpha": 1.0, "reg_lambda": 3.0,
     },
+    # Overfit gap was 0.34, only 352 train rows — very conservative model.
     "rental_elevator": {
-        "n_estimators": 300, "learning_rate": 0.04, "max_depth": 4,
-        "min_child_weight": 5, "subsample": 0.8, "colsample_bytree": 0.7,
-        "gamma": 0.2, "reg_alpha": 0.5, "reg_lambda": 2.0,
+        "n_estimators": 150, "learning_rate": 0.04, "max_depth": 3,
+        "min_child_weight": 10, "subsample": 0.7, "colsample_bytree": 0.6,
+        "gamma": 0.3, "reg_alpha": 2.0, "reg_lambda": 5.0,
     },
 }
 
@@ -220,8 +239,18 @@ def load_enriched_spine() -> pd.DataFrame:
     j51_sub  = _dedup(j51[[c for c in j51_cols if c in j51.columns]], "J51")
     spine = spine.merge(j51_sub, on=join_keys, how="left")
 
-    # Ensure integer columns arrive as float for sklearn compatibility.
-    for c in ["acris_prior_sale_cnt", "acris_mortgage_cnt", "j51_active_flag"]:
+    # ── PLUTO ────────────────────────────────────────────────────────────────
+    # Joined on bbl only (no as_of_date) — physical/geo attributes are stable.
+    print("  Joining Gold PLUTO …")
+    pluto = pd.read_parquet(GOLD_PLUTO)
+    pluto_geo = [c for c in pluto.columns if c.startswith("pluto_") or c == "subway_dist_km"]
+    pluto_sub = pluto[["bbl"] + pluto_geo].drop_duplicates(subset=["bbl"]).reset_index(drop=True)
+    spine = spine.merge(pluto_sub, on="bbl", how="left")
+    print(f"    PLUTO match rate: {spine['pluto_latitude'].notna().mean():.1%}")
+
+    # Ensure integer/mixed columns arrive as float for sklearn compatibility.
+    for c in ["acris_prior_sale_cnt", "acris_mortgage_cnt", "j51_active_flag",
+              *_PLUTO_NUMERIC]:
         if c in spine.columns:
             spine[c] = pd.to_numeric(spine[c], errors="coerce").astype(float)
 
