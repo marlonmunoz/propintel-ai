@@ -57,6 +57,11 @@ HISTORICAL_FILES: dict[tuple[int, int], Path] = {
     (2023, 3): HIST_DIR / "2023_brooklyn.xlsx",
     (2023, 4): HIST_DIR / "2023_queens.xlsx",
     (2023, 5): HIST_DIR / "2023_staten_island.xlsx",
+    (2024, 1): HIST_DIR / "2024_manhattan.xlsx",
+    (2024, 2): HIST_DIR / "2024_bronx.xlsx",
+    (2024, 3): HIST_DIR / "2024_brooklyn.xlsx",
+    (2024, 4): HIST_DIR / "2024_queens.xlsx",
+    (2024, 5): HIST_DIR / "2024_staten_island.xlsx",
 }
 
 # Residential building-class categories to keep --------------------------------------------
