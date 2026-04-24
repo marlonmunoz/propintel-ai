@@ -36,8 +36,8 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - XGBoost regression with log-transformed target for residential property valuation
 - **Optuna hyperparameter search** on the strict time split per segment
 - ModelRegistry pattern: metadata-driven, segment-routable, lazy-loading model serving
-- 5 trained spine v3 models: one_family, multi_family, condo_coop, rental_walkup, rental_elevator
-- Full building-class routing to dedicated segment models
+- **4 trained spine v4 models** with overfitting-gate guardrails: one_family, multi_family, condo_coop, rentals_all (pooled walkup + elevator)
+- Full building-class routing to dedicated segment models; `07` and `08` both route to the pooled `rentals_all` model
 - **Optional BBL + as_of_date on inference** — DOF / ACRIS / J-51 / PLUTO features loaded from Silver + Gold parquets at request time (same as-of rules as training)
 - BallTree haversine subway-distance feature (MTA stations) at training and inference
 - Feature importance / explainability artifact persisted after training
@@ -73,7 +73,7 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - **Supabase Auth** integrated: register / login, JWT sessions, `GET`/`PATCH /auth/me` profiles, per-user saved properties; optional **admin** via `profiles.role` and/or `ADMIN_USER_IDS` in server env (full portfolio visibility for admins)
 - **Paid tier feature** complete: `user` / `paid` / `admin` roles enforced on LLM quota; `GET /auth/quota` endpoint; quota pill on Analyze page; Paid badge in Navbar; tier card + quota bar + Stripe placeholder on Profile page
 - **Medallion data pipeline** implemented: Bronze → Silver normalizers (DOF, ACRIS, J-51, PLUTO) → Gold as-of feature builders → spine-based training
-- **Spine v3 models** trained on Gold features with strict time-based splits; Optuna HPO on 3 underperforming segments — all metrics are honest forward-time R² values
+- **Spine v4 models** trained on Gold features with strict time-based splits; overfitting-gate guardrails applied — all metrics are honest forward-time R² values. New anti-overfitting measures: 5-seed VotingRegressor ensemble, rare-neighbourhood collapse, pooled `rentals_all` model
 - **BBL inference enrichment**: optional `bbl` + `as_of_date` on `POST /predict-price-v2` and `POST /analyze-property-v2` triggers on-the-fly Silver/PLUTO feature loading at request time, closing the train/inference feature gap
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
@@ -229,21 +229,23 @@ PropIntel uses a `ModelRegistry` to route each prediction request to the most ap
 | `01 ONE FAMILY DWELLINGS` | `one_family` | `one_family_spine_price_model.pkl` |
 | `02 TWO FAMILY DWELLINGS`, `03 THREE FAMILY DWELLINGS` | `multi_family` | `multi_family_spine_price_model.pkl` |
 | `09`–`17` COOPS / CONDOS | `condo_coop` | `condo_coop_spine_price_model.pkl` |
-| `07 RENTALS - WALKUP APARTMENTS` | `rental_walkup` | `rental_walkup_spine_price_model.pkl` |
-| `08 RENTALS - ELEVATOR APARTMENTS` | `rental_elevator` | `rental_elevator_spine_price_model.pkl` |
+| `07 RENTALS - WALKUP APARTMENTS` | `rentals_all` | `rentals_all_spine_price_model.pkl` |
+| `08 RENTALS - ELEVATOR APARTMENTS` | `rentals_all` | `rentals_all_spine_price_model.pkl` |
 | All others | `global` | `price_model.pkl` |
+
+Both rental building classes route to the shared `rentals_all` pooled model. An `is_elevator` binary feature (0 = walkup, 1 = elevator) is injected at inference to preserve the signal.
 
 ### Model metadata
 Each model has a JSON metadata file in `ml/artifacts/metadata/` that defines:
 - `name`, `version`, `segment`
 - `artifact_path` — path to the serialized `.pkl`
 - `stats_path` — neighborhood stats JSON (loaded at inference for median lookups)
-- `numeric_features` + `categorical_features` — exact spine v3 feature lists
-- `metrics` — MAE, RMSE, R², median_ape from time-based test evaluation
+- `numeric_features` + `categorical_features` — exact spine v4 feature lists
+- `metrics` — MAE, RMSE, R², median_ape, ΔR² gap and worst-fold R² from time-based evaluation
 
 ### Warning system
 The `warnings` field in `ProductionPredictionResponse` is populated based on model key:
-- `rental_walkup` / `rental_elevator` → warning served if `total_units` is missing (falls back to global model)
+- `rentals_all` → warning served if `total_units` is missing (falls back to global model)
 - `global` → fallback model warning
 - `bbl` provided without `as_of_date` (or vice versa) → warning that BBL enrichment was skipped
 
@@ -251,31 +253,42 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 ## 📈 Model Performance
 
-### Spine v3 model results (time-based split, train ≤ 2024 / test ≥ 2025)
+### Spine v4 results — time-based split (train ≤ 2024-12-31 / test ≥ 2025-01-31)
 
-| Segment | Test R² | Test MAE | Test Median APE | Target | Tuned | Notes |
-|---|---|---|---|---|---|---|
-| `one_family` | **0.765** | $238k | 17.2% | sales_price | No | Protected — not retrained |
-| `condo_coop` | **0.700** | $413k | 20.7% | sales_price | ✅ Optuna | +0.067 R² vs pre-tuning |
-| `multi_family` | **0.608** | $348k | 21.0% | sales_price | No | Optuna degraded; hand-tuned retained |
-| `rental_walkup` | **0.628** | $108k/unit | 24.3% | price_per_unit | ✅ Optuna | +0.135 R² vs pre-tuning |
-| `rental_elevator` | **0.537** | $94k/unit | 28.6% | price_per_unit | ✅ Optuna | +0.077 R² (crossed 0.50) |
+| Segment | Test R² | Test MAE | Test Median APE | Target | ΔR² gap | Worst-fold R² | Notes |
+|---|---|---|---|---|---|---|---|
+| `one_family` | **0.765** | $238k | 17.2% | sales_price | 0.109 ✅ | 0.755 ✅ | Protected — not retrained |
+| `condo_coop` | **0.633** | $421k | 21.4% | sales_price | 0.044 ✅ | 0.594 ✅ | Most stable model |
+| `multi_family` | **0.608** | $346k | 20.8% | sales_price | 0.138 ✅ | 0.541 ✅ | v4: 5-seed ensemble + rare-nbhd collapse |
+| `rentals_all` | **0.456** | $110k/unit | 25.7% | price_per_unit | 0.131 ✅ | 0.456 ✅ | v4: pooled walkup+elevator, no lat/lon, ensemble |
 
-> All metrics are from a **strict time-based holdout** — no random splits. Train rows come from sales up to 2024-12-31; test rows from sales on or after 2025-01-31 (30-day reporting-lag gap). This is a more conservative and honest evaluation than the legacy random-split R² values previously reported.
+> All metrics are from a **strict time-based holdout** — no random splits. Train rows: sales up to 2024-12-31. Test rows: sales on or after 2025-01-31 (30-day reporting-lag gap enforced). The ΔR² gap and worst rolling-origin fold R² are the anti-overfitting gates that must both pass before any model is promoted.
+
+> **`rentals_all`** replaces the previous separate `rental_walkup` and `rental_elevator` models. Pooling eliminated the ~350-row data starvation problem for elevator rentals (worst-fold R² improved from 0.280 → 0.456). Both building classes `07` and `08` route to this shared model via the `is_elevator` binary feature.
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price.
 
-### Feature set (all spine v3 segments)
+### Anti-overfitting measures (v4)
 
-| Group | Features |
+| Measure | Segments |
 |---|---|
-| Neighbourhood stats | `neighborhood_median_price`, `dof_assess_per_unit` |
-| Derived | `property_age`, `borough_name` |
-| DOF roll | `dof_curmkttot`, `dof_curacttot`, `dof_curactland`, `dof_assess_per_unit`, `dof_gross_sqft`, `dof_bld_story`, `dof_units`, `dof_yrbuilt`, `dof_bldg_class`, `dof_tax_class` |
-| ACRIS | `acris_prior_sale_cnt`, `acris_last_deed_amt`, `acris_days_since_last_deed`, `acris_mortgage_cnt`, `acris_last_mtge_amt` |
-| J-51 | `j51_active_flag`, `j51_last_abate_amt`, `j51_total_abatement` |
-| PLUTO geo | `pluto_latitude`, `pluto_longitude`, `subway_dist_km`, `pluto_numfloors`, `pluto_builtfar`, `pluto_bldg_footprint`, `pluto_bldgarea`, `pluto_lotarea`, `pluto_bldgclass` |
-| Rental only | `total_units`, `residential_units` |
+| 5-seed VotingRegressor ensemble | `multi_family`, `rentals_all` |
+| Rare-neighbourhood collapse (< 30 train rows → `Other_<Borough>`) | `multi_family` |
+| lat/lon excluded (prevents geographic memorisation in small datasets) | `rentals_all` |
+| Time-based split instead of random 80/20 | All |
+| Rolling-origin fold scorecard gates: ΔR² ≤ 0.15, worst-fold R² ≥ 0.40 | All |
+
+### Feature set
+
+| Group | Features | Segments |
+|---|---|---|
+| Neighbourhood stats | `neighborhood_median_price`, `dof_assess_per_unit` | All |
+| Derived | `property_age`, `borough_name` | All |
+| DOF roll | `dof_curmkttot`, `dof_curacttot`, `dof_curactland`, `dof_gross_sqft`, `dof_bld_story`, `dof_units`, `dof_yrbuilt`, `dof_bldg_class`, `dof_tax_class` | All |
+| ACRIS | `acris_prior_sale_cnt`, `acris_last_deed_amt`, `acris_days_since_last_deed`, `acris_mortgage_cnt`, `acris_last_mtge_amt` | All |
+| J-51 | `j51_active_flag`, `j51_last_abate_amt`, `j51_total_abatement` | All |
+| PLUTO geo | `pluto_latitude`, `pluto_longitude`, `subway_dist_km`, `pluto_numfloors`, `pluto_builtfar`, `pluto_bldg_footprint`, `pluto_bldgarea`, `pluto_lotarea`, `pluto_bldgclass` | All except `rentals_all` (no lat/lon) |
+| Rental only | `total_units`, `residential_units`, `is_elevator` | `rentals_all` |
 
 ### Explainability
 Feature importance CSVs for each segment are saved to `ml/artifacts/spine_models/` after training and are loaded at inference time to drive the LLM explanation.
@@ -832,8 +845,8 @@ docker compose down
 ## ⚠️ Model Limitations
 
 - Trained only on **NYC residential properties** — not applicable to commercial.
-- `rental_elevator` (R²=0.537) has only ~350 training rows in the time-split era; predictions should be interpreted with the provided valuation band.
-- `multi_family` (R²=0.608) remains heterogeneous across price ranges and boroughs; Optuna HPO did not improve it further.
+- `rentals_all` (R²=0.456) pools walkup and elevator rentals to solve elevator's 350-row starvation. The pooled model passes both overfitting gates (ΔR² = 0.131, worst-fold = 0.456) but rental markets are inherently noisy; predictions should be interpreted with the valuation band.
+- `multi_family` (R²=0.608) remains heterogeneous across price ranges and boroughs; variance is reduced by the 5-seed ensemble but the market complexity limits further improvement without more data.
 - All metrics are from a **strict time-based holdout** — forward-time generalisation, not in-sample or random-split estimates.
 - PLUTO match rate is ~76%; parcels without a PLUTO row get median imputation for physical features.
 - No temporal or macroeconomic cycle features.

@@ -292,6 +292,13 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         "pluto_bldgclass": np.nan,
     }
 
+    # ── Pooled rental flag ────────────────────────────────────────────────────
+    # When the rentals_all model is active, the is_elevator feature is required.
+    # 0 = walkup (building class 07), 1 = elevator (building class 08).
+    if model_key == "rentals_all":
+        building_class = getattr(payload, "building_class_category", "") or ""
+        row["is_elevator"] = 1.0 if "08" in str(building_class) or "ELEVATOR" in str(building_class).upper() else 0.0
+
     # ── Optional BBL + as_of_date → Silver / PLUTO as-of features ───────────
     bbl_raw, as_of_raw = payload.bbl, payload.as_of_date
     if (bbl_raw and not as_of_raw) or (as_of_raw and not bbl_raw):

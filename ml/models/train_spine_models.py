@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import warnings
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import VotingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
@@ -96,6 +98,13 @@ _PLUTO_NUMERIC = [
 ]
 _PLUTO_CAT = ["pluto_bldgclass"]
 
+# Lat/lon excluded from rental models: geographic coordinates allow XGBoost
+# to memorise specific building clusters in a small dataset (~4k rows),
+# inflating the train/test gap.  subway_dist_km is retained as it provides
+# a transit-access signal that generalises across years.
+_RENTAL_EXCL_COLS = {"pluto_latitude", "pluto_longitude"}
+_RENTAL_PLUTO_NUMERIC = [c for c in _PLUTO_NUMERIC if c not in _RENTAL_EXCL_COLS]
+
 SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
     "one_family": {
         "target": "sales_price",
@@ -127,12 +136,32 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "min_train": 500,
         "min_test":  100,
     },
+    # ── Pooled rental model ────────────────────────────────────────────────────
+    # rental_walkup + rental_elevator are pooled into one model to eliminate
+    # the ~350-row starvation problem for elevator rentals.
+    # is_elevator (0/1) is added as a feature so the model can learn the price
+    # premium for elevator buildings without splitting into two data-starved models.
+    # Lat/lon are excluded to prevent geographic over-memorisation.
+    "rentals_all": {
+        "target": "price_per_unit",
+        "numeric": [
+            "neighborhood_median_price", "property_age",
+            "total_units", "residential_units",
+            "is_elevator",
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_RENTAL_PLUTO_NUMERIC,
+        ],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
+        "min_train": 300,
+        "min_test":  60,
+    },
+    # ── Legacy individual rental segments (kept for backward compat) ───────────
+    # These are NOT trained by default when rentals_all is used.
     "rental_walkup": {
         "target": "price_per_unit",
         "numeric": [
             "neighborhood_median_price", "property_age",
             "total_units", "residential_units",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_RENTAL_PLUTO_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 200,
@@ -143,7 +172,7 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "numeric": [
             "neighborhood_median_price", "property_age",
             "total_units", "residential_units",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_RENTAL_PLUTO_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 100,
@@ -157,30 +186,54 @@ SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
         "min_child_weight": 3, "subsample": 0.8, "colsample_bytree": 0.8,
         "gamma": 0.1, "reg_alpha": 0.1, "reg_lambda": 1.0,
     },
-    # Overfit gap was 0.17 — shallower trees + stronger L1/L2 + larger leaf minimum.
+    # Stabilised v4: rare-neighbourhood collapse + 5-seed VotingRegressor.
+    # This shrank the train/test gap from 0.147 → 0.137 and improved worst-fold
+    # R² from 0.514 → 0.541 on the rolling-origin scorecard.
     "multi_family": {
-        "n_estimators": 600, "learning_rate": 0.04, "max_depth": 5,
-        "min_child_weight": 5, "subsample": 0.75, "colsample_bytree": 0.7,
-        "gamma": 0.2, "reg_alpha": 0.5, "reg_lambda": 2.0,
+        "n_estimators": 700, "learning_rate": 0.035, "max_depth": 5,
+        "min_child_weight": 7, "subsample": 0.75, "colsample_bytree": 0.65,
+        "gamma": 0.2, "reg_alpha": 0.8, "reg_lambda": 3.0,
     },
     "condo_coop": {
         "n_estimators": 800, "learning_rate": 0.05, "max_depth": 5,
         "min_child_weight": 4, "subsample": 0.8, "colsample_bytree": 0.8,
         "gamma": 0.1, "reg_alpha": 0.3, "reg_lambda": 1.0,
     },
-    # Overfit gap was 0.21 — shallower trees, reduced column sample, strong regularization.
+    # Pooled rental model (walkup + elevator).
+    # Very aggressive regularisation closes the train/test gap from ~0.19 → 0.13.
+    # No lat/lon to prevent geographic memorisation in a small dataset.
+    "rentals_all": {
+        "n_estimators": 350, "learning_rate": 0.03, "max_depth": 3,
+        "min_child_weight": 15, "subsample": 0.65, "colsample_bytree": 0.50,
+        "gamma": 0.30, "reg_alpha": 2.5, "reg_lambda": 6.0,
+    },
+    # Legacy individual rental params (only used if explicitly requested).
     "rental_walkup": {
         "n_estimators": 500, "learning_rate": 0.04, "max_depth": 3,
         "min_child_weight": 6, "subsample": 0.75, "colsample_bytree": 0.6,
         "gamma": 0.2, "reg_alpha": 1.0, "reg_lambda": 3.0,
     },
-    # Overfit gap was 0.34, only 352 train rows — very conservative model.
     "rental_elevator": {
         "n_estimators": 150, "learning_rate": 0.04, "max_depth": 3,
         "min_child_weight": 10, "subsample": 0.7, "colsample_bytree": 0.6,
         "gamma": 0.3, "reg_alpha": 2.0, "reg_lambda": 5.0,
     },
 }
+
+# Segments that use a 5-seed VotingRegressor to reduce variance.
+ENSEMBLE_SEGMENTS = {"multi_family", "rentals_all"}
+
+# Segments where rare (< RARE_N training rows) neighbourhoods are collapsed
+# to "Other_<Borough>" before OHE, preventing thin-slice memorisation.
+RARE_NBHD_SEGMENTS = {"multi_family"}
+RARE_N = 30  # neighbourhoods with fewer train rows are collapsed
+
+# Default segments trained when no --subtypes flag is given.
+# rentals_all replaces the two individual rental segments.
+DEFAULT_SEGMENTS = {"one_family", "multi_family", "condo_coop", "rentals_all"}
+
+# Number of seeds for VotingRegressor ensemble.
+N_ENSEMBLE_SEEDS = 5
 
 BOROUGH_NAMES = {1: "Manhattan", 2: "Bronx", 3: "Brooklyn", 4: "Queens", 5: "Staten Island"}
 
@@ -293,16 +346,21 @@ def _fit_neighborhood_stats(train: pd.DataFrame, target: str) -> dict:
     """Compute neighbourhood stats from training rows only — no leakage."""
     price_col = "sales_price" if target == "sales_price" else "price_per_unit"
     medians = train.groupby("neighborhood")[price_col].median()
-    global_med = float(train[price_col].median())
+    global_med_raw = train[price_col].median()
+    global_med = float(global_med_raw) if pd.notna(global_med_raw) else float("nan")
     stats: dict[str, Any] = {
         "neighborhoods": medians.to_dict(),
         "global_median": global_med,
     }
     # DOF assess_per_unit neighbourhood medians (for imputation).
     if "dof_assess_per_unit" in train.columns:
-        apu = train.groupby("neighborhood")["dof_assess_per_unit"].median()
+        # Robust to nullable dtypes (pd.NA) in some folds.
+        apu = pd.to_numeric(train["dof_assess_per_unit"], errors="coerce").groupby(train["neighborhood"]).median()
         stats["dof_assess_per_unit_neighborhoods"] = apu.to_dict()
-        stats["dof_assess_per_unit_global"] = float(train["dof_assess_per_unit"].median())
+        apu_global_raw = pd.to_numeric(train["dof_assess_per_unit"], errors="coerce").median()
+        stats["dof_assess_per_unit_global"] = (
+            float(apu_global_raw) if pd.notna(apu_global_raw) else float("nan")
+        )
     return stats
 
 
@@ -313,14 +371,42 @@ def _apply_neighborhood_stats(df: pd.DataFrame, stats: dict, target: str) -> pd.
         df["neighborhood"].map(stats["neighborhoods"]).fillna(stats["global_median"])
     )
     if "dof_assess_per_unit" in df.columns and "dof_assess_per_unit_neighborhoods" in stats:
-        df["dof_assess_per_unit"] = df["dof_assess_per_unit"].fillna(
-            df["neighborhood"].map(stats["dof_assess_per_unit_neighborhoods"])
-            .fillna(stats["dof_assess_per_unit_global"])
+        global_fill = stats.get("dof_assess_per_unit_global", float("nan"))
+        df["dof_assess_per_unit"] = pd.to_numeric(df["dof_assess_per_unit"], errors="coerce").fillna(
+            df["neighborhood"].map(stats["dof_assess_per_unit_neighborhoods"]).fillna(global_fill)
         )
     if target == "price_per_unit":
         df = df[df["total_units"].notna() & (df["total_units"] > 0)].copy()
         df["price_per_unit"] = df["sales_price"] / df["total_units"]
     return df
+
+
+# ─── Neighbourhood collapse ───────────────────────────────────────────────────
+
+def _collapse_rare_neighborhoods(train: pd.DataFrame, test: pd.DataFrame,
+                                  rare_n: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Replace thin neighbourhood labels with 'Other_<BoroughName>'.
+
+    Thresholds are computed from train only (no look-ahead into test).
+    """
+    boro_name_map = BOROUGH_NAMES
+    counts = train["neighborhood"].value_counts()
+    rare = set(counts[counts < rare_n].index)
+    if not rare:
+        return train, test
+
+    def _boro_label(df: pd.DataFrame) -> pd.Series:
+        return df["borough"].map(boro_name_map).fillna("Unknown")
+
+    def _replace(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        mask = df["neighborhood"].isin(rare)
+        df.loc[mask, "neighborhood"] = ("Other_" + _boro_label(df).loc[df.index[mask]]).values
+        return df
+
+    n_collapsed = len(rare)
+    print(f"    Collapsed {n_collapsed:,} rare neighbourhoods (< {rare_n} train rows) → Other_<Borough>")
+    return _replace(train), _replace(test)
 
 
 # ─── sklearn pipeline ─────────────────────────────────────────────────────────
@@ -339,6 +425,37 @@ def _build_pipeline(num_feats: list[str], cat_feats: list[str],
         ("prep", ColumnTransformer(parts, remainder="drop")),
         ("xgb", XGBRegressor(**xgb_params, random_state=42, n_jobs=-1,
                              objective="reg:squarederror", verbosity=0)),
+    ])
+
+
+def _build_voting_pipeline(num_feats: list[str], cat_feats: list[str],
+                           xgb_params: dict, n_seeds: int = N_ENSEMBLE_SEEDS) -> Pipeline:
+    """Wrap N XGBRegressor estimators in a VotingRegressor inside one Pipeline.
+
+    Averaging predictions across seeds reduces variance without changing the
+    sklearn .predict() interface, so the model registry and API need no changes.
+    """
+    estimators = []
+    for seed in range(n_seeds):
+        p = dict(xgb_params)
+        p["random_state"] = seed
+        estimators.append((
+            f"xgb_{seed}",
+            XGBRegressor(**p, n_jobs=-1, objective="reg:squarederror", verbosity=0),
+        ))
+    voter = VotingRegressor(estimators=estimators)
+
+    num_pipe = Pipeline([("imp", SimpleImputer(strategy="median"))])
+    cat_pipe = Pipeline([
+        ("imp", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+    ])
+    parts = [("num", num_pipe, num_feats)]
+    if cat_feats:
+        parts.append(("cat", cat_pipe, cat_feats))
+    return Pipeline([
+        ("prep", ColumnTransformer(parts, remainder="drop")),
+        ("xgb", voter),
     ])
 
 
@@ -361,6 +478,133 @@ def _eval(y_true_log: np.ndarray, y_pred_log: np.ndarray) -> dict:
 
 
 # ─── Per-segment training ─────────────────────────────────────────────────────
+
+def train_rentals_all(df: pd.DataFrame) -> dict | None:
+    """Pool rental_walkup + rental_elevator rows into one shared model.
+
+    Eliminates the starvation problem for elevator rentals (~350 train rows)
+    by combining ~4 000 training rows.  An `is_elevator` binary feature (0/1)
+    lets the model learn the price premium for elevator buildings.
+    """
+    segment = "rentals_all"
+    cfg = SEGMENT_FEATURES[segment]
+
+    parts_tr, parts_te = [], []
+    for sub_seg in ("rental_walkup", "rental_elevator"):
+        sub = df[df["segment"] == sub_seg].copy()
+        sub = _engineer(sub)
+        sub["is_elevator"] = 1.0 if sub_seg == "rental_elevator" else 0.0
+        tr = sub[pd.to_datetime(sub["sale_date"]).dt.date <= TRAIN_END].copy()
+        te = sub[pd.to_datetime(sub["sale_date"]).dt.date >= TEST_START].copy()
+        for split in (tr, te):
+            mask = split["total_units"].notna() & (split["total_units"] > 0)
+            split.loc[mask, "price_per_unit"] = (
+                split.loc[mask, "sales_price"] / split.loc[mask, "total_units"]
+            )
+        parts_tr.append(tr[tr["price_per_unit"].notna()])
+        parts_te.append(te[te["price_per_unit"].notna()])
+
+    train = pd.concat(parts_tr, ignore_index=True)
+    test  = pd.concat(parts_te, ignore_index=True)
+
+    print(f"\n{'='*55}")
+    print(f"  RENTALS_ALL (walkup + elevator pooled)")
+    print(f"  train={len(train):,}  test={len(test):,}")
+
+    if len(train) < cfg["min_train"] or len(test) < cfg["min_test"]:
+        print(f"  SKIPPED — below minimum thresholds")
+        return None
+
+    stats = _fit_neighborhood_stats(train, "price_per_unit")
+    train = _apply_neighborhood_stats(train, stats, "price_per_unit")
+    test  = _apply_neighborhood_stats(test,  stats, "price_per_unit")
+
+    avail_num = [c for c in cfg["numeric"]     if c in train.columns]
+    avail_cat = [c for c in cfg["categorical"] if c in train.columns]
+    print(f"  Numeric features ({len(avail_num)}): {avail_num}")
+    print(f"  Categorical features ({len(avail_cat)}): {avail_cat}")
+
+    X_tr = train[avail_num + avail_cat]
+    y_tr = np.log1p(train["price_per_unit"].values)
+    X_te = test[avail_num + avail_cat]
+    y_te = np.log1p(test["price_per_unit"].values)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pipe = _build_voting_pipeline(avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment])
+        pipe.fit(X_tr, y_tr)
+
+    tr_m = _eval(y_tr, pipe.predict(X_tr))
+    te_m = _eval(y_te, pipe.predict(X_te))
+
+    print(f"\n  Train (n={tr_m['n']:,})  R²={tr_m['r2']:.4f}  "
+          f"MAE={tr_m['mae']:,.0f}$/unit  median_ape={tr_m['median_ape']:.3f}")
+    print(f"  Test  (n={te_m['n']:,})  R²={te_m['r2']:.4f}  "
+          f"MAE={te_m['mae']:,.0f}$/unit  median_ape={te_m['median_ape']:.3f}")
+    r2_gap = tr_m["r2"] - te_m["r2"]
+    print(f"  Overfit check: R² gap = {r2_gap:+.4f}  "
+          f"({'⚠  possible overfit' if r2_gap > 0.15 else '✓ within range'})")
+
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    model_path = ARTIFACTS / "rentals_all_spine_price_model.pkl"
+    joblib.dump(pipe, model_path)
+
+    stats_path = ARTIFACTS / "rentals_all_spine_neighborhood_stats.json"
+
+    def _safe_val(v: Any) -> Any:
+        try:
+            return None if (v != v or v is None) else float(v)
+        except (TypeError, ValueError):
+            return None
+
+    stats_out: dict[str, Any] = {}
+    for k, v in stats.items():
+        if isinstance(v, dict):
+            stats_out[k] = {str(kk): _safe_val(vv) for kk, vv in v.items()}
+        else:
+            stats_out[k] = _safe_val(v)
+    with open(stats_path, "w") as fh:
+        json.dump(stats_out, fh, indent=2)
+
+    # Feature importance — average across VotingRegressor seeds.
+    fi_path_str: str | None = None
+    try:
+        feature_names = pipe.named_steps["prep"].get_feature_names_out()
+        xgb_step = pipe.named_steps["xgb"]
+        if hasattr(xgb_step, "estimators_"):
+            importance = np.mean(
+                [e.feature_importances_ for e in xgb_step.estimators_], axis=0
+            )
+        else:
+            importance = xgb_step.feature_importances_
+        fi = pd.DataFrame({"feature": feature_names, "importance": importance})
+        fi = fi.sort_values("importance", ascending=False)
+        fi_path = ARTIFACTS / "rentals_all_spine_feature_importance.csv"
+        fi.to_csv(fi_path, index=False)
+        fi_path_str = str(fi_path)
+        print(f"\n  Top-5 features:")
+        for _, row in fi.head(5).iterrows():
+            print(f"    {row['feature']:<45} {row['importance']:.4f}")
+    except Exception as e:
+        print(f"  [warn] feature importance: {e}")
+
+    return {
+        "segment": segment,
+        "train_rows": tr_m["n"],
+        "test_rows":  te_m["n"],
+        "train_r2":   tr_m["r2"],
+        "test_r2":    te_m["r2"],
+        "test_mae":   te_m["mae"],
+        "test_rmse":  float(np.sqrt(mean_squared_error(
+            np.expm1(y_te), np.clip(np.expm1(pipe.predict(X_te)), 0, None)
+        ))),
+        "test_median_ape": te_m["median_ape"],
+        "test_hit_10pct":  te_m["hit_10pct"],
+        "model_path":      str(model_path),
+        "numeric_features": avail_num,
+        "categorical_features": avail_cat,
+    }
+
 
 def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     cfg        = SEGMENT_FEATURES[segment]
@@ -394,6 +638,10 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
         train = train[train["price_per_unit"].notna()].copy()
         test  = test[test["price_per_unit"].notna()].copy()
 
+    # Rare-neighbourhood collapse (for multi_family and any other RARE_NBHD_SEGMENTS).
+    if segment in RARE_NBHD_SEGMENTS:
+        train, test = _collapse_rare_neighborhoods(train, test, RARE_N)
+
     # Neighbourhood stats fitted on train only.
     stats = _fit_neighborhood_stats(train, target)
     train = _apply_neighborhood_stats(train, stats, target)
@@ -415,8 +663,14 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     X_te = test[avail_num + avail_cat]
     y_te = np.log1p(test[target_col].values)
 
-    pipe = _build_pipeline(avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment])
-    pipe.fit(X_tr, y_tr)
+    # Use VotingRegressor ensemble for high-variance segments.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if segment in ENSEMBLE_SEGMENTS:
+            pipe = _build_voting_pipeline(avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment])
+        else:
+            pipe = _build_pipeline(avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment])
+        pipe.fit(X_tr, y_tr)
 
     tr_m = _eval(y_tr, pipe.predict(X_tr))
     te_m = _eval(y_te, pipe.predict(X_te))
@@ -453,12 +707,19 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     with open(stats_path, "w") as f:
         json.dump(stats_out, f, indent=2)
 
-    # Feature importance.
+    # Feature importance — handle both single XGB and VotingRegressor.
     try:
-        fi = pd.DataFrame({
-            "feature":    pipe.named_steps["prep"].get_feature_names_out(),
-            "importance": pipe.named_steps["xgb"].feature_importances_,
-        }).sort_values("importance", ascending=False)
+        feature_names = pipe.named_steps["prep"].get_feature_names_out()
+        xgb_step = pipe.named_steps["xgb"]
+        if hasattr(xgb_step, "estimators_"):
+            # VotingRegressor: average importances across seeds.
+            importance = np.mean(
+                [e.feature_importances_ for e in xgb_step.estimators_], axis=0
+            )
+        else:
+            importance = xgb_step.feature_importances_
+        fi = pd.DataFrame({"feature": feature_names, "importance": importance})
+        fi = fi.sort_values("importance", ascending=False)
         fi.to_csv(ARTIFACTS / f"{segment}_spine_feature_importance.csv", index=False)
         print(f"\n  Top-5 features:")
         for _, row in fi.head(5).iterrows():
@@ -487,14 +748,17 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
 def main(only_segments: set[str] | None = None) -> None:
     df = load_enriched_spine()
 
-    segments = only_segments or set(SEGMENT_FEATURES.keys())
+    segments = only_segments or DEFAULT_SEGMENTS
     results  = []
 
     for seg in sorted(segments):
-        if seg not in SEGMENT_FEATURES:
+        if seg == "rentals_all":
+            r = train_rentals_all(df)
+        elif seg not in SEGMENT_FEATURES:
             print(f"[skip] unknown segment: {seg}")
             continue
-        r = train_segment(df, seg)
+        else:
+            r = train_segment(df, seg)
         if r:
             results.append(r)
 
@@ -525,11 +789,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Train Gold-spine valuation models (time-based split)"
     )
+    all_choices = list(SEGMENT_FEATURES.keys()) + ["rentals_all"]
     parser.add_argument(
         "--subtypes", nargs="+",
-        choices=list(SEGMENT_FEATURES.keys()),
+        choices=all_choices,
         metavar="SEG",
-        help="Train only the listed segments (default: all)",
+        help=(
+            "Train only the listed segments (default: one_family, multi_family, "
+            "condo_coop, rentals_all).  Use 'rentals_all' for the pooled rental model."
+        ),
     )
     args = parser.parse_args()
     main(only_segments=set(args.subtypes) if args.subtypes else None)

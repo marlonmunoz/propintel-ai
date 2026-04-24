@@ -44,6 +44,11 @@ class ModelRegistry:
             "rental_walkup":   self._load_metadata("rental_walkup_model.json"),
             "rental_elevator": self._load_metadata("rental_elevator_model.json"),
         }
+        # Promote rentals_all if its metadata exists.  When present it overrides
+        # the two individual rental models in get_model_key().
+        _rentals_all_meta = self.metadata_dir / "rentals_all_model.json"
+        if _rentals_all_meta.exists():
+            self._models["rentals_all"] = self._load_metadata("rentals_all_model.json")
         self._loaded_models = {}
 
     def load_model(self, key: str):
@@ -100,10 +105,11 @@ class ModelRegistry:
             return "multi_family"
         if bc in CONDO_COOP:
             return "condo_coop"
-        if bc == "07 RENTALS - WALKUP APARTMENTS":
-            return "rental_walkup"
-        if bc == "08 RENTALS - ELEVATOR APARTMENTS":
-            return "rental_elevator"
+        # Route both rental classes to rentals_all when available (pooled model).
+        if bc in ("07 RENTALS - WALKUP APARTMENTS", "08 RENTALS - ELEVATOR APARTMENTS"):
+            if "rentals_all" in self._models:
+                return "rentals_all"
+            return "rental_walkup" if bc == "07 RENTALS - WALKUP APARTMENTS" else "rental_elevator"
         return "global"
 
     def get_metadata(self, key: str) -> RegisteredModel:

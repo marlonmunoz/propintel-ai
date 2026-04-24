@@ -1,19 +1,20 @@
 {
-    "name": "multi_family_spine",
-    "version": "v3",
-    "segment": "multi_family",
-    "artifact_path": "ml/artifacts/spine_models/multi_family_spine_price_model.pkl",
-    "stats_path": "ml/artifacts/spine_models/multi_family_spine_neighborhood_stats.json",
-    "feature_importance_path": "ml/artifacts/spine_models/multi_family_spine_feature_importance.csv",
-    "target": "sales_price",
+    "name": "rentals_all_spine",
+    "version": "v4",
+    "segment": "rentals_all",
+    "artifact_path": "ml/artifacts/spine_models/rentals_all_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/rentals_all_spine_neighborhood_stats.json",
+    "target": "price_per_unit",
     "numeric_features": [
         "neighborhood_median_price", "property_age",
+        "total_units", "residential_units",
+        "is_elevator",
         "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
         "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
         "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
         "acris_mortgage_cnt", "acris_last_mtge_amt",
         "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
-        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "subway_dist_km",
         "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
         "pluto_bldgarea", "pluto_lotarea"
     ],
@@ -21,10 +22,10 @@
         "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 346108.0,
-        "rmse": 615000.0,
-        "r2": 0.6084,
-        "median_ape": 0.208,
-        "note": "v4 spine (5-seed VotingRegressor + rare-nbhd collapse): ΔR² gap 0.138, worst-fold R² 0.541. time-based split (train≤2024, test≥2025)"
+        "mae": 110463.0,
+        "rmse": 270000.0,
+        "r2": 0.4564,
+        "median_ape": 0.257,
+        "note": "v4 spine (pooled walkup+elevator, 5-seed VotingRegressor, no lat/lon): ΔR² gap 0.132, worst-fold R² 0.455. time-based split (train≤2024, test≥2025). Both 07-walkup and 08-elevator classes route here."
     }
 }
