@@ -29,27 +29,27 @@ const features = [
 const modelMetrics = [
   {
     label: 'Strongest segment',
-    segment: 'Condo & co-op',
-    target: 0.8,
+    segment: 'Single family homes',
+    target: 0.77,
     decimals: 2,
     suffix: 'R²',
-    detail: 'Highest explanatory power on NYC residential sales',
+    detail: 'Highest accuracy on NYC residential sales — time-based holdout',
   },
   {
     label: 'Multi-family',
     segment: '2–3 unit buildings',
-    target: 0.75,
+    target: 0.61,
     decimals: 2,
     suffix: 'R²',
-    detail: 'PLUTO-enriched features + multi-year sales',
+    detail: 'Ensemble model + rare-neighbourhood collapse to reduce overfitting',
   },
   {
-    label: 'Subtype models',
+    label: 'Segment models',
     segment: 'Production routing',
-    target: 5,
+    target: 4,
     decimals: 0,
     suffix: 'models',
-    detail: 'One global fallback + four dedicated segments',
+    detail: 'One global fallback + four dedicated segments, overfitting-gated',
   },
 ]
 
