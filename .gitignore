@@ -233,9 +233,11 @@ ml/data/pluto_raw/
 ml/data/processed/
 ml/data/external/
 
-# generated ML outputs
+# generated ML outputs (reproducible from pipelines — not committed)
 ml/data/features/
-# ml/artifacts/
+ml/data/silver/
+ml/data/gold/
+ml/artifacts/
 
 # catboost
 catboost_info/
