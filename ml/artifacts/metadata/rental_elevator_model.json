@@ -22,10 +22,10 @@
         "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 95863.0,
+        "mae": 93565.0,
         "rmse": 178619.5,
-        "r2": 0.4596,
-        "median_ape": 0.299,
-        "note": "v3 spine: target=price_per_unit, small sample (n=352 train). Use with caution."
+        "r2": 0.5373,
+        "median_ape": 0.286,
+        "note": "v3 spine (Optuna-tuned 60 trials): target=price_per_unit, small sample (n=352 train). Use with caution."
     }
 }

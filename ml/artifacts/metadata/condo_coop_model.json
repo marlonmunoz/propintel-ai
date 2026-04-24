@@ -21,10 +21,10 @@
         "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 420637.0,
+        "mae": 412565.0,
         "rmse": 974838.6,
-        "r2": 0.6327,
-        "median_ape": 0.214,
-        "note": "v3 spine: time-based split (train≤2024, test≥2025), DOF+ACRIS+J51+PLUTO features"
+        "r2": 0.7004,
+        "median_ape": 0.207,
+        "note": "v3 spine (Optuna-tuned 60 trials): time-based split (train≤2024, test≥2025), DOF+ACRIS+J51+PLUTO features"
     }
 }
