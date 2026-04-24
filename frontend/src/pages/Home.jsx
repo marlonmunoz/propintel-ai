@@ -9,7 +9,7 @@ const features = [
     icon: BarChart3,
     title: 'ML-Powered Valuation',
     description:
-      'XGBoost models trained on real NYC sales data route to the best segment model for your property type — one family, multi-family, condo, co-op, or rental.',
+      'XGBoost ensemble models trained on real NYC sales data route to the best segment model for your property type — one family, multi-family, condo/co-op, or rental (walkup and elevator pooled).',
   },
   {
     icon: Brain,
