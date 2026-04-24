@@ -1,6 +1,6 @@
 # PropIntel AI
 
-PropIntel AI is an end-to-end AI engineering platform for real estate investment analysis, combining data pipelines, machine learning models, a scalable backend API, and a React frontend to deliver property valuation, investment scoring, and explainable decision support.
+PropIntel AI is an end-to-end AI engineering platform for real estate investment analysis, combining a Bronze → Silver → Gold medallion data pipeline, machine learning models, a scalable backend API, and a React frontend to deliver property valuation, investment scoring, and explainable decision support.
 
 ![App Preview](docs/PropIntel_Preview.png)
 
@@ -17,6 +17,7 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 ![Data Engineering](https://img.shields.io/badge/Data-Engineering-darkblue)
 ![Machine Learning](https://img.shields.io/badge/Machine-Learning-orange)
 ![XGBoost](https://img.shields.io/badge/XGBoost-Model-red)
+![Optuna](https://img.shields.io/badge/Optuna-HPO-blue)
 ![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-purple)
 
 ---
@@ -27,12 +28,18 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - Modular AI system architecture with clean layer separation
 - Production-style FastAPI backend with Pydantic v2 validation
 - PostgreSQL data layer via Supabase
-- Real NYC government data ingestion pipeline (Rolling Sales + PLUTO, BBL join)
-- End-to-end ML pipeline: ingestion → feature engineering → training → inference
+- **Medallion data pipeline**: Bronze (raw) → Silver (normalised) → Gold (as-of feature views)
+- **As-of / leakage contract**: every training row uses only data available before `sale_date - 1 day`
+- **Time-based evaluation**: rolling-origin cross-validation (no random splits)
+- Real NYC government data: Rolling Sales, PLUTO, DOF Assessment, ACRIS, J-51 Exemption
+- End-to-end ML pipeline: ingestion → Silver normalisation → Gold feature build → training → inference
 - XGBoost regression with log-transformed target for residential property valuation
+- **Optuna hyperparameter search** on the strict time split per segment
 - ModelRegistry pattern: metadata-driven, segment-routable, lazy-loading model serving
-- 5 trained subtype models: one_family, multi_family, condo_coop, rental_walkup, rental_elevator
+- 5 trained spine v3 models: one_family, multi_family, condo_coop, rental_walkup, rental_elevator
 - Full building-class routing to dedicated segment models
+- **Optional BBL + as_of_date on inference** — DOF / ACRIS / J-51 / PLUTO features loaded from Silver + Gold parquets at request time (same as-of rules as training)
+- BallTree haversine subway-distance feature (MTA stations) at training and inference
 - Feature importance / explainability artifact persisted after training
 - Global explainability endpoint: `GET /model/feature-importance`
 - `@lru_cache` on feature importance for zero disk I/O after first request
@@ -59,21 +66,15 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 
 🟢 **Active — Production-Hardened Full-Stack AI Platform**
 
-All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (authentication, rate limiting, CORS, error handling, structured logging). Paid tier feature implemented end-to-end. 186 total automated tests (74 backend, 112 frontend).
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (authentication, rate limiting, CORS, error handling, structured logging). 186 total automated tests (74 backend, 112 frontend).
 
 **Current milestone:**
 - Full-stack platform live: React 19 frontend talking to FastAPI backend
 - **Supabase Auth** integrated: register / login, JWT sessions, `GET`/`PATCH /auth/me` profiles, per-user saved properties; optional **admin** via `profiles.role` and/or `ADMIN_USER_IDS` in server env (full portfolio visibility for admins)
 - **Paid tier feature** complete: `user` / `paid` / `admin` roles enforced on LLM quota; `GET /auth/quota` endpoint; quota pill on Analyze page; Paid badge in Navbar; tier card + quota bar + Stripe placeholder on Profile page
-- Real NYC Rolling Sales + PLUTO ingestion pipeline implemented
-- Residential-only feature engineering pipeline implemented
-- XGBoost pricing model trained on real NYC residential sales data
-- 5 subtype models trained and fully routed via ModelRegistry:
-  - `one_family` — R²=0.736 ✅ production grade
-  - `multi_family` — R²=0.747 ✅ production grade
-  - `condo_coop` — R²=0.801 (parent BBL fix + condo unit transactions + `numfloors` / `lot_coverage`)
-  - `rental_walkup` — R²=0.594 MVP (walkup class 07, **price/unit**; density + subway features)
-  - `rental_elevator` — R²=0.592 MVP (elevator class 08, **price/unit**)
+- **Medallion data pipeline** implemented: Bronze → Silver normalizers (DOF, ACRIS, J-51, PLUTO) → Gold as-of feature builders → spine-based training
+- **Spine v3 models** trained on Gold features with strict time-based splits; Optuna HPO on 3 underperforming segments — all metrics are honest forward-time R² values
+- **BBL inference enrichment**: optional `bbl` + `as_of_date` on `POST /predict-price-v2` and `POST /analyze-property-v2` triggers on-the-fly Silver/PLUTO feature loading at request time, closing the train/inference feature gap
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
 - LLM explanation layer live with structured JSON output
@@ -131,86 +132,70 @@ New frontend work should target **v2 only**. Legacy routes are not the primary c
                       │
                       ▼
               Service Layer
-    ┌──────────────────────────────┐
-    │  PredictionService           │
-    │  ModelRegistry               │
-    │  Explainer (OpenAI LLM)      │
-    └──────────────────────────────┘
+    ┌──────────────────────────────────────┐
+    │  PredictionService                   │
+    │  BblFeatureBuilder (as-of lookup)    │
+    │  ModelRegistry                       │
+    │  Explainer (OpenAI LLM)             │
+    └──────────────────────────────────────┘
                       │
               ┌───────┴────────┐
               ▼                ▼
         SQLAlchemy ORM    ML Inference
               │                │
               ▼                ▼
-      PostgreSQL DB     Subtype Models
+      PostgreSQL DB     Spine v3 Models
         (Supabase)      (XGBoost PKLs)
-              │
-              ▼
-         Data Pipelines
-              │
-              ▼
-       Feature Engineering
-              │
-              ▼
-      Model Training Pipeline
+                               │
+                               ▼
+                     Silver / Gold Parquets
+                     (DOF · ACRIS · J-51 · PLUTO)
 ```
 
 ---
 
-## Data & ML Pipeline
+## 🏅 Medallion Data Pipeline
 
 ```
-NYC Rolling Sales (5 borough Excel files)
-                    +
-NYC PLUTO (CSV)
-                    │
-                    ▼
-          Data Ingestion Pipeline
-      (`ml/pipelines/data_ingestion.py`)
-                    │
-                    ▼
-          BBL-based dataset merge
-                    │
-                    ▼
-         Processed training dataset
-  (`ml/data/processed/nyc_training_data.csv`)
-                    │
-                    ▼
-        Training Data Preparation
-    (`ml/pipelines/create_training_data.py`)
-    (`ml/pipelines/create_subtype_training_data.py`)
-                    │
-                    ▼
-         Feature Engineering Pipeline
-     (`ml/features/feature_engineering.py`)
-                    │
-                    ▼
-     Residential-only feature dataset
-      (`ml/data/features/nyc_features.csv`)
-                    │
-                    ▼
-       Global + Subtype Training Pipelines
-    (`ml/models/train_model.py`)
-    (`ml/models/train_subtype_models.py`)
-                    │
-                    ▼
-      XGBoost models serialized to artifacts
-  (`ml/artifacts/price_model.pkl`)
-  (`ml/artifacts/subtype_models/*.pkl`)
-                    │
-                    ▼
-      Feature importance / explainability
-  (`ml/artifacts/feature_importance.csv`)
-                    │
-                    ▼
-    ModelRegistry routes requests to segment models
-                    │
-                    ▼
-         v2 FastAPI prediction endpoints
-                    │
-                    ▼
-        Structured analysis responses
-       with LLM explanation narrative
+Raw datasets (Bronze)
+  NYC Rolling Sales (5-borough Excel, current + historical 2022–2024)
+  NYC PLUTO (CSV, ~858k rows)
+  DOF Property Valuation & Assessment (CSV)
+  ACRIS Real Property (master + legals + parties CSVs)
+  J-51 Exemption & Abatement Historical (CSV, ~4.2M rows)
+  NYC Subway Stations (CSV, 496 stations)
+            │
+            ▼
+  Silver normalizers  (ml/pipelines/silver_*.py)
+  silver_dof_assessment.parquet
+  silver_acris_transactions.parquet  +  silver_acris_parties.parquet
+  silver_j51.parquet
+            │
+            ▼
+  Spine builder  (ml/pipelines/spine_builder.py)
+  training_spine_v1.parquet
+  ─ canonical sales rows with sale_date + as_of_date (sale_date − 1 day)
+  ─ BBL normalised · segment label · duplicates removed
+            │
+            ▼
+  Gold as-of feature builders  (ml/pipelines/gold_*_asof.py)
+  gold_dof_assessment_asof.parquet   — DOF roll features strictly before as_of_date
+  gold_acris_features_asof.parquet   — deed / mortgage history strictly before as_of_date
+  gold_j51_features_asof.parquet     — J-51 exemption status strictly before as_of_date
+  gold_pluto_features.parquet        — geo / physical features (BBL-only, no date filter)
+            │
+            ▼
+  Training  (ml/models/train_spine_models.py)
+  Per-segment XGBoost pipeline (sklearn ColumnTransformer → XGBRegressor)
+  Time-based split: train ≤ 2024-12-31, test ≥ 2025-01-31 (30-day gap)
+            │
+            ▼
+  Optuna HPO  (ml/models/tune_spine_models.py)
+  60 trials per underperforming segment on the same time split
+            │
+            ▼
+  Spine v3 artifacts  (ml/artifacts/spine_models/)
+  *_spine_price_model.pkl · *_spine_neighborhood_stats.json · *_spine_feature_importance.csv
 ```
 
 ---
@@ -219,16 +204,17 @@ NYC PLUTO (CSV)
 
 PropIntel uses real NYC government datasets:
 
-### NYC Rolling Sales Data
-- Historical property sales records for all 5 boroughs
-- Includes sale price, building size, building class, and property type
+| Dataset | Source | Coverage |
+|---|---|---|
+| NYC Rolling Sales | DOF (5 borough Excel files, current + 2022–2024 historical) | Sales transactions with price, size, building class |
+| NYC PLUTO | DCP (CSV, ~858k parcels) | Lat/lon, numfloors, FAR, lot/building dimensions |
+| DOF Property Valuation & Assessment | NYC Open Data | Annual tax roll — market + assessed values, year built, units |
+| ACRIS Real Property | NYC Open Data (master + legals + parties) | Deed transfers, mortgages with document amounts and dates |
+| J-51 Exemption & Abatement | NYC Open Data (historical, tax years ≤ 2018) | Per-BBL abatement amounts, expiry years, active flag |
+| NYC Subway Stations | MTA (GTFS, 496 stations) | Lat/lon for nearest-station distance (BallTree haversine) |
 
-### NYC PLUTO Dataset
-- Property-level geographic and structural data
-- Includes zoning, building class, lot size, and geographic coordinates
-
-### Join Strategy
-- Datasets merged using **BBL (Borough-Block-Lot)** as the property key
+### Join strategy
+All datasets are joined on **BBL (Borough-Block-Lot)** — the canonical NYC property key. As-of filters prevent future data from leaking into any training row.
 
 ---
 
@@ -240,87 +226,59 @@ PropIntel uses a `ModelRegistry` to route each prediction request to the most ap
 
 | Building Class | Model Key | Artifact |
 |---|---|---|
-| `01 ONE FAMILY DWELLINGS` | `one_family` | `one_family_price_model.pkl` |
-| `02 TWO FAMILY DWELLINGS`, `03 THREE FAMILY DWELLINGS` | `multi_family` | `multi_family_price_model.pkl` |
-| `09`–`17` COOPS / CONDOS | `condo_coop` | `condo_coop_price_model.pkl` |
-| `07 RENTALS - WALKUP APARTMENTS` | `rental_walkup` | `rental_walkup_price_model.pkl` |
-| `08 RENTALS - ELEVATOR APARTMENTS` | `rental_elevator` | `rental_elevator_price_model.pkl` |
+| `01 ONE FAMILY DWELLINGS` | `one_family` | `one_family_spine_price_model.pkl` |
+| `02 TWO FAMILY DWELLINGS`, `03 THREE FAMILY DWELLINGS` | `multi_family` | `multi_family_spine_price_model.pkl` |
+| `09`–`17` COOPS / CONDOS | `condo_coop` | `condo_coop_spine_price_model.pkl` |
+| `07 RENTALS - WALKUP APARTMENTS` | `rental_walkup` | `rental_walkup_spine_price_model.pkl` |
+| `08 RENTALS - ELEVATOR APARTMENTS` | `rental_elevator` | `rental_elevator_spine_price_model.pkl` |
 | All others | `global` | `price_model.pkl` |
 
 ### Model metadata
 Each model has a JSON metadata file in `ml/artifacts/metadata/` that defines:
 - `name`, `version`, `segment`
 - `artifact_path` — path to the serialized `.pkl`
-- `feature_columns` — exact columns the model expects
-- `metrics` — MAE, RMSE, R² from training evaluation
+- `stats_path` — neighborhood stats JSON (loaded at inference for median lookups)
+- `numeric_features` + `categorical_features` — exact spine v3 feature lists
+- `metrics` — MAE, RMSE, R², median_ape from time-based test evaluation
 
 ### Warning system
 The `warnings` field in `ProductionPredictionResponse` is populated based on model key:
 - `rental_walkup` / `rental_elevator` → warning served if `total_units` is missing (falls back to global model)
 - `global` → fallback model warning
+- `bbl` provided without `as_of_date` (or vice versa) → warning that BBL enrichment was skipped
 
 ---
 
 ## 📈 Model Performance
 
-### Subtype model results
+### Spine v3 model results (time-based split, train ≤ 2024 / test ≥ 2025)
 
-| Model | Segment | R² | MAE | RMSE | RMSE/MAE | Target | Ver |
-|---|---|---|---|---|---|---|---|
-| `condo_coop` | Condos & co-ops | **0.801** | $289k | $493k | 1.70 | sales_price | v4 |
-| `one_family` | One family dwellings | **0.736** | **$140k** | **$203k** | 1.45 | sales_price | v2 |
-| `multi_family` | Two & three family | **0.747** | **$205k** | **$321k** | 1.56 | sales_price | v4 |
-| `rental_elevator` | Elevator rental buildings (08) | **0.592** | $78k/unit | $150k/unit | 1.92 | price_per_unit | v2 |
-| `rental_walkup` | Walkup rental buildings (07) | **0.594** | $107k/unit | $170k/unit | 1.59 | price_per_unit | v4 |
-| `global` | All residential fallback | **0.610** | $350k | $842k | 2.40 | sales_price | v1 |
+| Segment | Test R² | Test MAE | Test Median APE | Target | Tuned | Notes |
+|---|---|---|---|---|---|---|
+| `one_family` | **0.765** | $238k | 17.2% | sales_price | No | Protected — not retrained |
+| `condo_coop` | **0.700** | $413k | 20.7% | sales_price | ✅ Optuna | +0.067 R² vs pre-tuning |
+| `multi_family` | **0.608** | $348k | 21.0% | sales_price | No | Optuna degraded; hand-tuned retained |
+| `rental_walkup` | **0.628** | $108k/unit | 24.3% | price_per_unit | ✅ Optuna | +0.135 R² vs pre-tuning |
+| `rental_elevator` | **0.537** | $94k/unit | 28.6% | price_per_unit | ✅ Optuna | +0.077 R² (crossed 0.50) |
 
-Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price. MAE/RMSE are therefore in $/unit, not $.
+> All metrics are from a **strict time-based holdout** — no random splits. Train rows come from sales up to 2024-12-31; test rows from sales on or after 2025-01-31 (30-day reporting-lag gap). This is a more conservative and honest evaluation than the legacy random-split R² values previously reported.
 
-**v4 improvements (Phase 3 — feature engineering):**
-- `condo_coop` **R² 0.55 → 0.801** (biggest single-session jump): root cause was a BBL mismatch — NYC condo unit lots (1001+) were not matching PLUTO's building lots (0001). Fixed by deriving the parent lot before the join, unlocking 4,599 individual condo elevator transaction records that were previously dropped. Training dataset grew from 12k → 18k rows. Added `numfloors` (floor count = prestige signal) and `lot_coverage` (FAR proxy = density signal) from PLUTO. Higher MAE/RMSE reflects the expanded price range now including condos up to $7.5M (vs co-op-only $4.5M cap before).
-- `rental_walkup` **v4** R² 0.58 → 0.594: deduplicated 56 genuinely new class 07 rows from rolling sales (P5–P95 ppu filter + PLUTO inner join) appended to the housing_data base; further augmentation limited by the fact that `housing_data` was already built from the same rolling sales source. Reaching 0.65+ requires multi-year rolling sales or external data beyond public NYC sources.
-- `multi_family` **v4** R² 0.641 → **0.747** (+16.5%): three-year dataset (2022 + 2023 + current, 26,931 rows vs 8,266), direct PLUTO BBL join adds `assess_per_unit`, `bldg_footprint` (front×depth), `numfloors`, `builtfar`, `lotdepth`. Per-borough×class P97 price caps preserve Manhattan transactions (260 rows vs 106). Hyperparameters: n_estimators=800, lr=0.04, max_depth=6. MAE $214k→$205k (−4%).
+Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price.
 
-**v2/v3 improvements (Phase 2 + outlier hardening):**
-- `one_family` + `multi_family`: per-class 97th-pct price cap + price/sqft P2–P98 anomaly filter — MAE reduced by 43% / 31%, RMSE by 67% / 49%.
-- `condo_coop` (v3): per-class 95th-pct cap + `assess_per_unit` (PLUTO BBL join) added as building quality proxy.
-- Rental models: `stabilization_ratio` (DHCR rent-stabilized units / total_units) added as a regulatory cash-flow signal.
+### Feature set (all spine v3 segments)
+
+| Group | Features |
+|---|---|
+| Neighbourhood stats | `neighborhood_median_price`, `dof_assess_per_unit` |
+| Derived | `property_age`, `borough_name` |
+| DOF roll | `dof_curmkttot`, `dof_curacttot`, `dof_curactland`, `dof_assess_per_unit`, `dof_gross_sqft`, `dof_bld_story`, `dof_units`, `dof_yrbuilt`, `dof_bldg_class`, `dof_tax_class` |
+| ACRIS | `acris_prior_sale_cnt`, `acris_last_deed_amt`, `acris_days_since_last_deed`, `acris_mortgage_cnt`, `acris_last_mtge_amt` |
+| J-51 | `j51_active_flag`, `j51_last_abate_amt`, `j51_total_abatement` |
+| PLUTO geo | `pluto_latitude`, `pluto_longitude`, `subway_dist_km`, `pluto_numfloors`, `pluto_builtfar`, `pluto_bldg_footprint`, `pluto_bldgarea`, `pluto_lotarea`, `pluto_bldgclass` |
+| Rental only | `total_units`, `residential_units` |
 
 ### Explainability
-Each subtype model is trained on its own feature set. Top features vary by segment:
-
-| Model | Key features |
-|---|---|
-| `global` | `gross_sqft`, `land_sqft`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
-| `one_family` | same as global + `neighborhood_median_price` |
-| `multi_family` | same as global + `neighborhood_median_price`, `neighborhood_median_ppsf`, `assess_per_unit`, `bldg_footprint`, `numfloors`, `builtfar`, `lotdepth` |
-| `condo_coop` | `assess_per_unit`, `numfloors`, `lot_coverage`, `neighborhood_median_price`, `year_built`, `property_age`, `latitude`, `longitude`, `borough`, `building_class`, `neighborhood` |
-| `rental_walkup` | same as one_family + `total_units`, `residential_units`, `sqft_per_unit`, `numfloors`, `units_per_floor`, `lot_coverage`, `subway_dist_km`, `stabilization_ratio` |
-| `rental_elevator` | same as rental_walkup minus density/subway features (separate model, stronger regularization for smaller dataset) |
-
-Feature importance CSVs for each segment are saved to `ml/artifacts/` after training and are loaded at inference time to drive the LLM explanation.
-
----
-
-## 📊 Feature Engineering
-
-The feature engineering pipeline transforms the merged NYC dataset into a model-ready residential valuation dataset.
-
-**Core modeling features (current model contract):**
-
-| Feature | Type | Description |
-|---|---|---|
-| `gross_sqft` | numeric | Gross building square footage |
-| `land_sqft` | numeric | Land square footage |
-| `year_built` | numeric | Year the property was built |
-| `property_age` | numeric | Derived: `current_year - year_built` |
-| `latitude` | numeric | Property latitude |
-| `longitude` | numeric | Property longitude |
-| `borough` | categorical | NYC borough |
-| `building_class` | categorical | NYC building class label |
-| `neighborhood` | categorical | NYC neighborhood name |
-
-> Note: `condo_coop` model does not use `gross_sqft` / `land_sqft` (not recorded for NYC co-op share sales). Instead it uses `assess_per_unit` (PLUTO tax assessment ÷ units), `numfloors` (building height), and `lot_coverage` (FAR proxy) from PLUTO via BBL join — covering 98%+ of rows. `rental_walkup` adds `numfloors`, `units_per_floor`, `lot_coverage` (PLUTO spatial join) and `subway_dist_km` (MTA haversine BallTree) alongside `stabilization_ratio` (DHCR). The ModelRegistry handles per-model feature columns automatically.
+Feature importance CSVs for each segment are saved to `ml/artifacts/spine_models/` after training and are loaded at inference time to drive the LLM explanation.
 
 ---
 
@@ -334,14 +292,18 @@ The primary v2 endpoints use the following standardized request schema:
 {
   "borough": "Brooklyn",
   "neighborhood": "Park Slope",
-  "building_class": "01 ONE FAMILY DWELLINGS",
+  "building_class": "02 TWO FAMILY DWELLINGS",
   "year_built": 1925,
   "gross_sqft": 1800,
   "land_sqft": 2000,
   "latitude": 40.6720,
-  "longitude": -73.9778
+  "longitude": -73.9778,
+  "bbl": "3012340056",
+  "as_of_date": "2025-06-15"
 }
 ```
+
+`bbl` and `as_of_date` are **optional**. When both are provided, the API loads DOF / ACRIS / J-51 / PLUTO features from local Silver + Gold parquets using the same as-of rules as training — closing the train/inference feature gap. Without them, the pipeline median-imputes those columns.
 
 ### `POST /analyze-property-v2`
 
@@ -358,7 +320,8 @@ Same as above plus:
 ## 🧠 ML Inference Architecture
 
 ```text
-Client Request (v2 schema)
+Client Request (v2 schema: borough, neighborhood, building_class,
+                year_built, gross_sqft, lat, lon [, bbl, as_of_date])
           │
     FastAPI Endpoint
           │
@@ -377,14 +340,25 @@ Client Request (v2 schema)
     ModelRegistry.load_model(key)
     (lazy-loaded, cached in memory)
           │
-    Build input DataFrame from
-    metadata.feature_columns
+    _build_spine_row()
+    ├─ neighborhood_median_price + dof_assess_per_unit
+    │  (from training-time neighborhood stats JSON)
+    ├─ subway_dist_km (BallTree haversine, MTA stations)
+    ├─ Optional: bbl + as_of_date → BblFeatureBuilder
+    │  ├─ DOF roll (Silver) — latest roll ≤ as_of_date
+    │  ├─ ACRIS (Silver) — deed + mortgage aggs < as_of_date
+    │  ├─ J-51 (Silver) — exemption status < as_of_date
+    │  └─ PLUTO (Gold) — geo / physical by BBL
+    └─ Remaining columns → pipeline median imputation
           │
     model.predict(X) → log-scale
           │
     expm1(prediction) → dollar value
+    (× total_units for price_per_unit models)
           │
-    Warnings generated by model_key
+    Valuation interval (±1× training MAE)
+          │
+    Warnings + bbl_feature_status in input_summary
           │
     Return ProductionPredictionResponse
 ```
@@ -443,8 +417,8 @@ All prediction routes require the same auth as above (**Bearer JWT** or **`X-API
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/predict-price-v2` | Property valuation with model metadata |
-| `POST` | `/analyze-property-v2` | Full investment analysis with LLM explanation |
+| `POST` | `/predict-price-v2` | Property valuation with model metadata; optional `bbl`+`as_of_date` for roll-aligned features |
+| `POST` | `/analyze-property-v2` | Full investment analysis with LLM explanation; optional `bbl`+`as_of_date` |
 | `GET` | `/model/feature-importance` | Top global feature importances |
 
 ### Admin (admin JWT or API key)
@@ -472,39 +446,31 @@ All prediction routes require the same auth as above (**Bearer JWT** or **`X-API
     "market_price": 1250000.0,
     "price_difference": -65000.0,
     "price_difference_pct": -5.2,
-    "price_low": 980000.0,
-    "price_high": 1390000.0,
-    "valuation_interval_note": "Typical error band from training MAE (not a formal confidence interval)."
+    "price_low": 946525.0,
+    "price_high": 1423475.0,
+    "valuation_interval_note": "Approximate range ±1× the model's training MAE for this segment (not a formal confidence interval)."
   },
   "investment_analysis": {
     "roi_estimate": -5.2,
     "investment_score": 38,
     "deal_label": "Avoid",
     "recommendation": "Approach cautiously and negotiate closer to model-estimated value.",
-    "confidence": "medium",
+    "confidence": "Medium",
     "analysis_summary": "Property may be overpriced by approximately $65,000 based on model analysis."
   },
   "drivers": {
     "top_drivers": [
-      "Neighborhood demand strongly influences pricing",
-      "Building size significantly impacts property value",
-      "Location (borough) plays a key role in valuation"
+      "Neighborhood price level is a strong driver of property value",
+      "City-assessed value per unit reflects building quality and income potential",
+      "Geographic positioning influences estimated price"
     ],
     "global_context": [
       "Model is trained on NYC residential sales data",
       "Location, size, and building characteristics influence estimated value"
     ],
     "explanation_factors": [
-      {
-        "factor": "predicted_price",
-        "value": 1185000.0,
-        "reason": "Derived from trained ML model using property features"
-      },
-      {
-        "factor": "market_price",
-        "value": 1250000.0,
-        "reason": "User-provided listing price"
-      }
+      { "factor": "predicted_price", "value": 1185000.0, "reason": "Derived from trained ML model using property features" },
+      { "factor": "market_price",    "value": 1250000.0, "reason": "User-provided listing price" }
     ]
   },
   "explanation": {
@@ -512,11 +478,9 @@ All prediction routes require the same auth as above (**Bearer JWT** or **`X-API
     "opportunity": "If acquired below asking price, the valuation gap may create a better entry point.",
     "risks": "Current asking price reduces margin for upside and weakens near-term return potential.",
     "recommendation": "Avoid",
-    "confidence": "medium"
+    "confidence": "Medium"
   },
-  "metadata": {
-    "model_version": "v1"
-  }
+  "metadata": { "model_version": "v3" }
 }
 ```
 
@@ -531,7 +495,7 @@ propintel-ai/
 │   ├── src/                         # pages, components, context (Auth), services, lib/supabase.js
 │   ├── public/
 │   ├── package.json
-│   └── .env                         # VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY; optional VITE_API_KEY for non-session API calls
+│   └── .env                         # VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 │
 ├── backend/
 │   └── app/
@@ -551,11 +515,12 @@ propintel-ai/
 │       │   ├── init_db.py           # Table creation script
 │       │   └── models.py            # ORM models (Property, Profile, LLMUsage, MapboxUsage, HousingData)
 │       ├── schemas/
-│       │   ├── prediction.py        # All prediction request/response schemas
+│       │   ├── prediction.py        # All prediction request/response schemas (incl. optional bbl, as_of_date)
 │       │   └── property.py          # Property + auth schemas (UserProfileResponse, QuotaResponse, …)
 │       ├── services/
-│       │   ├── model_registry.py    # Metadata-driven model loader + routing
-│       │   ├── predictor.py         # PredictionService: predict + analyze
+│       │   ├── model_registry.py    # Metadata-driven model loader + routing (spine v3 aware)
+│       │   ├── predictor.py         # PredictionService: spine feature row builder + predict + analyze
+│       │   ├── bbl_feature_builder.py # On-the-fly as-of Silver/PLUTO feature lookup by BBL
 │       │   ├── explainer.py         # OpenAI LLM explanation + per-role quota enforcement
 │       │   └── mapbox_usage.py      # Mapbox daily counter + org-wide monthly cap check
 │       ├── scripts/
@@ -566,51 +531,77 @@ propintel-ai/
 │
 ├── ml/
 │   ├── artifacts/
-│   │   ├── price_model.pkl          # Global XGBoost model
-│   │   ├── catboost_model.joblib    # CatBoost experiment artifact
-│   │   ├── feature_importance.csv   # Persisted global feature importances
-│   │   ├── metadata/
+│   │   ├── price_model.pkl          # Global XGBoost model (legacy fallback)
+│   │   ├── feature_importance.csv   # Global feature importances (legacy)
+│   │   ├── metadata/                # ← COMMITTED — controls which model the API serves
 │   │   │   ├── global_model.json
-│   │   │   ├── one_family_model.json
-│   │   │   ├── multi_family_model.json
-│   │   │   ├── condo_coop_model.json
-│   │   │   ├── rental_walkup_model.json
-│   │   │   └── rental_elevator_model.json
-│   │   └── subtype_models/
-│   │       ├── one_family_price_model.pkl
-│   │       ├── multi_family_price_model.pkl
-│   │       ├── condo_coop_price_model.pkl
-│   │       ├── rental_walkup_price_model.pkl
-│   │       ├── rental_elevator_price_model.pkl
-│   │       └── subtype_model_metrics.csv
+│   │   │   ├── one_family_model.json      # v3 — points to spine_models/
+│   │   │   ├── multi_family_model.json    # v3 — points to spine_models/
+│   │   │   ├── condo_coop_model.json      # v3 — points to spine_models/
+│   │   │   ├── rental_walkup_model.json   # v3 — points to spine_models/
+│   │   │   └── rental_elevator_model.json # v3 — points to spine_models/
+│   │   └── spine_models/            # ← git-ignored (regenerate with train_spine_models.py)
+│   │       ├── *_spine_price_model.pkl
+│   │       ├── *_spine_neighborhood_stats.json
+│   │       ├── *_spine_feature_importance.csv
+│   │       └── spine_model_metrics.json
 │   ├── data/
-│   │   ├── nyc_raw/                 # NYC Rolling Sales Excel files (git-ignored)
-│   │   ├── pluto_raw/               # PLUTO CSV (git-ignored)
-│   │   ├── processed/               # Merged + cleaned datasets (git-ignored)
-│   │   └── features/                # Engineered feature datasets (git-ignored)
+│   │   ├── nyc_raw/                 # NYC Rolling Sales Excel files — git-ignored
+│   │   │   └── historical/          # 2022–2024 annualized sales
+│   │   ├── pluto_raw/               # PLUTO CSV — git-ignored
+│   │   ├── external/                # Raw external datasets — git-ignored
+│   │   │   ├── dof_property_valuation_assessment/
+│   │   │   ├── acris/ (master/ legals/ parties/)
+│   │   │   ├── j51_exemption_abatement_historical/
+│   │   │   └── nyc_subway_stations.csv
+│   │   ├── silver/                  # Normalised parquets — git-ignored
+│   │   │   ├── dof_assessment/silver_dof_assessment.parquet
+│   │   │   ├── acris/silver_acris_transactions.parquet + silver_acris_parties.parquet
+│   │   │   └── j51/silver_j51.parquet
+│   │   ├── gold/                    # Feature-view parquets — git-ignored
+│   │   │   ├── training_spine_v1.parquet
+│   │   │   ├── gold_dof_assessment_asof.parquet
+│   │   │   ├── gold_acris_features_asof.parquet
+│   │   │   ├── gold_j51_features_asof.parquet
+│   │   │   └── gold_pluto_features.parquet
+│   │   ├── processed/               # Legacy merged datasets — git-ignored
+│   │   └── features/                # Legacy engineered datasets — git-ignored
 │   ├── features/
-│   │   └── feature_engineering.py
+│   │   └── feature_engineering.py   # Legacy feature engineering
 │   ├── inference/
 │   │   └── predict.py               # Legacy inference + feature importance loader
 │   ├── models/
-│   │   ├── train_model.py           # Global XGBoost training pipeline
-│   │   ├── train_subtype_models.py  # Subtype XGBoost training pipeline
+│   │   ├── train_model.py           # Legacy global XGBoost training
+│   │   ├── train_subtype_models.py  # Legacy subtype training
+│   │   ├── train_spine_models.py    # Spine v3: Gold features + time-based split (DO NOT touch one_family artifacts)
+│   │   ├── tune_spine_models.py     # Optuna HPO for multi_family/condo_coop/rental_* (one_family excluded)
 │   │   └── train_catboost_model.py  # CatBoost experiment
 │   └── pipelines/
-│       ├── data_ingestion.py        # NYC Rolling Sales + PLUTO ingestion
-│       ├── create_training_data.py  # Clean + filter training data from DB
+│       ├── spine_builder.py             # Canonical spine: normalised BBL + as_of_date + segment
+│       ├── eval_protocol.py             # Rolling-origin evaluation protocol (time-based folds)
+│       ├── silver_dof_assessment.py     # Silver normalizer: DOF assessment CSV → parquet
+│       ├── silver_acris.py              # Silver normalizer: ACRIS master+legals+parties → parquet
+│       ├── silver_j51.py                # Silver normalizer: J-51 historical CSV → parquet
+│       ├── gold_dof_assessment_asof.py  # Gold builder: as-of DOF features
+│       ├── gold_acris_features_asof.py  # Gold builder: as-of ACRIS deed/mortgage features
+│       ├── gold_j51_features_asof.py    # Gold builder: as-of J-51 exemption features
+│       ├── gold_pluto_features.py       # Gold builder: PLUTO geo/physical + subway_dist_km
+│       ├── download_j51_historical.py   # Download J-51 dataset from NYC Open Data
+│       ├── download_rolling_sales_2024.py # Download 2024 annualized rolling sales
+│       ├── data_ingestion.py            # Legacy: NYC Rolling Sales + PLUTO ingestion
+│       ├── create_training_data.py      # Legacy training data pipeline
 │       ├── create_subtype_training_data.py
-│       └── profile_housing_data.py  # Dataset profiling utility
+│       └── profile_housing_data.py
 │
 ├── tests/
 │   ├── conftest.py
-│   ├── test_prediction_api.py       # Prediction v1/v2, feature importance; overrides get_current_user
-│   ├── test_property_api.py         # Property CRUD, housing lookup, filters; UserContext mocks
-│   ├── test_llm_guardrails.py       # LLM schema validation, per-user quota, admin/api_key exemption
-│   ├── test_admin_api.py            # Admin overview, role PATCH, role enrichment logic
-│   ├── test_quota_api.py            # GET /auth/quota — all role/usage combinations
-│   ├── test_auth_me_api.py          # GET/PATCH /auth/me — profile creation, backfill, admin promo
-│   └── test_geocode_usage_api.py    # Mapbox usage recording + monthly cap 429
+│   ├── test_prediction_api.py
+│   ├── test_property_api.py
+│   ├── test_llm_guardrails.py
+│   ├── test_admin_api.py
+│   ├── test_quota_api.py
+│   ├── test_auth_me_api.py
+│   └── test_geocode_usage_api.py
 │
 ├── .github/
 │   └── workflows/
@@ -632,14 +623,13 @@ propintel-ai/
 | `api/` | FastAPI route handlers — prediction, properties, auth (`/me`, `/quota`), admin, geocode usage |
 | `core/` | JWT + API-key auth (`auth.py`), rate limiting, error handlers, path config |
 | `db/` | Database engine, session, and ORM models (`Profile`, `LLMUsage`, `MapboxUsage`, …) |
-| `schemas/` | Pydantic v2 request/response validation — includes `QuotaResponse`, `UserProfileResponse` |
-| `services/` | ML prediction, investment scoring, LLM explanation (with role-based quota), Mapbox usage + cap |
-| `ml/artifacts/` | Serialized model PKLs, metadata JSONs, feature importance |
-| `ml/data/` | Dataset ingestion and processing |
-| `ml/features/` | Feature engineering logic |
-| `ml/inference/` | Legacy prediction utilities and feature importance loader |
-| `ml/models/` | Model training pipelines |
-| `ml/pipelines/` | End-to-end ML pipeline orchestration |
+| `schemas/` | Pydantic v2 request/response validation — includes optional `bbl`, `as_of_date` on prediction requests |
+| `services/` | ML prediction, investment scoring, BBL as-of feature lookup, LLM explanation (with role-based quota), Mapbox usage + cap |
+| `ml/artifacts/metadata/` | Committed metadata JSONs — controls which PKL file the API loads per segment |
+| `ml/data/silver/` | Normalised Silver parquets (DOF, ACRIS, J-51) — git-ignored, regenerated from pipelines |
+| `ml/data/gold/` | As-of Gold feature parquets + training spine — git-ignored, regenerated from pipelines |
+| `ml/models/` | Model training + Optuna tuning pipelines |
+| `ml/pipelines/` | Silver normalizers, Gold builders, spine builder, eval protocol, download scripts |
 
 ---
 
@@ -666,7 +656,7 @@ LLM_TEMPERATURE=0.3
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_JWT_SECRET=your-jwt-secret-from-supabase-dashboard
 
-# Optional: comma-separated Supabase user UUIDs treated as app admins (full portfolio + role in /auth/me)
+# Optional: comma-separated Supabase user UUIDs treated as app admins
 ADMIN_USER_IDS=00000000-0000-0000-0000-000000000000
 
 # LLM daily quota limits per role (defaults: free=10, paid=200)
@@ -691,8 +681,6 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
-
-Optional: `VITE_API_KEY` — same value as backend `API_KEY` — only needed for calling the API **without** a logged-in session (e.g. local scripts). The logged-in app uses the Supabase **Bearer** token for all protected routes.
 
 ---
 
@@ -725,6 +713,29 @@ Available at `http://localhost:5174`
 python -m backend.app.db.init_db
 ```
 
+### Rebuild the ML pipeline from scratch
+
+```bash
+# 1. Silver normalizers
+python ml/pipelines/silver_dof_assessment.py
+python ml/pipelines/silver_acris.py
+python ml/pipelines/silver_j51.py
+
+# 2. Spine + Gold features
+python ml/pipelines/spine_builder.py
+python ml/pipelines/gold_dof_assessment_asof.py
+python ml/pipelines/gold_acris_features_asof.py
+python ml/pipelines/gold_j51_features_asof.py
+python ml/pipelines/gold_pluto_features.py
+
+# 3. Train (one_family excluded from tuning — use train_spine_models.py for it)
+python ml/models/train_spine_models.py --subtypes one_family
+python ml/models/tune_spine_models.py --trials 60
+
+# 4. Evaluate
+python ml/pipelines/eval_protocol.py
+```
+
 ---
 
 ## 🗄️ Database Integration
@@ -745,15 +756,6 @@ python -m backend.app.db.init_db
 | `llm_usage` | `LLMUsage` | Per-user daily LLM call counter — enforces `LLM_QUOTA_FREE` / `LLM_QUOTA_PAID` limits |
 | `mapbox_usage` | `MapboxUsage` | Per-user daily Mapbox geocode request counter — reported by the frontend, shown in admin dashboard |
 | `housing_data` | `HousingData` | NYC training data loaded from CSV pipeline |
-
-### Row Level Security (Supabase)
-
-The app reads and writes these tables **only through FastAPI** (not PostgREST from the browser). Enable RLS on every `public` app table so the Supabase linter passes and the Data API does not expose rows without policies.
-
-- **`backend/migrations/005_enable_rls_all_public_app_tables.sql`** — enables RLS on `profiles`, `properties`, `housing_data`, `llm_usage`, and `mapbox_usage` if they exist (idempotent).
-- Earlier migrations: **`003_mapbox_usage.sql`** also enables RLS on `mapbox_usage` for new installs; **`004_mapbox_usage_rls.sql`** is a catch-up if you ran an older `003` without RLS.
-
-Your `DATABASE_URL` user should be the **table owner** (typical Supabase `postgres` connection) so the API bypasses RLS; do not add `FORCE ROW LEVEL SECURITY` unless you also add policies for that role.
 
 ---
 
@@ -794,172 +796,51 @@ pytest
 
 **Total frontend: 112 tests** (`npm run test` from `frontend/`)
 
-### Patterns used
-- `monkeypatch` for mocking legacy inference functions
-- `app.dependency_overrides` for mocking `PredictionService` and `get_current_user` (returns a stub `UserContext`)
-- Targeted `dependency_overrides.pop()` to isolate service mocks across tests
-- SQLite test database for full test isolation
-- Validation error tests for coordinate and year bounds
-- Auth exercised via dependency overrides; API key path still available for integration tests outside pytest overrides
-- Vitest + React Testing Library for all frontend tests
-- `vi.mock()` + `vi.hoisted()` for module mocking without initialization order issues
-- Mapbox `PropertyLocationMap` mocked in Analyze tests to prevent WebGL errors in jsdom
-
 ### CI Pipeline
 
-GitHub Actions runs `pytest` automatically on:
-- push to `main`
-- pull requests targeting `main`
+GitHub Actions runs `pytest` automatically on push to `main` and pull requests targeting `main`.
 
 Workflow: `.github/workflows/tests.yml`
-
-The CI pipeline:
-1. Checks out the repo
-2. Sets up Python 3.11
-3. Installs dependencies
-4. Initializes the SQLite test database
-5. Runs `pytest` with `DATABASE_URL=sqlite:///./test.db`
 
 ---
 
 ## 🐳 Docker & Docker Compose
 
-### Build the API image
-
 ```bash
+# Build
 docker build -t propintel-api .
-```
 
-### Run with Supabase (cloud PostgreSQL)
-
-```bash
+# Run with Supabase (cloud PostgreSQL)
 docker run --rm -p 8000:8000 --env-file .env.docker propintel-api
-```
 
-### Run with Docker Compose (local PostgreSQL)
-
-```bash
+# Run with Docker Compose (local PostgreSQL)
 docker compose up --build
-```
-
-Stop:
-
-```bash
 docker compose down
 ```
-
-### Environment files
-
-| File | Purpose |
-|---|---|
-| `.env` | Local development |
-| `.env.docker` | Docker with Supabase (git-ignored) |
-| `.env.docker.example` | Template for `.env.docker` |
-| `.env.example` | Template for `.env` |
 
 ---
 
 ## ⚡ Performance Optimizations
 
-### Model caching
-Models are lazy-loaded on first request and cached in memory by the `ModelRegistry`. Subsequent requests for the same model key return the cached pipeline with zero disk I/O.
-
-### Feature importance caching
-`load_feature_importance()` and `get_top_global_features()` in `ml/inference/predict.py` are decorated with `@lru_cache(maxsize=None)`. The feature importance CSV is read from disk once per server process and cached for all subsequent analysis requests.
-
----
-
-## ✅ Current Progress
-
-### Frontend
-- React 19 + Vite 8 + TailwindCSS 4 + React Router 7
-- Live and integrated with FastAPI backend
-- **Supabase Auth** — `Login` / `Register`, `ProtectedRoute` for Analyze, Portfolio, and Profile
-- **Home page** — hero section with feature highlights
-- **Analyze page** — property form, Mapbox address autocomplete, v2 analysis, MAE-based valuation band (`price_low` / `price_high`), color-coded deal label badge, "Save to Portfolio"; quota pill shows remaining AI analyses with color-coded urgency states; quota-exceeded card with upgrade CTA replaces explanation panels when limit hit
-- **Portfolio page** — saved analyses with deal labels, valuation range, sort and filter controls
-- **Profile page** — tier card (Free / Paid / Admin), visual quota usage bar, Stripe upgrade placeholder for free users, display name and marketing preferences (`PATCH /auth/me`)
-- **Navbar** — theme toggle, account menu, **Admin** badge when `profile.role === 'admin'`; **Paid** badge when `profile.role === 'paid'`
-- **AuthContext** — `quota` state and `refreshQuota` hook globally available; auto-refreshed on session change and after each analysis
-
-### Backend and Database
-- FastAPI backend with modular architecture
-- Supabase PostgreSQL integration
-- SQLAlchemy ORM with `Property` and `HousingData` models
-- Full property CRUD:
-  - `POST /properties/`
-  - `GET /properties/` (filtering + pagination)
-  - `GET /properties/{property_id}`
-  - `PATCH /properties/{property_id}`
-  - `DELETE /properties/{property_id}`
-- Pydantic v2 validation on all create and update schemas
-- Swagger API documentation auto-generated
-
-### Service Layer
-- `ModelRegistry` — metadata-driven model loader with segment routing
-- `PredictionService` — prediction + investment analysis orchestration
-- `Explainer` — OpenAI gpt-5.4-mini LLM narrative generation
-- Per-model-key warning system for low-confidence predictions
-
-### Machine Learning
-- NYC Rolling Sales ingestion pipeline (5 boroughs)
-- PLUTO dataset ingestion pipeline
-- BBL-based dataset merge
-- Feature engineering pipeline
-- Residential-only dataset filtering
-- Log-transformed target training (`log1p` / `expm1`)
-- Global XGBoost residential valuation model
-- 5 trained subtype XGBoost models (v2–v4 — outlier-hardened / enriched where noted):
-  - `one_family` (R²=0.736, MAE=$140k) — per-class price cap + price/sqft filter (v2)
-  - `multi_family` (R²=0.747, MAE=$205k) — per-borough×class caps + PLUTO building dimensions (v4)
-  - `condo_coop` (R²=0.801, MAE=$289k) — parent BBL fix, condo unit transactions, numfloors + lot_coverage (v4)
-  - `rental_walkup` (R²=0.594, MAE=$107k/unit) — density features + subway proximity (v4)
-  - `rental_elevator` (R²=0.592, MAE=$78k/unit) — stabilization_ratio (v2)
-- Full building-class routing via `ModelRegistry.get_model_key()`
-- Feature importance artifact persisted and cached at runtime
-- All 6 models registered with version metadata JSONs
-- ML inference endpoints:
-  - `POST /predict-price-v2` (primary)
-  - `POST /analyze-property-v2` (primary)
-  - `GET /model/feature-importance`
-  - Legacy routes maintained for compatibility
-- Grouped investment analysis response schema
-- Deterministic investment scoring (ROI + valuation gap + risk penalty)
-- Deterministic `deal_label` classification
-- LLM-based investment narrative generation
-
-### Engineering and Reliability
-- **Authentication** — `Authorization: Bearer` (Supabase JWT) or `X-API-Key` on protected routes; shared `get_current_user` dependency
-- **Per-IP rate limiting** — 10–60 req/min per endpoint via slowapi
-- **CORS hardening** — allowed origins from `CORS_ORIGINS` env var, explicit methods and headers
-- **Unified error envelope** — `{ error, status_code, message, detail }` for all error types (401, 422, 429, 500)
-- **JSON structured logging** — every request logged with method, path, status, duration, IP, and request UUID
-- **Request ID tracing** — `X-Request-ID` header returned on every response for log correlation
-- **Liveness + readiness endpoints** — `/health` (instant) and `/ready` (DB connectivity check)
-- **186 automated tests** (74 backend + 112 frontend) — property CRUD, housing lookup, prediction v1/v2, LLM guardrails, admin role management, auth/me profile lifecycle, quota API, AuthContext, Analyze page quota UI, Register, Portfolio, AdminDashboard
-- GitHub Actions CI workflow passing on push/PR to `main`
-- Test isolation: SQLite `test.db`, `DATABASE_URL` set before app import
-- Dockerfile for containerized API deployment
-- Docker Compose with `env_file` for full environment variable passthrough
-- Secure environment variable management via `.env` files
+- **Model caching** — `ModelRegistry` lazy-loads each segment PKL on first request and holds it in memory; zero disk I/O on subsequent requests for the same key.
+- **Feature importance caching** — `@lru_cache` on feature importance loaders; one disk read per server process.
+- **Parquet row filters** — `BblFeatureBuilder` pushes BBL equality filters into parquet reads, scanning only matching row groups.
+- **BallTree subway distance** — cached at startup via `@lru_cache`; single in-memory haversine query per request.
 
 ---
 
 ## ⚠️ Model Limitations
 
-Current constraints of the valuation models:
-
-- Trained only on **NYC residential properties** — not applicable to commercial
- - `condo_coop` (R²=0.801) is the strongest subtype model after the parent BBL fix unlocked individual condo unit transactions
- - `rental_walkup` (R²=0.594) and `rental_elevator` (R²=0.592) predict **price per unit** and require `total_units` — falls back to the global model when not provided
-- All models are trained on the filtered (non-luxury) price range; very-high-end properties (above 95th–97th pct per class) should use the global model or be interpreted as directional estimates
-- No temporal features — does not capture market cycles or seasonality
-- No macroeconomic indicators
-- Sensitive to data quality in source NYC datasets
+- Trained only on **NYC residential properties** — not applicable to commercial.
+- `rental_elevator` (R²=0.537) has only ~350 training rows in the time-split era; predictions should be interpreted with the provided valuation band.
+- `multi_family` (R²=0.608) remains heterogeneous across price ranges and boroughs; Optuna HPO did not improve it further.
+- All metrics are from a **strict time-based holdout** — forward-time generalisation, not in-sample or random-split estimates.
+- PLUTO match rate is ~76%; parcels without a PLUTO row get median imputation for physical features.
+- No temporal or macroeconomic cycle features.
 
 ### Future improvements
-- Add time-series features for market trend awareness
-- Add macroeconomic indicators
 - Expand SHAP per-property explainability
 - Batch prediction endpoint for portfolio analysis
-- Optional admin tools (e.g. impersonation / “view as user”) with audit logging
+- Rent-stabilisation (DHCR) feature integration for rental segments
+- Additional hyperparameter trials or CatBoost for `multi_family`
+- Optional admin tools (impersonation / "view as user") with audit logging
