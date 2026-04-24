@@ -296,8 +296,8 @@ def _build_spine_row(payload: ProductionPredictionRequest,
     # When the rentals_all model is active, the is_elevator feature is required.
     # 0 = walkup (building class 07), 1 = elevator (building class 08).
     if model_key == "rentals_all":
-        building_class = getattr(payload, "building_class_category", "") or ""
-        row["is_elevator"] = 1.0 if "08" in str(building_class) or "ELEVATOR" in str(building_class).upper() else 0.0
+        bc = (getattr(payload, "building_class", None) or "").strip()
+        row["is_elevator"] = 1.0 if bc.startswith("08") or "ELEVATOR" in bc.upper() else 0.0
 
     # ── Optional BBL + as_of_date → Silver / PLUTO as-of features ───────────
     bbl_raw, as_of_raw = payload.bbl, payload.as_of_date
@@ -436,6 +436,8 @@ class PredictionService:
             if join_meta.get("as_of_date"):
                 input_summary["as_of_date"] = join_meta["as_of_date"]
             input_summary["bbl_feature_status"] = join_meta.get("bbl_join_status", "skipped")
+        if metadata.segment == "rentals_all":
+            input_summary["is_elevator"] = int(row.get("is_elevator", 0))
 
         out: dict = {
             "predicted_price": predicted_price,
