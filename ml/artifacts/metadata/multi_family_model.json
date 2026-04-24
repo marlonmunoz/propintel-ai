@@ -1,30 +1,30 @@
 {
-    "name": "multi_family",
-    "version": "v4",
+    "name": "multi_family_spine",
+    "version": "v3",
     "segment": "multi_family",
-    "artifact_path": "ml/artifacts/subtype_models/multi_family_price_model.pkl",
-    "feature_columns": [
-        "gross_sqft",
-        "land_sqft",
-        "assess_per_unit",
-        "bldg_footprint",
-        "numfloors",
-        "builtfar",
-        "lotdepth",
-        "neighborhood_median_price",
-        "neighborhood_median_ppsf",
-        "year_built",
-        "property_age",
-        "latitude",
-        "longitude",
-        "borough",
-        "building_class",
-        "neighborhood"
+    "artifact_path": "ml/artifacts/spine_models/multi_family_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/multi_family_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/multi_family_spine_feature_importance.csv",
+    "target": "sales_price",
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 205427.35,
-        "rmse": 320764.82,
-        "r2": 0.7465,
-        "note": "v4: 3-year dataset (2022+2023+current, 26,931 rows vs 8,266 prior). PLUTO BBL join unlocks assess_per_unit, bldg_footprint (bldgfront×bldgdepth), numfloors, builtfar, lotdepth. Per-borough×class P97 caps preserve Manhattan (260 rows vs 106 prior). n_estimators=800, lr=0.04, max_depth=6. R²: 0.641→0.747 (+16.5%), MAE: $214k→$205k (-4%)."
+        "mae": 347719.0,
+        "rmse": 615584.6,
+        "r2": 0.6075,
+        "median_ape": 0.210,
+        "note": "v3 spine: time-based split (train≤2024, test≥2025), DOF+ACRIS+J51+PLUTO features"
     }
 }

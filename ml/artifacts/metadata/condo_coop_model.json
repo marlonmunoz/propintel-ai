@@ -1,25 +1,30 @@
 {
-    "name": "condo_coop",
-    "version": "v4",
+    "name": "condo_coop_spine",
+    "version": "v3",
     "segment": "condo_coop",
-    "artifact_path": "ml/artifacts/subtype_models/condo_coop_price_model.pkl",
-    "feature_columns": [
-        "assess_per_unit",
-        "numfloors",
-        "lot_coverage",
-        "neighborhood_median_price",
-        "year_built",
-        "property_age",
-        "latitude",
-        "longitude",
-        "borough",
-        "building_class",
-        "neighborhood"
+    "artifact_path": "ml/artifacts/spine_models/condo_coop_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/condo_coop_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/condo_coop_spine_feature_importance.csv",
+    "target": "sales_price",
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 289305.32,
-        "rmse": 492655.80,
-        "r2": 0.8009,
-        "note": "v4: parent BBL fix unlocked 4,599 condo elevator unit transactions (previously 0 matching); added numfloors + lot_coverage from PLUTO; dataset grew 12k→18k rows; R2 jumped 0.55→0.80. Higher MAE/RMSE reflects expanded condo price range ($100k–$7.5M vs co-op-only $100k–$4.5M)."
+        "mae": 420637.0,
+        "rmse": 974838.6,
+        "r2": 0.6327,
+        "median_ape": 0.214,
+        "note": "v3 spine: time-based split (train≤2024, test≥2025), DOF+ACRIS+J51+PLUTO features"
     }
 }

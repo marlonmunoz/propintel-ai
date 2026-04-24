@@ -1,33 +1,31 @@
 {
-    "name": "rental_walkup",
-    "version": "v4",
+    "name": "rental_walkup_spine",
+    "version": "v3",
     "segment": "rental_walkup",
-    "artifact_path": "ml/artifacts/subtype_models/rental_walkup_price_model.pkl",
+    "artifact_path": "ml/artifacts/spine_models/rental_walkup_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/rental_walkup_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/rental_walkup_spine_feature_importance.csv",
     "target": "price_per_unit",
-    "feature_columns": [
-        "gross_sqft",
-        "land_sqft",
-        "sqft_per_unit",
-        "total_units",
-        "residential_units",
-        "numfloors",
-        "units_per_floor",
-        "lot_coverage",
-        "subway_dist_km",
-        "stabilization_ratio",
-        "neighborhood_median_price",
-        "year_built",
-        "property_age",
-        "latitude",
-        "longitude",
-        "borough",
-        "building_class",
-        "neighborhood"
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "total_units", "residential_units",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 107055.69,
-        "rmse": 170481.30,
-        "r2": 0.5943,
-        "note": "metrics in $/unit. v4: augmented base with 56 de-duplicated raw rolling-sales class 07 rows (ppu P5-P95 filter + PLUTO inner join); dataset 1308->1359 rows. R2 0.580->0.594. Further improvement to 0.65 requires multi-year rolling sales or external data beyond public NYC sources."
+        "mae": 108210.0,
+        "rmse": 262087.1,
+        "r2": 0.4926,
+        "median_ape": 0.245,
+        "note": "v3 spine: target=price_per_unit, time-based split (train≤2024, test≥2025)"
     }
 }
