@@ -245,6 +245,7 @@ ml/artifacts/**/*.joblib
 ml/artifacts/**/*.csv
 ml/artifacts/eval_reports/
 ml/artifacts/spine_models/
+ml/artifacts/spine_models_exp/
 ml/artifacts/subtype_models/
 
 # catboost
