@@ -1,24 +1,30 @@
 {
-    "name": "one_family",
-    "version": "v2",
+    "name": "one_family_spine",
+    "version": "v3",
     "segment": "one_family",
-    "artifact_path": "ml/artifacts/subtype_models/one_family_price_model.pkl",
-    "feature_columns" : [
-        "gross_sqft",
-        "land_sqft",
-        "neighborhood_median_price",
-        "year_built",
-        "property_age",
-        "latitude",
-        "longitude",
-        "borough",
-        "building_class",
-        "neighborhood"
+    "artifact_path": "ml/artifacts/spine_models/one_family_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/one_family_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/one_family_spine_feature_importance.csv",
+    "target": "sales_price",
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 139839.63,
-        "rmse": 202997.04,
-        "r2": 0.7356,
-        "note": "v2: per-class 97th-pct price cap + price/sqft P2-P98 filter reduced MAE by 43% and RMSE by 67%"
+        "mae": 238475.0,
+        "rmse": 512454.8,
+        "r2": 0.7649,
+        "median_ape": 0.172,
+        "note": "v3 spine: time-based split (train≤2024, test≥2025), DOF+ACRIS+J51+PLUTO features"
     }
 }

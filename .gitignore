@@ -237,7 +237,15 @@ ml/data/external/
 ml/data/features/
 ml/data/silver/
 ml/data/gold/
-ml/artifacts/
+
+# ML artifact binaries and large outputs — not committed.
+# ml/artifacts/metadata/ IS committed (it controls which model the API serves).
+ml/artifacts/**/*.pkl
+ml/artifacts/**/*.joblib
+ml/artifacts/**/*.csv
+ml/artifacts/eval_reports/
+ml/artifacts/spine_models/
+ml/artifacts/subtype_models/
 
 # catboost
 catboost_info/
