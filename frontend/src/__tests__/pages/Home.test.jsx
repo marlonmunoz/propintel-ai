@@ -71,7 +71,7 @@ describe('Home page', () => {
     expect(screen.getByText(/Strongest segment/i)).toBeInTheDocument()
     // Use case-sensitive regex to avoid matching "multi-family" in the feature description.
     expect(screen.getByText(/Multi-family/)).toBeInTheDocument()
-    expect(screen.getByText(/Subtype models/i)).toBeInTheDocument()
+    expect(screen.getByText(/^Segment models$/i)).toBeInTheDocument()
   })
 
   it('renders the "Product" section', () => {
