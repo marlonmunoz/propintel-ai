@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal, Optional, Dict
 
 from pydantic import BaseModel, Field, field_validator
@@ -135,11 +136,34 @@ class ProductionPredictionRequest(BaseModel):
         le=-73.0,
         description="Longitude coordinate of the property."
     )
+    bbl: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional NYC Borough-Block-Lot identifier (digits only, e.g. '3012340056'). "
+            "When provided together with as_of_date, the API loads DOF / ACRIS / J-51 / PLUTO "
+            "features from local Silver + Gold tables using the same as-of rules as training."
+        ),
+    )
+    as_of_date: Optional[date] = Field(
+        default=None,
+        description=(
+            "Optional valuation as-of date (contract date, effective date, or today). "
+            "Required together with bbl to enable roll-aligned Gold features at inference."
+        ),
+    )
 
     @field_validator("borough", "neighborhood", "building_class")
     @classmethod
     def strip_text(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("bbl")
+    @classmethod
+    def strip_bbl(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        return s if s else None
 
     model_config = {
         "json_schema_extra": {
@@ -151,7 +175,9 @@ class ProductionPredictionRequest(BaseModel):
                 "gross_sqft": 1800,
                 "land_sqft": 2000,
                 "latitude": 40.6720,
-                "longitude": -73.9778
+                "longitude": -73.9778,
+                "bbl": "3012340056",
+                "as_of_date": "2025-06-15",
             }
         }
     }
@@ -506,6 +532,8 @@ class ProductionAnalyzeRequest(ProductionPredictionRequest):
                 "land_sqft": 2000,
                 "latitude": 40.6720,
                 "longitude": -73.9778,
+                "bbl": "3012340056",
+                "as_of_date": "2025-06-15",
                 "market_price": 1250000.0
             }
         }

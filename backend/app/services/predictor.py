@@ -21,6 +21,11 @@ EARTH_RADIUS_KM = 6_371.0
 logger = logging.getLogger("propintel")
 from backend.app.services.explainer import generate_explanation
 from backend.app.schemas.prediction import ProductionPredictionRequest
+from backend.app.services.bbl_feature_builder import (
+    build_spine_gold_features_from_bbl,
+    normalize_bbl,
+    parse_as_of_date,
+)
 from backend.app.services.model_registry import ModelRegistry, RegisteredModel
 
 VALUATION_INTERVAL_MAE_MULTIPLIER = 1.0
@@ -205,16 +210,21 @@ def _valuation_interval_dollars(predicted_price: float,
 
 def _build_spine_row(payload: ProductionPredictionRequest,
                      metadata: RegisteredModel,
-                     registry: ModelRegistry) -> dict[str, Any]:
+                     registry: ModelRegistry) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build the feature dict expected by the spine sklearn Pipeline.
 
     The Pipeline's SimpleImputer(strategy="median") handles every NaN so we
     only need to populate the fields we actually have at inference time.
     Categorical NaN values are imputed with the most-frequent training class.
+
+    Returns ``(row, join_meta)`` where ``join_meta`` describes optional BBL
+    Gold-feature hydration (``bbl_join_status``: skipped | ok | partial | no_data).
     """
     model_key = metadata.segment
     neighborhood = payload.neighborhood.strip()
     n_units = max(payload.total_units or 1, 1)
+
+    join_meta: dict[str, Any] = {"bbl_join_status": "skipped"}
 
     # ── Derived scalars ───────────────────────────────────────────────────────
     property_age = float(REFERENCE_YEAR - payload.year_built)
@@ -281,7 +291,38 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         "dof_tax_class":   np.nan,
         "pluto_bldgclass": np.nan,
     }
-    return row
+
+    # ── Optional BBL + as_of_date → Silver / PLUTO as-of features ───────────
+    bbl_raw, as_of_raw = payload.bbl, payload.as_of_date
+    if (bbl_raw and not as_of_raw) or (as_of_raw and not bbl_raw):
+        join_meta["bbl_join_status"] = "incomplete"
+    elif bbl_raw and as_of_raw:
+        bbl_n = normalize_bbl(bbl_raw)
+        as_of = parse_as_of_date(as_of_raw)
+        if not bbl_n or not as_of:
+            join_meta["bbl_join_status"] = "invalid_bbl_or_date"
+        else:
+            join_meta["bbl_normalized"] = bbl_n
+            join_meta["as_of_date"] = str(as_of)
+            gold_feats, status = build_spine_gold_features_from_bbl(bbl_n, as_of)
+            join_meta["bbl_join_status"] = status
+            for k, v in gold_feats.items():
+                if v is None:
+                    continue
+                if isinstance(v, (float, np.floating)) and bool(np.isnan(v)):
+                    continue
+                row[k] = v
+            # Prefer DOF year-built for property_age when a roll row exists.
+            yb = row.get("dof_yrbuilt")
+            try:
+                if yb is not None and yb == yb and float(yb) > 0:
+                    row["property_age"] = float(
+                        np.clip(REFERENCE_YEAR - float(yb), 0, 200)
+                    )
+            except (TypeError, ValueError):
+                pass
+
+    return row, join_meta
 
 
 # ─── PredictionService ────────────────────────────────────────────────────────
@@ -293,6 +334,7 @@ class PredictionService:
     def predict(self, payload: ProductionPredictionRequest) -> dict:
         model_key = self.registry.get_model_key(payload.building_class)
         warnings: list[str] = []
+        join_meta: dict[str, Any] = {}
 
         # Rental models predict price_per_unit — need total_units to recover
         # the full building price. Fall back to global when missing.
@@ -311,12 +353,27 @@ class PredictionService:
         neighborhood = payload.neighborhood.strip()
 
         if metadata.is_spine_model:
-            row = _build_spine_row(payload, metadata, self.registry)
+            row, join_meta = _build_spine_row(payload, metadata, self.registry)
             all_features = metadata.numeric_features + metadata.categorical_features
             X = pd.DataFrame(
                 [{col: row.get(col, np.nan) for col in all_features}],
                 columns=all_features,
             )
+
+            if join_meta.get("bbl_join_status") == "incomplete":
+                warnings.append(
+                    "Both bbl and as_of_date are required together for roll-aligned "
+                    "DOF/ACRIS/J-51/PLUTO features; continuing with user fields only."
+                )
+            elif join_meta.get("bbl_join_status") == "invalid_bbl_or_date":
+                warnings.append(
+                    "Could not parse bbl or as_of_date; continuing without BBL-aligned roll features."
+                )
+            elif join_meta.get("bbl_join_status") == "no_data":
+                warnings.append(
+                    f"No Silver/PLUTO rows found for BBL {join_meta.get('bbl_normalized')!r} "
+                    "at the given as_of_date (local data may be missing or BBL not in extract)."
+                )
         else:
             # ── Legacy model path (global model, v1/v2 subtype models) ────────
             property_age = REFERENCE_YEAR - payload.year_built
@@ -361,16 +418,24 @@ class PredictionService:
             )
 
         interval = _valuation_interval_dollars(predicted_price, metadata, n_units)
+        input_summary: dict[str, Any] = {
+            "borough":        payload.borough,
+            "neighborhood":   neighborhood,
+            "building_class": payload.building_class,
+        }
+        if metadata.is_spine_model and join_meta:
+            if join_meta.get("bbl_normalized"):
+                input_summary["bbl"] = join_meta["bbl_normalized"]
+            if join_meta.get("as_of_date"):
+                input_summary["as_of_date"] = join_meta["as_of_date"]
+            input_summary["bbl_feature_status"] = join_meta.get("bbl_join_status", "skipped")
+
         out: dict = {
             "predicted_price": predicted_price,
             "model_used":      metadata.name,
             "model_version":   metadata.version,
             "segment":         metadata.segment,
-            "input_summary": {
-                "borough":        payload.borough,
-                "neighborhood":   neighborhood,
-                "building_class": payload.building_class,
-            },
+            "input_summary":   input_summary,
             "warnings":      warnings,
             "model_metrics": metadata.metrics,
         }
