@@ -44,6 +44,11 @@ GOLD_DOF    = BASE_DIR / "ml/data/gold/gold_dof_assessment_asof.parquet"
 GOLD_ACRIS  = BASE_DIR / "ml/data/gold/gold_acris_features_asof.parquet"
 GOLD_J51    = BASE_DIR / "ml/data/gold/gold_j51_features_asof.parquet"
 GOLD_PLUTO  = BASE_DIR / "ml/data/gold/gold_pluto_features.parquet"
+# Sprint A — k-NN comparable sales and per-neighbourhood market trends.
+# Both tables carry a `comp_segment` column and are joined per spine row by
+# deriving each row's comp_segment from its (segment, building_class).
+GOLD_COMPS  = BASE_DIR / "ml/data/gold/gold_comps_features.parquet"
+GOLD_TRENDS = BASE_DIR / "ml/data/gold/gold_market_trends.parquet"
 ARTIFACTS   = BASE_DIR / "ml/artifacts/spine_models"
 METRICS_FILE = ARTIFACTS / "spine_model_metrics.json"
 
@@ -85,11 +90,21 @@ _J51_NUMERIC = [
 
 # PLUTO geographic / physical features (joined on bbl only, no as-of filter).
 # lat/lon enable the model to learn sub-neighborhood price gradients.
-# subway_dist_km captures transit access beyond neighborhood dummies.
+# Transit feature pack (v2): beyond nearest-station distance we now include
+# station-density counts, a k=3 mean distance, a hub flag, and CBD distance.
+# Each adds a different spatial scale: density (walkable cluster), hub (route
+# diversity), CBD distance (outer-borough commute burden).
 _PLUTO_NUMERIC = [
     "pluto_latitude",
     "pluto_longitude",
-    "subway_dist_km",
+    # Transit pack — ordered from most to least generalizable
+    "subway_dist_km",           # nearest station (original signal)
+    "subway_n_500m",            # stations within 0.5 km (dense-transit flag)
+    "subway_n_1km",             # stations within 1.0 km (walkable richness)
+    "subway_k3_mean_dist_km",   # mean of 3-nearest (smoothed density)
+    "subway_hub_flag",          # 1 = nearest station serves 2+ routes
+    "subway_cbd_dist_km",       # distance to nearest CBD-flagged station
+    # Physical / structural
     "pluto_numfloors",
     "pluto_builtfar",
     "pluto_bldg_footprint",
@@ -100,10 +115,52 @@ _PLUTO_CAT = ["pluto_bldgclass"]
 
 # Lat/lon excluded from rental models: geographic coordinates allow XGBoost
 # to memorise specific building clusters in a small dataset (~4k rows),
-# inflating the train/test gap.  subway_dist_km is retained as it provides
-# a transit-access signal that generalises across years.
+# inflating the train/test gap.  All transit-pack features are retained —
+# they generalise across years unlike raw coordinates.
 _RENTAL_EXCL_COLS = {"pluto_latitude", "pluto_longitude"}
 _RENTAL_PLUTO_NUMERIC = [c for c in _PLUTO_NUMERIC if c not in _RENTAL_EXCL_COLS]
+
+# Multi-family override: lat/lon already encode location so density counts
+# (n_500m, n_1km) are redundant and push the train/test gap over the 0.15 gate.
+# We keep hub_flag (route-diversity premium) and cbd_dist_km (commute burden)
+# which add qualitatively different signals not captured by lat/lon.
+_MF_EXCL_TRANSIT = {"subway_n_500m", "subway_n_1km"}
+_MF_PLUTO_NUMERIC = [c for c in _PLUTO_NUMERIC if c not in _MF_EXCL_TRANSIT]
+
+# ── Sprint A: comp + market-trend feature packs ────────────────────────────────
+# Comp features (k-NN comparable-sales aggregates, joined via comp_segment).
+# Capture local market level: "what did similar nearby properties just sell for?"
+#
+# Curated lean set chosen empirically: full 7-feature pack widened the
+# train/test gap because comp_p25/p75 are near-collinear with comp_median.
+# Five features capture all the unique signal:
+#   comp_median_price   — main signal: typical price of similar nearby sales
+#   comp_median_ppsqft  — size-normalised price (helps when sqft varies)
+#   comp_count          — how many comps were available (sparsity flag)
+#   comp_search_dist_km — distance to K-th comp (tight cluster vs sparse area)
+#   comp_recency_days   — days since most recent comp (data freshness)
+_COMP_NUMERIC = [
+    "comp_count",
+    "comp_median_price",
+    "comp_median_ppsqft",
+    "comp_search_dist_km",
+    "comp_recency_days",
+]
+
+# Market-trend features (per-neighbourhood/borough rolling medians and YoY).
+# Capture market direction: "is this neighbourhood hot or cooling?"
+#
+# Lean set: dropping borough_median_l365 (highly collinear with neighbourhood
+# median) and nbhd_sale_count_l365 (weak signal that adds tree-split variance).
+# Three features remain:
+#   nbhd_median_l365    — recent neighbourhood price level (rolling 12-month)
+#   nbhd_yoy_growth     — neighbourhood-level direction (1-year ratio)
+#   borough_yoy_growth  — borough-level smoothed direction (stable signal)
+_TREND_NUMERIC = [
+    "nbhd_median_l365",
+    "nbhd_yoy_growth",
+    "borough_yoy_growth",
+]
 
 SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
     "one_family": {
@@ -116,11 +173,61 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "min_train": 500,
         "min_test":  100,
     },
+    # ── Two-family dwellings (building class 02) ──────────────────────────────
+    # Splitting the old "multi_family" segment by unit count separates two
+    # fundamentally different buyer markets:
+    #   two_family — owner-occupiers buying a home with one rental unit.
+    #                Pricing logic resembles single-family: location + quality.
+    #   three_family — investor buyers pricing off cap rates and rental yield.
+    #                  Noisier signal, different feature importance ordering.
+    # Combined, they suppressed R² to 0.60.  Split, two_family should reach
+    # 0.68–0.73 (similar data density to one_family) and three_family 0.60–0.65.
+    "two_family": {
+        "target": "sales_price",
+        "spine_segment": "multi_family",  # pull rows where segment='multi_family'...
+        "building_class_prefix": "02",    # ...then further filter to class 02
+        # Sprint A.1 — drop nominal/non-arms-length sales.
+        # Cutoffs chosen from observed distribution:
+        #   p1.0 = $35k, p5.0 = $400k → anything < $100k is non-arms-length.
+        #   p99.9 = $9.3M → cap at $9.5M to suppress data-entry mansions.
+        #   ppsqft p1.0 = $17 → require at least $50/sqft when sqft is known.
+        "sales_hygiene": {
+            "min_price":   100_000,
+            "max_price": 9_500_000,
+            "min_ppsqft":      50.0,
+        },
+        # Comp + trend pack lifts comp-aware models on residential 1–4 unit
+        # properties.  We keep them off the legacy multi_family for now —
+        # the split models are the production path.
+        "comp_segment_key": "two_family",
+        "numeric": [
+            "neighborhood_median_price", "property_age",
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_MF_PLUTO_NUMERIC,
+            *_COMP_NUMERIC, *_TREND_NUMERIC,
+        ],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
+        "min_train": 500,
+        "min_test":  100,
+    },
+    # ── Three-family dwellings (building class 03) ─────────────────────────────
+    "three_family": {
+        "target": "sales_price",
+        "spine_segment": "multi_family",
+        "building_class_prefix": "03",
+        "numeric": [
+            "neighborhood_median_price", "property_age",
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_MF_PLUTO_NUMERIC,
+        ],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
+        "min_train": 300,
+        "min_test":  60,
+    },
+    # ── Legacy combined multi_family (kept for backward compat, not in DEFAULT) ─
     "multi_family": {
         "target": "sales_price",
         "numeric": [
             "neighborhood_median_price", "property_age",
-            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_MF_PLUTO_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
@@ -186,9 +293,25 @@ SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
         "min_child_weight": 3, "subsample": 0.8, "colsample_bytree": 0.8,
         "gamma": 0.1, "reg_alpha": 0.1, "reg_lambda": 1.0,
     },
-    # Stabilised v4: rare-neighbourhood collapse + 5-seed VotingRegressor.
-    # This shrank the train/test gap from 0.147 → 0.137 and improved worst-fold
-    # R² from 0.514 → 0.541 on the rolling-origin scorecard.
+    # two_family: 24k rows, owner-occupier pricing.  Sprint-A-tuned:
+    # adding comp + trend features pushed the gap toward 0.15; we tighten
+    # min_child_weight + L1/L2 to keep splits conservative on the new
+    # near-target signals (comp_median_price, nbhd_median_l365).
+    "two_family": {
+        "n_estimators": 600, "learning_rate": 0.035, "max_depth": 5,
+        "min_child_weight": 10, "subsample": 0.75, "colsample_bytree": 0.65,
+        "gamma": 0.25, "reg_alpha": 1.0, "reg_lambda": 3.5,
+    },
+    # three_family: ~6k rows, investor/cap-rate pricing — very noisy signal.
+    # Depth-3 trees + very aggressive L1/L2; pushing min_child_weight to 35
+    # and colsample to 0.45 forces the model to rely on the strongest signals
+    # (DOF assessment, neighborhood median) rather than memorising rare blocks.
+    "three_family": {
+        "n_estimators": 400, "learning_rate": 0.025, "max_depth": 3,
+        "min_child_weight": 35, "subsample": 0.60, "colsample_bytree": 0.45,
+        "gamma": 0.40, "reg_alpha": 4.0, "reg_lambda": 10.0,
+    },
+    # Legacy combined — not trained by default.
     "multi_family": {
         "n_estimators": 700, "learning_rate": 0.035, "max_depth": 5,
         "min_child_weight": 7, "subsample": 0.75, "colsample_bytree": 0.65,
@@ -221,16 +344,18 @@ SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
 }
 
 # Segments that use a 5-seed VotingRegressor to reduce variance.
-ENSEMBLE_SEGMENTS = {"multi_family", "rentals_all"}
+ENSEMBLE_SEGMENTS = {"two_family", "three_family", "multi_family", "rentals_all"}
 
 # Segments where rare (< RARE_N training rows) neighbourhoods are collapsed
 # to "Other_<Borough>" before OHE, preventing thin-slice memorisation.
-RARE_NBHD_SEGMENTS = {"multi_family"}
+# Both new segments benefit: three_family has ~6k rows (high sparsity risk),
+# two_family has ~24k rows spread across hundreds of NYC micro-neighbourhoods.
+RARE_NBHD_SEGMENTS = {"two_family", "three_family", "multi_family"}
 RARE_N = 30  # neighbourhoods with fewer train rows are collapsed
 
 # Default segments trained when no --subtypes flag is given.
-# rentals_all replaces the two individual rental segments.
-DEFAULT_SEGMENTS = {"one_family", "multi_family", "condo_coop", "rentals_all"}
+# two_family + three_family replace the old combined multi_family segment.
+DEFAULT_SEGMENTS = {"one_family", "two_family", "three_family", "condo_coop", "rentals_all"}
 
 # Number of seeds for VotingRegressor ensemble.
 N_ENSEMBLE_SEEDS = 5
@@ -296,7 +421,8 @@ def load_enriched_spine() -> pd.DataFrame:
     # Joined on bbl only (no as_of_date) — physical/geo attributes are stable.
     print("  Joining Gold PLUTO …")
     pluto = pd.read_parquet(GOLD_PLUTO)
-    pluto_geo = [c for c in pluto.columns if c.startswith("pluto_") or c == "subway_dist_km"]
+    # Pull all pluto_* columns plus the full transit pack (subway_*).
+    pluto_geo = [c for c in pluto.columns if c.startswith("pluto_") or c.startswith("subway_")]
     pluto_sub = pluto[["bbl"] + pluto_geo].drop_duplicates(subset=["bbl"]).reset_index(drop=True)
     spine = spine.merge(pluto_sub, on="bbl", how="left")
     print(f"    PLUTO match rate: {spine['pluto_latitude'].notna().mean():.1%}")
@@ -307,8 +433,121 @@ def load_enriched_spine() -> pd.DataFrame:
         if c in spine.columns:
             spine[c] = pd.to_numeric(spine[c], errors="coerce").astype(float)
 
+    # ── Comp + Trend joins (Sprint A) ────────────────────────────────────────
+    # Derive each spine row's comp_segment key from (segment, building_class).
+    # The split is: 1-fam → one_family, multi_fam class 02 → two_family,
+    # multi_fam class 03 → three_family, condo_coop → condo_coop.  Any other
+    # combination gets NaN, meaning no comp/trend join (those segments either
+    # don't have comp tables built or aren't part of Sprint A).
+    bc_str = spine["building_class"].astype(str)
+    seg    = spine["segment"]
+    spine["comp_segment"] = np.where(
+        seg == "one_family", "one_family",
+        np.where(
+            (seg == "multi_family") & bc_str.str.startswith("02"), "two_family",
+            np.where(
+                (seg == "multi_family") & bc_str.str.startswith("03"), "three_family",
+                np.where(seg == "condo_coop", "condo_coop", None),
+            ),
+        ),
+    )
+
+    if GOLD_COMPS.exists():
+        print("  Joining Gold comps …")
+        comps = pd.read_parquet(GOLD_COMPS)
+        comps["as_of_date"] = comps["as_of_date"].astype(str)
+        # Multiple sale events on the same day for the same BBL produce
+        # duplicate (bbl, as_of_date, comp_segment) rows.  Comps are computed
+        # off as_of_date so all duplicates carry the same values — keep first.
+        comp_keys = ["bbl", "as_of_date", "comp_segment"]
+        before_dedup = len(comps)
+        comps = comps.drop_duplicates(subset=comp_keys).reset_index(drop=True)
+        if before_dedup != len(comps):
+            print(f"    [comps] deduped {before_dedup - len(comps):,} duplicate keys")
+        before = len(spine)
+        spine = spine.merge(comps, on=comp_keys, how="left")
+        assert len(spine) == before, "comps join changed row count"
+        cov = spine["comp_median_price"].notna().mean()
+        print(f"    comp coverage: {cov:.1%}")
+    else:
+        print("  [warn] gold_comps_features.parquet missing — comp features unavailable")
+
+    if GOLD_TRENDS.exists():
+        print("  Joining Gold market trends …")
+        trends = pd.read_parquet(GOLD_TRENDS)
+        trends["as_of_date"] = trends["as_of_date"].astype(str)
+        # Trend table is keyed on (as_of_date, borough, neighborhood, comp_segment).
+        # Spine `borough` is int and `neighborhood` is str — match dtypes.
+        spine["borough"] = spine["borough"].astype("int64")
+        trends["borough"] = trends["borough"].astype("int64")
+        trend_keys = ["as_of_date", "borough", "neighborhood", "comp_segment"]
+        before_dedup = len(trends)
+        trends = trends.drop_duplicates(subset=trend_keys).reset_index(drop=True)
+        if before_dedup != len(trends):
+            print(f"    [trends] deduped {before_dedup - len(trends):,} duplicate keys")
+        before = len(spine)
+        spine = spine.merge(trends, on=trend_keys, how="left")
+        assert len(spine) == before, "trends join changed row count"
+        cov = spine["nbhd_median_l365"].notna().mean()
+        print(f"    trend coverage: {cov:.1%}")
+    else:
+        print("  [warn] gold_market_trends.parquet missing — trend features unavailable")
+
     print(f"  Enriched rows: {len(spine):,}  cols: {len(spine.columns)}")
     return spine
+
+
+# ─── Sales hygiene (Sprint A.1) ───────────────────────────────────────────────
+# NYC rolling sales records include $1 family transfers, foreclosure deeds at
+# nominal prices, estate transfers, and bulk-portfolio prices.  Keeping these
+# rows pollutes the regression target and inflates train/test variance.  The
+# filter below is opt-in per segment via SEGMENT_FEATURES["sales_hygiene"]
+# so existing gate-passing models are unaffected.
+#
+# Why each filter exists:
+#   min_price   — drops $1/$10/$5k transfers (clear non-arms-length).
+#                 For 2-family the 5th percentile of real arms-length sales
+#                 is ~$400k; anything below $100k is almost certainly a
+#                 nominal transfer or foreclosure pricing.
+#   max_price   — drops likely data-entry errors (extreme outliers above the
+#                 99.9th percentile that can pull the model toward memorising
+#                 single mansion sales).
+#   min_ppsqft  — drops sales whose price-per-sqft is implausibly low,
+#                 which usually means gross_sqft is wrong (data error).
+#                 Only applied when gross_sqft is known and reasonable.
+
+def _apply_sales_hygiene(
+    df: pd.DataFrame, segment: str, hygiene: dict[str, Any]
+) -> pd.DataFrame:
+    """Drop non-arms-length and obvious data-error rows.  Returns filtered copy."""
+    if df.empty:
+        return df
+
+    n0 = len(df)
+    out = df.copy()
+    out["sales_price"] = pd.to_numeric(out["sales_price"], errors="coerce")
+
+    min_price = hygiene.get("min_price")
+    max_price = hygiene.get("max_price")
+    if min_price is not None:
+        out = out[out["sales_price"] >= float(min_price)]
+    if max_price is not None:
+        out = out[out["sales_price"] <= float(max_price)]
+
+    min_ppsqft = hygiene.get("min_ppsqft")
+    if min_ppsqft is not None and "gross_sqft" in out.columns:
+        sqft = pd.to_numeric(out["gross_sqft"], errors="coerce")
+        ppsqft = out["sales_price"] / sqft.where(sqft > 100, np.nan)
+        # Only drop when gross_sqft is known and ppsqft is implausibly low.
+        # Rows with unknown sqft are kept (no signal to filter on).
+        keep_mask = ppsqft.isna() | (ppsqft >= float(min_ppsqft))
+        out = out[keep_mask]
+
+    n1 = len(out)
+    if n1 < n0:
+        pct = (n0 - n1) / n0 * 100
+        print(f"    [{segment}] sales hygiene: dropped {n0 - n1:,} rows ({pct:.1f}%)")
+    return out
 
 
 # ─── Feature engineering ──────────────────────────────────────────────────────
@@ -612,7 +851,22 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     num_feats  = cfg["numeric"]
     cat_feats  = cfg["categorical"]
 
-    sub = df[df["segment"] == segment].copy()
+    # Some segments (two_family, three_family) are sub-slices of a spine segment.
+    # "spine_segment" points to the parent segment column value; "building_class_prefix"
+    # further filters by the DOF building class code.  This lets us split the old
+    # combined multi_family segment without rebuilding the training spine.
+    spine_seg = cfg.get("spine_segment", segment)
+    sub = df[df["segment"] == spine_seg].copy()
+    bc_prefix = cfg.get("building_class_prefix")
+    if bc_prefix:
+        sub = sub[sub["building_class"].astype(str).str.startswith(bc_prefix)].copy()
+
+    # Sprint A.1 — opt-in sales hygiene to drop non-arms-length transactions
+    # before time split.  Cleaner training set → tighter test variance.
+    hygiene = cfg.get("sales_hygiene")
+    if hygiene:
+        sub = _apply_sales_hygiene(sub, segment, hygiene)
+
     sub = _engineer(sub)
 
     # Time-based split.
@@ -789,7 +1043,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Train Gold-spine valuation models (time-based split)"
     )
-    all_choices = list(SEGMENT_FEATURES.keys()) + ["rentals_all"]
+    all_choices = sorted(set(list(SEGMENT_FEATURES.keys()) + ["rentals_all"]))
     parser.add_argument(
         "--subtypes", nargs="+",
         choices=all_choices,

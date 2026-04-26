@@ -1,0 +1,34 @@
+{
+    "name": "two_family_spine",
+    "version": "v2",
+    "segment": "two_family",
+    "artifact_path": "ml/artifacts/spine_models/two_family_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/two_family_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/two_family_spine_feature_importance.csv",
+    "target": "sales_price",
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude",
+        "subway_dist_km", "subway_k3_mean_dist_km", "subway_hub_flag", "subway_cbd_dist_km",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea",
+        "comp_count", "comp_median_price", "comp_median_ppsqft",
+        "comp_search_dist_km", "comp_recency_days",
+        "nbhd_median_l365", "nbhd_yoy_growth", "borough_yoy_growth"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
+    ],
+    "metrics": {
+        "mae": 264229.0,
+        "rmse": 487931.0,
+        "r2": 0.6770,
+        "median_ape": 0.164,
+        "note": "v2 (Sprint A): + sales hygiene filter, k-NN comparable-sales pack (5 features), and neighbourhood/borough trend pack (3 features). R² 0.641→0.677 (+5.6%), MAE -16%, median APE -20%. ΔR² gap 0.131, worst-fold R² 0.519. nbhd_median_l365 ranks #3 and comp_median_price ranks #4 in feature importance — the model is using the new market-context signals as designed. time-based split (train≤2024, test≥2025)."
+    }
+}
