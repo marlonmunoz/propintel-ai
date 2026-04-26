@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { BarChart3, FileDown, FileSpreadsheet, Printer, Trash2, X } from 'lucide-react'
+import { Fragment, useState, useEffect, useMemo } from 'react'
+import { BarChart3, ChevronDown, FileDown, FileSpreadsheet, Printer, Trash2, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -84,6 +84,26 @@ export default function Portfolio() {
   const [selectedOrder, setSelectedOrder] = useState([])
   const [compareOpen, setCompareOpen] = useState(false)
   const [compareError, setCompareError] = useState('')
+  /** Export dropdown per card (Print / PDF / CSV) — one control on all breakpoints. */
+  const [exportMenuPropertyId, setExportMenuPropertyId] = useState(null)
+
+  useEffect(() => {
+    if (exportMenuPropertyId == null) return undefined
+    const close = (e) => {
+      const root = document.querySelector(`[data-export-menu="${exportMenuPropertyId}"]`)
+      if (root && e.target instanceof Node && root.contains(e.target)) return
+      setExportMenuPropertyId(null)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') setExportMenuPropertyId(null)
+    }
+    document.addEventListener('pointerdown', close, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', close, true)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [exportMenuPropertyId])
 
   useEffect(() => {
     fetchProperties()
@@ -333,32 +353,8 @@ export default function Portfolio() {
                 >
                   {/* Card header — always visible */}
                   <div className="space-y-4 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex min-w-0 items-center gap-4">
-                        <label
-                          className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-xs font-semibold ${
-                            isSelected
-                              ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-900 dark:border-cyan-400/50 dark:bg-cyan-400/10 dark:text-cyan-200'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-slate-600'
-                          } ${disableUnchecked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                          title={
-                            disableUnchecked
-                              ? compareLimit === 2
-                                ? 'Free tier: compare up to 2. Upgrade to compare up to 10.'
-                                : `Compare limit reached (${compareLimit}).`
-                              : 'Select for comparison'
-                          }
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            disabled={disableUnchecked}
-                            onChange={() => toggleSelected(property.id)}
-                            aria-label={`Select ${property.address} for comparison`}
-                            className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900"
-                          />
-                          Compare
-                        </label>
+                    <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
+                      <div className="flex min-w-0 items-center gap-3">
                         <span className="flex h-7 min-w-[28px] flex-shrink-0 items-center justify-center rounded-lg bg-slate-200 px-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                           {property.id}
                         </span>
@@ -386,96 +382,175 @@ export default function Portfolio() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-6 text-sm">
-                        {valuation && (
-                          <>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">Predicted</p>
-                              <p className="font-semibold text-cyan-600 dark:text-cyan-400">
-                                {formatCurrency(valuation.predicted_price)}
-                              </p>
-                              {valuation.price_low != null && valuation.price_high != null ? (
-                                <p className="mt-0.5 max-w-[11rem] text-right text-[10px] leading-tight text-slate-400 dark:text-slate-500">
-                                  Range {formatCurrency(valuation.price_low)} –{' '}
-                                  {formatCurrency(valuation.price_high)}
+                      {(valuation || inv) && (
+                        <div
+                          className={
+                            valuation && inv
+                              ? 'grid w-full min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm md:ml-auto md:w-auto md:grid-cols-4 md:gap-x-6 md:gap-y-0'
+                              : valuation
+                                ? 'grid w-full min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm md:ml-auto md:w-auto md:grid-cols-3 md:gap-x-6 md:gap-y-0'
+                                : 'w-full text-sm md:ml-auto md:w-auto'
+                          }
+                        >
+                          {valuation ? (
+                            <>
+                              <div className="flex min-h-0 min-w-0 flex-col gap-0.5 text-left md:items-end md:text-right">
+                                <p className="text-xs text-slate-400 dark:text-slate-500">Predicted</p>
+                                <p className="font-semibold text-cyan-600 dark:text-cyan-400">
+                                  {formatCurrency(valuation.predicted_price)}
                                 </p>
-                              ) : null}
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">Market</p>
+                                {valuation.price_low != null && valuation.price_high != null ? (
+                                  <p className="mt-0.5 text-[10px] leading-tight text-slate-400 dark:text-slate-500">
+                                    Range {formatCurrency(valuation.price_low)} –{' '}
+                                    {formatCurrency(valuation.price_high)}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className="flex min-h-0 flex-col gap-0.5 text-left md:items-end md:text-right">
+                                <p className="text-xs text-slate-400 dark:text-slate-500">Market</p>
+                                <p className="font-semibold text-slate-900 dark:text-white">
+                                  {formatCurrency(valuation.market_price)}
+                                </p>
+                              </div>
+                              <div className="flex min-h-0 flex-col gap-0.5 text-left md:items-end md:text-right">
+                                <p className="text-xs text-slate-400 dark:text-slate-500">Difference</p>
+                                <p
+                                  className={`font-semibold ${valuation.price_difference >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                                >
+                                  {formatPercent(valuation.price_difference_pct)}
+                                </p>
+                              </div>
+                            </>
+                          ) : null}
+                          {inv ? (
+                            <div className="flex min-h-0 flex-col gap-0.5 text-left md:items-end md:text-right">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">ROI Est.</p>
                               <p className="font-semibold text-slate-900 dark:text-white">
-                                {formatCurrency(valuation.market_price)}
+                                {formatPercent(inv.roi_estimate)}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">Difference</p>
-                              <p className={`font-semibold ${valuation.price_difference >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                {formatPercent(valuation.price_difference_pct)}
-                              </p>
-                            </div>
-                          </>
-                        )}
-                        {inv && (
-                          <div className="text-right">
-                            <p className="text-xs text-slate-400 dark:text-slate-500">ROI Est.</p>
-                            <p className="font-semibold text-slate-900 dark:text-white">
-                              {formatPercent(inv.roi_estimate)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {a && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => printPortfolioReport(property)}
-                              className="flex items-center gap-1.5 rounded-xl border border-sky-400/60 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-800 transition hover:border-sky-500 hover:bg-sky-500/15 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:border-sky-300 dark:hover:bg-sky-400/20"
-                              aria-label="Print report"
-                              title="Print report"
-                            >
-                              <Printer className="h-3.5 w-3.5 shrink-0" />
-                              Print
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void downloadPropertyPdf(property)}
-                              className="flex items-center gap-1.5 rounded-xl border border-rose-400/60 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-800 transition hover:border-rose-500 hover:bg-rose-500/15 dark:border-rose-400/50 dark:bg-rose-400/10 dark:text-rose-200 dark:hover:border-rose-300 dark:hover:bg-rose-400/20"
-                              aria-label="Download PDF"
-                              title="Download PDF"
-                            >
-                              <FileDown className="h-3.5 w-3.5 shrink-0" />
-                              PDF
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => downloadPropertyCsv(property)}
-                              className="flex items-center gap-1.5 rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:border-emerald-500 hover:bg-emerald-500/15 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:border-emerald-300 dark:hover:bg-emerald-400/20"
-                              aria-label="Download CSV"
-                              title="Download CSV"
-                            >
-                              <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-                              CSV
-                            </button>
-                          </>
-                        )}
-                      </div>
+                    {/* Compare lives here (not in the card header): on phones the top-left
+                        corner is a hard reach and competes with the address. Placing it
+                        just above Print / Details puts it in the natural thumb zone and
+                        groups “actions on this card” in one block. */}
+                    <div className="flex min-w-0 flex-col gap-3 border-t border-slate-200 pt-4 dark:border-slate-800 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between md:flex-nowrap md:items-center md:gap-4">
+                      <label
+                        className={`flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-3 rounded-xl border px-4 py-2.5 text-sm font-semibold sm:w-auto sm:justify-start sm:px-3 ${
+                          isSelected
+                            ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-900 dark:border-cyan-400/50 dark:bg-cyan-400/10 dark:text-cyan-200'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-slate-600'
+                        } ${disableUnchecked ? 'cursor-not-allowed opacity-50' : ''}`}
+                        title={
+                          disableUnchecked
+                            ? compareLimit === 2
+                              ? 'Free tier: compare up to 2. Upgrade to compare up to 10.'
+                              : `Compare limit reached (${compareLimit}).`
+                            : 'Select for comparison'
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={disableUnchecked}
+                          onChange={() => toggleSelected(property.id)}
+                          aria-label={`Select ${property.address} for comparison`}
+                          className="h-5 w-5 shrink-0 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900"
+                        />
+                        <span>Add to compare</span>
+                      </label>
 
-                      <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3 md:flex-nowrap">
+                        {/* Details → Export → Delete. Narrow screens: full-width stack so nothing
+                            wraps into a ragged 2+1 grid; sm+ collapses to one row like desktop. */}
                         {a && (
                           <button
                             type="button"
                             onClick={() => setExpandedId(isExpanded ? null : property.id)}
-                            className="rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium text-cyan-900 transition hover:border-cyan-500 hover:bg-cyan-500/15 dark:border-cyan-400/50 dark:bg-cyan-400/10 dark:text-cyan-300 dark:hover:border-cyan-300 dark:hover:bg-cyan-400/20"
+                            className="flex min-h-[44px] w-full items-center justify-center rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-900 transition hover:border-cyan-500 hover:bg-cyan-500/15 sm:w-auto sm:min-h-0 sm:py-1.5 dark:border-cyan-400/50 dark:bg-cyan-400/10 dark:text-cyan-300 dark:hover:border-cyan-300 dark:hover:bg-cyan-400/20"
                           >
                             {isExpanded ? 'Collapse' : 'Details'}
                           </button>
                         )}
+
+                        {/* Print / PDF / CSV always behind one Export control (mobile + desktop) —
+                            avoids four competing colored chips in one row on small phones. */}
+                        {a && (
+                          <div
+                            className="relative w-full sm:w-auto"
+                            data-export-menu={String(property.id)}
+                          >
+                            <button
+                              type="button"
+                              className="relative flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-100 sm:w-auto sm:min-h-0 sm:gap-1.5 sm:px-3 sm:py-1.5 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800"
+                              aria-expanded={exportMenuPropertyId === String(property.id)}
+                              aria-haspopup="menu"
+                              onClick={() =>
+                                setExportMenuPropertyId((prev) => {
+                                  const pid = String(property.id)
+                                  return prev === pid ? null : pid
+                                })
+                              }
+                            >
+                              <span>Export</span>
+                              <ChevronDown
+                                className={`absolute right-4 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 transition sm:static sm:right-auto sm:translate-y-0 ${exportMenuPropertyId === String(property.id) ? 'rotate-180' : ''}`}
+                                aria-hidden
+                              />
+                            </button>
+                            {exportMenuPropertyId === String(property.id) ? (
+                              <div
+                                role="menu"
+                                className="absolute left-0 right-0 z-30 mt-1 rounded-xl border border-slate-200 bg-white py-1 shadow-lg sm:left-auto sm:right-0 sm:min-w-[11.5rem] dark:border-slate-700 dark:bg-slate-900"
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex min-h-[44px] w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 sm:min-h-0 dark:text-slate-100 dark:hover:bg-slate-800"
+                                  onClick={() => {
+                                    printPortfolioReport(property)
+                                    setExportMenuPropertyId(null)
+                                  }}
+                                >
+                                  <Printer className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                                  Print
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex min-h-[44px] w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 sm:min-h-0 dark:text-slate-100 dark:hover:bg-slate-800"
+                                  onClick={() => {
+                                    void downloadPropertyPdf(property)
+                                    setExportMenuPropertyId(null)
+                                  }}
+                                >
+                                  <FileDown className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                                  Download PDF
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex min-h-[44px] w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 sm:min-h-0 dark:text-slate-100 dark:hover:bg-slate-800"
+                                  onClick={() => {
+                                    downloadPropertyCsv(property)
+                                    setExportMenuPropertyId(null)
+                                  }}
+                                >
+                                  <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                  Download CSV
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+
+                        <div className="flex w-full flex-shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                         {confirmDeleteId === property.id ? (
-                          <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5">
+                          <div className="flex min-h-[44px] w-full flex-wrap items-center justify-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 sm:w-auto sm:min-h-0 sm:py-1.5">
                             <span className="text-sm text-rose-600 dark:text-rose-300">Delete?</span>
                             <button
                               type="button"
@@ -497,11 +572,12 @@ export default function Portfolio() {
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteId(property.id)}
-                            className="flex items-center gap-1 rounded-xl border border-rose-500/30 px-3 py-1.5 text-sm text-rose-500 transition hover:bg-rose-500/10 dark:text-rose-400"
+                            className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-rose-500/30 px-3 py-2 text-sm text-rose-500 transition hover:bg-rose-500/10 sm:w-auto sm:min-h-0 sm:py-1.5 dark:text-rose-400"
                           >
                             <Trash2 className="h-3.5 w-3.5" /> Delete
                           </button>
                         )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -637,114 +713,138 @@ export default function Portfolio() {
               </button>
             </div>
 
-            <div className="h-[calc(100%-80px)] overflow-auto p-6">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-950 dark:text-slate-400">
-                        Metric
-                      </th>
-                      {selectedProperties.map((p) => {
-                        const inv = p?.analysis?.investment_analysis
-                        const label = inv?.deal_label
-                        return (
-                          <th key={p.id} className="px-3 py-2 text-left">
-                            <div className={`rounded-xl border px-3 py-2 ${dealLabelHeaderClasses(label)}`}>
-                              <p className="truncate text-sm font-semibold">{p.address}</p>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                {label ? <DealLabelBadge label={label} size="sm" /> : null}
-                                {p.created_at ? (
-                                  <span className="text-xs opacity-80">Saved {formatDateShort(p.created_at)}</span>
-                                ) : null}
+            {/* One CSS Grid inside a single horizontal scroller: every logical row is
+                one grid row, so label + all property cells share the same row height
+                (tallest cell wins). The previous split-column flex stacked labels and
+                values in separate flex columns — row heights drifted when header cards
+                or value text wrapped differently per column. Grid fixes alignment.
+                First column uses position:sticky on divs (more reliable than table
+                sticky on iOS). Solid bg + shadow keeps labels readable while scrolling. */}
+            <div className="flex h-[calc(100%-80px)] min-h-0 flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6">
+                {(() => {
+                  const rows = [
+                    { key: 'deal', label: 'Deal Label' },
+                    { key: 'predicted', label: 'Predicted Price', dir: 'max' },
+                    { key: 'market', label: 'Market Price', dir: 'min' },
+                    { key: 'roi', label: 'ROI Est.', dir: 'max' },
+                    { key: 'score', label: 'Investment Score', dir: 'max' },
+                    { key: 'diff', label: 'Price Difference', dir: 'max' },
+                    { key: 'saved', label: 'Saved', dir: 'max' },
+                  ]
+
+                  function getNumeric(rowKey, p) {
+                    const a = p?.analysis
+                    const v = a?.valuation
+                    const inv = a?.investment_analysis
+                    if (rowKey === 'predicted') return v?.predicted_price ?? null
+                    if (rowKey === 'market') return v?.market_price ?? null
+                    if (rowKey === 'roi') return inv?.roi_estimate ?? null
+                    if (rowKey === 'score') return inv?.investment_score ?? null
+                    if (rowKey === 'diff') return v?.price_difference ?? null
+                    if (rowKey === 'saved') return p?.created_at ? new Date(p.created_at).getTime() : null
+                    return null
+                  }
+
+                  function formatCell(rowKey, p) {
+                    const a = p?.analysis
+                    const v = a?.valuation
+                    const inv = a?.investment_analysis
+                    if (rowKey === 'deal') return inv?.deal_label ?? '—'
+                    if (rowKey === 'predicted') return formatCurrency(v?.predicted_price)
+                    if (rowKey === 'market') return formatCurrency(v?.market_price)
+                    if (rowKey === 'roi') return formatPercent(inv?.roi_estimate ?? null)
+                    if (rowKey === 'score')
+                      return inv?.investment_score != null ? `${inv.investment_score}/100` : '—'
+                    if (rowKey === 'diff')
+                      return v?.price_difference != null ? formatCurrency(v.price_difference) : '—'
+                    if (rowKey === 'saved') return formatDateShort(p?.created_at)
+                    return '—'
+                  }
+
+                  const bestColByRow = rows.map((r) => {
+                    if (!r.dir) return -1
+                    const vals = selectedProperties.map((p) => getNumeric(r.key, p))
+                    const filtered = vals
+                      .map((v, i) => ({ v, i }))
+                      .filter((x) => x.v != null && Number.isFinite(Number(x.v)))
+                    if (!filtered.length) return -1
+                    filtered.sort((a, b) => (r.dir === 'min' ? a.v - b.v : b.v - a.v))
+                    return filtered[0].i
+                  })
+
+                  const n = selectedProperties.length
+                  const gridTemplateColumns = `minmax(9.5rem, 32vw) repeat(${n}, minmax(11rem, 13rem))`
+                  const stickyCorner =
+                    'sticky left-0 z-20 border-r border-slate-200 bg-white shadow-[4px_0_14px_-4px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-950 dark:shadow-[4px_0_14px_-4px_rgba(0,0,0,0.55)]'
+
+                  return (
+                    <div className="isolate overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+                      <div
+                        className="grid w-max gap-0 [grid-auto-rows:minmax(0,auto)]"
+                        style={{ gridTemplateColumns }}
+                      >
+                        <div
+                          className={`${stickyCorner} flex items-end border-b border-slate-200 px-3 pb-2 pt-3 dark:border-slate-800`}
+                        >
+                          <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
+                            Metric
+                          </span>
+                        </div>
+                        {selectedProperties.map((p) => {
+                          const inv = p?.analysis?.investment_analysis
+                          const label = inv?.deal_label
+                          return (
+                            <div
+                              key={`hdr-${p.id}`}
+                              className="flex items-stretch border-b border-l border-slate-200 px-2 py-2 dark:border-slate-800"
+                            >
+                              <div
+                                className={`flex min-h-0 w-full flex-col justify-end rounded-xl border px-3 py-2 ${dealLabelHeaderClasses(label)}`}
+                              >
+                                <p className="line-clamp-2 text-sm font-semibold leading-snug">{p.address}</p>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                  {label ? <DealLabelBadge label={label} size="sm" /> : null}
+                                  {p.created_at ? (
+                                    <span className="text-xs opacity-80">
+                                      Saved {formatDateShort(p.created_at)}
+                                    </span>
+                                  ) : null}
+                                </div>
                               </div>
                             </div>
-                          </th>
-                        )
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody className="align-top">
-                    {(() => {
-                      const rows = [
-                        { key: 'deal', label: 'Deal Label' },
-                        { key: 'predicted', label: 'Predicted Price', dir: 'max' },
-                        { key: 'market', label: 'Market Price', dir: 'min' },
-                        { key: 'roi', label: 'ROI Est.', dir: 'max' },
-                        { key: 'score', label: 'Investment Score', dir: 'max' },
-                        { key: 'diff', label: 'Price Difference', dir: 'max' },
-                        { key: 'saved', label: 'Saved', dir: 'max' },
-                      ]
+                          )
+                        })}
 
-                      function getNumeric(rowKey, p) {
-                        const a = p?.analysis
-                        const v = a?.valuation
-                        const inv = a?.investment_analysis
-                        if (rowKey === 'predicted') return v?.predicted_price ?? null
-                        if (rowKey === 'market') return v?.market_price ?? null
-                        if (rowKey === 'roi') return inv?.roi_estimate ?? null
-                        if (rowKey === 'score') return inv?.investment_score ?? null
-                        if (rowKey === 'diff') return v?.price_difference ?? null
-                        if (rowKey === 'saved') return p?.created_at ? new Date(p.created_at).getTime() : null
-                        return null
-                      }
-
-                      function formatCell(rowKey, p) {
-                        const a = p?.analysis
-                        const v = a?.valuation
-                        const inv = a?.investment_analysis
-                        if (rowKey === 'deal') return inv?.deal_label ?? '—'
-                        if (rowKey === 'predicted') return formatCurrency(v?.predicted_price)
-                        if (rowKey === 'market') return formatCurrency(v?.market_price)
-                        if (rowKey === 'roi') return formatPercent(inv?.roi_estimate ?? null)
-                        if (rowKey === 'score')
-                          return inv?.investment_score != null ? `${inv.investment_score}/100` : '—'
-                        if (rowKey === 'diff')
-                          return v?.price_difference != null ? formatCurrency(v.price_difference) : '—'
-                        if (rowKey === 'saved') return formatDateShort(p?.created_at)
-                        return '—'
-                      }
-
-                      return rows.map((r, idx) => {
-                        let bestIndex = -1
-                        if (r.dir) {
-                          const vals = selectedProperties.map((p) => getNumeric(r.key, p))
-                          const filtered = vals
-                            .map((v, i) => ({ v, i }))
-                            .filter((x) => x.v != null && Number.isFinite(Number(x.v)))
-                          if (filtered.length) {
-                            filtered.sort((a, b) => (r.dir === 'min' ? a.v - b.v : b.v - a.v))
-                            bestIndex = filtered[0].i
-                          }
-                        }
-
-                        return (
-                          <tr
-                            key={r.key}
-                            className={idx % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-900/20' : ''}
-                          >
-                            <td className="sticky left-0 z-10 border-t border-slate-200 bg-inherit px-3 py-3 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                              {r.label}
-                            </td>
-                            {selectedProperties.map((p, colIdx) => {
-                              const highlight = bestIndex === colIdx
-                              return (
-                                <td
-                                  key={p.id}
-                                  className={`border-t border-slate-200 px-3 py-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200 ${
-                                    highlight ? 'bg-cyan-500/10 font-semibold' : ''
-                                  }`}
-                                >
-                                  {formatCell(r.key, p)}
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        )
-                      })
-                    })()}
-                  </tbody>
-                </table>
+                        {rows.map((r, idx) => {
+                          const stripe = idx % 2 === 0 ? 'bg-slate-50 dark:bg-slate-900' : 'bg-white dark:bg-slate-950'
+                          return (
+                            <Fragment key={r.key}>
+                              <div
+                                className={`${stickyCorner} flex items-center border-t border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200 ${stripe}`}
+                              >
+                                {r.label}
+                              </div>
+                              {selectedProperties.map((p, colIdx) => {
+                                const highlight = bestColByRow[idx] === colIdx
+                                return (
+                                  <div
+                                    key={`${r.key}-${p.id}`}
+                                    className={`flex items-center border-t border-l border-slate-200 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200 ${stripe} ${
+                                      highlight ? 'bg-cyan-500/15 font-semibold ring-1 ring-inset ring-cyan-500/25' : ''
+                                    }`}
+                                  >
+                                    <span className="min-w-0 break-words">{formatCell(r.key, p)}</span>
+                                  </div>
+                                )
+                              })}
+                            </Fragment>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </aside>
