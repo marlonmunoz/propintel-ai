@@ -1,6 +1,6 @@
 {
     "name": "multi_family_spine",
-    "version": "v3",
+    "version": "v5",
     "segment": "multi_family",
     "artifact_path": "ml/artifacts/spine_models/multi_family_spine_price_model.pkl",
     "stats_path": "ml/artifacts/spine_models/multi_family_spine_neighborhood_stats.json",
@@ -13,7 +13,8 @@
         "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
         "acris_mortgage_cnt", "acris_last_mtge_amt",
         "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
-        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "pluto_latitude", "pluto_longitude",
+        "subway_dist_km", "subway_k3_mean_dist_km", "subway_hub_flag", "subway_cbd_dist_km",
         "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
         "pluto_bldgarea", "pluto_lotarea"
     ],
@@ -21,10 +22,10 @@
         "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 346108.0,
-        "rmse": 615000.0,
-        "r2": 0.6084,
+        "mae": 346622.0,
+        "rmse": 618225.0,
+        "r2": 0.6041,
         "median_ape": 0.208,
-        "note": "v4 spine (5-seed VotingRegressor + rare-nbhd collapse): ΔR² gap 0.138, worst-fold R² 0.541. time-based split (train≤2024, test≥2025)"
+        "note": "v5 spine (transit pack: hub_flag + cbd_dist_km + k3_mean_dist added; no n_500m/n_1km to avoid lat/lon collinearity): ΔR² gap 0.150, worst-fold R² 0.547. time-based split (train≤2024, test≥2025)"
     }
 }
