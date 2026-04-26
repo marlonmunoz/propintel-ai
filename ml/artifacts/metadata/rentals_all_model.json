@@ -1,6 +1,6 @@
 {
     "name": "rentals_all_spine",
-    "version": "v4",
+    "version": "v5",
     "segment": "rentals_all",
     "artifact_path": "ml/artifacts/spine_models/rentals_all_spine_price_model.pkl",
     "stats_path": "ml/artifacts/spine_models/rentals_all_spine_neighborhood_stats.json",
@@ -14,7 +14,8 @@
         "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
         "acris_mortgage_cnt", "acris_last_mtge_amt",
         "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
-        "subway_dist_km",
+        "subway_dist_km", "subway_n_500m", "subway_n_1km",
+        "subway_k3_mean_dist_km", "subway_hub_flag", "subway_cbd_dist_km",
         "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
         "pluto_bldgarea", "pluto_lotarea"
     ],
@@ -22,10 +23,10 @@
         "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
     ],
     "metrics": {
-        "mae": 110463.0,
-        "rmse": 270000.0,
-        "r2": 0.4564,
-        "median_ape": 0.257,
-        "note": "v4 spine (pooled walkup+elevator, 5-seed VotingRegressor, no lat/lon): ΔR² gap 0.132, worst-fold R² 0.455. time-based split (train≤2024, test≥2025). Both 07-walkup and 08-elevator classes route here."
+        "mae": 110162.0,
+        "rmse": 263453.0,
+        "r2": 0.4582,
+        "median_ape": 0.259,
+        "note": "v5 spine (full transit pack: dist + n_500m + n_1km + k3_mean + hub_flag + cbd_dist_km; no lat/lon): ΔR² gap 0.140, worst-fold R² 0.458. subway_cbd_dist_km ranks #5 in feature importance — confirming commute-to-Manhattan as a key rental price driver. time-based split (train≤2024, test≥2025). Both 07-walkup and 08-elevator classes route here."
     }
 }
