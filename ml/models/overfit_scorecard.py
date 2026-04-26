@@ -52,8 +52,9 @@ from ml.models.train_spine_models import (
     train_rentals_all,
 )
 
-# Segments scored by the scorecard.  rentals_all replaces the individual rental segs.
-SCORECARD_SEGMENTS = ["one_family", "multi_family", "condo_coop", "rentals_all"]
+# Segments scored by the scorecard.
+# two_family + three_family replace the old combined multi_family segment.
+SCORECARD_SEGMENTS = ["one_family", "two_family", "three_family", "condo_coop", "rentals_all"]
 
 
 @dataclass
@@ -146,7 +147,14 @@ def _prepare_segment_split(df: pd.DataFrame, segment: str, train_end: date, test
     if segment == "rentals_all":
         return _pool_rentals(df, train_end, test_start)
 
-    sub = df[df["segment"] == segment].copy()
+    cfg = SEGMENT_FEATURES[segment]
+    # For segments that are sub-slices of a spine segment (e.g. two_family, three_family),
+    # filter on the parent spine_segment first, then by building_class_prefix.
+    spine_seg = cfg.get("spine_segment", segment)
+    sub = df[df["segment"] == spine_seg].copy()
+    bc_prefix = cfg.get("building_class_prefix")
+    if bc_prefix:
+        sub = sub[sub["building_class"].astype(str).str.startswith(bc_prefix)].copy()
     sub = _engineer(sub)
     train = sub[pd.to_datetime(sub["sale_date"]).dt.date <= train_end].copy()
     test = sub[pd.to_datetime(sub["sale_date"]).dt.date >= test_start].copy()
@@ -222,7 +230,16 @@ def main(max_folds: int) -> None:
         gap = tr_m.r2 - te_m.r2
 
         # ── Rolling folds stability ───────────────────────────────────────
-        fold_df = _rentals_df_for_folds(df) if seg == "rentals_all" else df[df["segment"] == seg]
+        if seg == "rentals_all":
+            fold_df = _rentals_df_for_folds(df)
+        else:
+            # For sub-segments (two_family, three_family) the spine segment
+            # column holds the parent name; apply building_class_prefix filter.
+            spine_seg = SEGMENT_FEATURES[seg].get("spine_segment", seg)
+            bc_prefix = SEGMENT_FEATURES[seg].get("building_class_prefix")
+            fold_df = df[df["segment"] == spine_seg].copy()
+            if bc_prefix:
+                fold_df = fold_df[fold_df["building_class"].astype(str).str.startswith(bc_prefix)]
         folds = _build_folds_for_segment(fold_df, max_folds=max_folds)
         fold_r2: list[float] = []
         fold_mae: list[float] = []

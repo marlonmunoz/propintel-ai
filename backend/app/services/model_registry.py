@@ -49,6 +49,14 @@ class ModelRegistry:
         _rentals_all_meta = self.metadata_dir / "rentals_all_model.json"
         if _rentals_all_meta.exists():
             self._models["rentals_all"] = self._load_metadata("rentals_all_model.json")
+
+        # Promote two_family and three_family if their metadata exists.
+        # When present they override the combined multi_family routing for
+        # building classes 02 and 03 respectively.
+        for seg in ("two_family", "three_family"):
+            _meta = self.metadata_dir / f"{seg}_model.json"
+            if _meta.exists():
+                self._models[seg] = self._load_metadata(f"{seg}_model.json")
         self._loaded_models = {}
 
     def load_model(self, key: str):
@@ -102,6 +110,13 @@ class ModelRegistry:
         if bc in ONE_FAMILY:
             return "one_family"
         if bc in MULTI_FAMILY:
+            # Route to dedicated split models when promoted metadata exists.
+            # two_family (class 02) and three_family (class 03) are separate
+            # trained models that out-perform the combined multi_family model.
+            if bc == "02 TWO FAMILY DWELLINGS" and "two_family" in self._models:
+                return "two_family"
+            if bc == "03 THREE FAMILY DWELLINGS" and "three_family" in self._models:
+                return "three_family"
             return "multi_family"
         if bc in CONDO_COOP:
             return "condo_coop"

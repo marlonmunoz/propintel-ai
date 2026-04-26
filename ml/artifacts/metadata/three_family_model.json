@@ -1,0 +1,31 @@
+{
+    "name": "three_family_spine",
+    "version": "v1",
+    "segment": "three_family",
+    "artifact_path": "ml/artifacts/spine_models/three_family_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/three_family_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/three_family_spine_feature_importance.csv",
+    "target": "sales_price",
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude",
+        "subway_dist_km", "subway_k3_mean_dist_km", "subway_hub_flag", "subway_cbd_dist_km",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
+    ],
+    "metrics": {
+        "mae": 485801.0,
+        "rmse": 913308.0,
+        "r2": 0.3951,
+        "median_ape": 0.232,
+        "note": "v1: building class 03 only. 5,849 train rows. Structurally limited by missing rental income data (investor pricing). ΔR² gap 0.158, worst-fold R² 0.395, fold-mean R² 0.470. 2025 investor market diverged from prior patterns. Wider prediction intervals expected for 3-family buildings."
+    }
+}
