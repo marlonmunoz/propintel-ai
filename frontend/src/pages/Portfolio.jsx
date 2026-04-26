@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { BarChart3, FileDown, FileSpreadsheet, Printer, Trash2 } from 'lucide-react'
+import { BarChart3, FileDown, FileSpreadsheet, Printer, Trash2, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -34,6 +34,30 @@ const SORT_OPTIONS = [
   { value: 'predicted_desc', label: 'Predicted Price: High → Low' },
 ]
 
+function dealLabelHeaderClasses(label) {
+  const l = (label || '').toLowerCase()
+  if (l === 'buy')
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-200'
+  if (l === 'hold')
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200'
+  if (l === 'avoid')
+    return 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:border-rose-400/40 dark:bg-rose-400/10 dark:text-rose-200'
+  return 'border-slate-300/60 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+}
+
+function getCompareLimit(profile) {
+  const role = profile?.role
+  if (role === 'paid' || role === 'admin') return 10
+  return 2
+}
+
+function formatDateShort(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function filterChipClasses(label, active) {
   if (active) {
     if (label === 'Buy') return 'border-emerald-500 bg-emerald-500 text-white'
@@ -48,7 +72,7 @@ function filterChipClasses(label, active) {
 }
 
 export default function Portfolio() {
-  const { refreshProfile } = useAuth()
+  const { refreshProfile, profile } = useAuth()
   const [properties, setProperties] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -56,6 +80,10 @@ export default function Portfolio() {
   const [expandedId, setExpandedId] = useState(null)
   const [filterLabel, setFilterLabel] = useState('All')
   const [sortBy, setSortBy] = useState('default')
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [selectedOrder, setSelectedOrder] = useState([])
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [compareError, setCompareError] = useState('')
 
   useEffect(() => {
     fetchProperties()
@@ -139,6 +167,50 @@ export default function Portfolio() {
   }, [properties, filterLabel, sortBy])
 
   const isFiltered = filterLabel !== 'All'
+  const compareLimit = getCompareLimit(profile)
+  const selectedCount = selectedOrder.length
+  const canCompare = selectedCount >= 2
+
+  const selectedProperties = useMemo(() => {
+    const map = new Map(properties.map((p) => [String(p.id), p]))
+    return selectedOrder.map((id) => map.get(String(id))).filter(Boolean)
+  }, [properties, selectedOrder])
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+    setSelectedOrder([])
+    setCompareError('')
+    setCompareOpen(false)
+  }
+
+  function toggleSelected(propertyId) {
+    const id = String(propertyId)
+    setCompareError('')
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setSelectedOrder((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      if (prev.length >= compareLimit) {
+        setCompareError(
+          compareLimit === 2
+            ? 'Free tier: compare up to 2. Upgrade to compare up to 10.'
+            : `Compare limit reached (${compareLimit}).`
+        )
+        return prev
+      }
+      return [...prev, id]
+    })
+  }
+
+  function openCompare() {
+    setCompareError('')
+    if (!canCompare) return
+    setCompareOpen(true)
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
@@ -250,6 +322,9 @@ export default function Portfolio() {
               const inv = a?.investment_analysis
               const exp = a?.explanation
               const isExpanded = expandedId === property.id
+              const id = String(property.id)
+              const isSelected = selectedIds.has(id)
+              const disableUnchecked = !isSelected && selectedCount >= compareLimit
 
               return (
                 <div
@@ -260,6 +335,30 @@ export default function Portfolio() {
                   <div className="space-y-4 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex min-w-0 items-center gap-4">
+                        <label
+                          className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-xs font-semibold ${
+                            isSelected
+                              ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-900 dark:border-cyan-400/50 dark:bg-cyan-400/10 dark:text-cyan-200'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-slate-600'
+                          } ${disableUnchecked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                          title={
+                            disableUnchecked
+                              ? compareLimit === 2
+                                ? 'Free tier: compare up to 2. Upgrade to compare up to 10.'
+                                : `Compare limit reached (${compareLimit}).`
+                              : 'Select for comparison'
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={disableUnchecked}
+                            onChange={() => toggleSelected(property.id)}
+                            aria-label={`Select ${property.address} for comparison`}
+                            className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900"
+                          />
+                          Compare
+                        </label>
                         <span className="flex h-7 min-w-[28px] flex-shrink-0 items-center justify-center rounded-lg bg-slate-200 px-1.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                           {property.id}
                         </span>
@@ -451,6 +550,206 @@ export default function Portfolio() {
           </div>
         )}
       </section>
+
+      {/* Sticky compare bar */}
+      {selectedCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                {canCompare ? (
+                  <>
+                    Compare <span className="text-cyan-600 dark:text-cyan-400">{selectedCount}</span>{' '}
+                    properties — <span className="text-slate-500 dark:text-slate-400">no quota used</span>
+                  </>
+                ) : (
+                  <>
+                    Select <span className="text-cyan-600 dark:text-cyan-400">2+</span> properties to compare
+                  </>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                Limit: {compareLimit}. {profile?.role === 'user' ? 'Free tier compares up to 2 · Paid compares up to 10.' : ''}
+              </p>
+              {compareError && (
+                <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">{compareError}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={openCompare}
+                disabled={!canCompare}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  canCompare
+                    ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                    : 'cursor-not-allowed bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                }`}
+              >
+                Compare {selectedCount} properties →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compare slide-in panel */}
+      {compareOpen && (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/40"
+            aria-label="Close comparison"
+            onClick={() => setCompareOpen(false)}
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Compare properties"
+            className="absolute right-0 top-0 h-full w-full max-w-5xl overflow-hidden border-l border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
+                  Comparison
+                </p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">
+                  Compare saved analyses — no quota used
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Side-by-side snapshot from your portfolio (free).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompareOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="h-[calc(100%-80px)] overflow-auto p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-950 dark:text-slate-400">
+                        Metric
+                      </th>
+                      {selectedProperties.map((p) => {
+                        const inv = p?.analysis?.investment_analysis
+                        const label = inv?.deal_label
+                        return (
+                          <th key={p.id} className="px-3 py-2 text-left">
+                            <div className={`rounded-xl border px-3 py-2 ${dealLabelHeaderClasses(label)}`}>
+                              <p className="truncate text-sm font-semibold">{p.address}</p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                {label ? <DealLabelBadge label={label} size="sm" /> : null}
+                                {p.created_at ? (
+                                  <span className="text-xs opacity-80">Saved {formatDateShort(p.created_at)}</span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody className="align-top">
+                    {(() => {
+                      const rows = [
+                        { key: 'deal', label: 'Deal Label' },
+                        { key: 'predicted', label: 'Predicted Price', dir: 'max' },
+                        { key: 'market', label: 'Market Price', dir: 'min' },
+                        { key: 'roi', label: 'ROI Est.', dir: 'max' },
+                        { key: 'score', label: 'Investment Score', dir: 'max' },
+                        { key: 'diff', label: 'Price Difference', dir: 'max' },
+                        { key: 'saved', label: 'Saved', dir: 'max' },
+                      ]
+
+                      function getNumeric(rowKey, p) {
+                        const a = p?.analysis
+                        const v = a?.valuation
+                        const inv = a?.investment_analysis
+                        if (rowKey === 'predicted') return v?.predicted_price ?? null
+                        if (rowKey === 'market') return v?.market_price ?? null
+                        if (rowKey === 'roi') return inv?.roi_estimate ?? null
+                        if (rowKey === 'score') return inv?.investment_score ?? null
+                        if (rowKey === 'diff') return v?.price_difference ?? null
+                        if (rowKey === 'saved') return p?.created_at ? new Date(p.created_at).getTime() : null
+                        return null
+                      }
+
+                      function formatCell(rowKey, p) {
+                        const a = p?.analysis
+                        const v = a?.valuation
+                        const inv = a?.investment_analysis
+                        if (rowKey === 'deal') return inv?.deal_label ?? '—'
+                        if (rowKey === 'predicted') return formatCurrency(v?.predicted_price)
+                        if (rowKey === 'market') return formatCurrency(v?.market_price)
+                        if (rowKey === 'roi') return formatPercent(inv?.roi_estimate ?? null)
+                        if (rowKey === 'score')
+                          return inv?.investment_score != null ? `${inv.investment_score}/100` : '—'
+                        if (rowKey === 'diff')
+                          return v?.price_difference != null ? formatCurrency(v.price_difference) : '—'
+                        if (rowKey === 'saved') return formatDateShort(p?.created_at)
+                        return '—'
+                      }
+
+                      return rows.map((r, idx) => {
+                        let bestIndex = -1
+                        if (r.dir) {
+                          const vals = selectedProperties.map((p) => getNumeric(r.key, p))
+                          const filtered = vals
+                            .map((v, i) => ({ v, i }))
+                            .filter((x) => x.v != null && Number.isFinite(Number(x.v)))
+                          if (filtered.length) {
+                            filtered.sort((a, b) => (r.dir === 'min' ? a.v - b.v : b.v - a.v))
+                            bestIndex = filtered[0].i
+                          }
+                        }
+
+                        return (
+                          <tr
+                            key={r.key}
+                            className={idx % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-900/20' : ''}
+                          >
+                            <td className="sticky left-0 z-10 border-t border-slate-200 bg-inherit px-3 py-3 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                              {r.label}
+                            </td>
+                            {selectedProperties.map((p, colIdx) => {
+                              const highlight = bestIndex === colIdx
+                              return (
+                                <td
+                                  key={p.id}
+                                  className={`border-t border-slate-200 px-3 py-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200 ${
+                                    highlight ? 'bg-cyan-500/10 font-semibold' : ''
+                                  }`}
+                                >
+                                  {formatCell(r.key, p)}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       <Footer />
     </div>

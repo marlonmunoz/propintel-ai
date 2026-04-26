@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '../../context/ThemeContext'
 
@@ -95,6 +96,63 @@ describe('Portfolio page', () => {
     await waitFor(() =>
       expect(screen.getByText('123 Main St')).toBeInTheDocument()
     )
+  })
+
+  it('enables selection and opens compare panel (free tier limit=2)', async () => {
+    const user = userEvent.setup()
+    const props = [
+      {
+        id: '1',
+        address: '41-17 Denman St',
+        borough: 'Queens',
+        created_at: new Date('2026-04-11T10:00:00Z').toISOString(),
+        analysis: {
+          investment_analysis: { deal_label: 'Avoid', investment_score: 0, roi_estimate: -25.0 },
+          valuation: { predicted_price: 937774, market_price: 1250000, price_difference: -312226 },
+        },
+      },
+      {
+        id: '2',
+        address: '123 Main St',
+        borough: 'Brooklyn',
+        created_at: new Date('2026-04-14T10:00:00Z').toISOString(),
+        analysis: {
+          investment_analysis: { deal_label: 'Buy', investment_score: 82, roi_estimate: 9.1 },
+          valuation: { predicted_price: 1200000, market_price: 1100000, price_difference: 100000 },
+        },
+      },
+      {
+        id: '3',
+        address: '55 Park Ave',
+        borough: 'Manhattan',
+        created_at: new Date('2026-04-20T10:00:00Z').toISOString(),
+        analysis: {
+          investment_analysis: { deal_label: 'Hold', investment_score: 51, roi_estimate: 1.7 },
+          valuation: { predicted_price: 890000, market_price: 875000, price_difference: 15000 },
+        },
+      },
+    ]
+    renderPortfolio(props)
+
+    await waitFor(() => expect(screen.getByText('41-17 Denman St')).toBeInTheDocument())
+
+    const cb1 = screen.getByLabelText(/Select 41-17 Denman St for comparison/i)
+    const cb2 = screen.getByLabelText(/Select 123 Main St for comparison/i)
+    const cb3 = screen.getByLabelText(/Select 55 Park Ave for comparison/i)
+
+    await user.click(cb1)
+    await user.click(cb2)
+
+    // Sticky bar should appear and allow compare.
+    const compareBtn = screen.getByRole('button', { name: /Compare 2 properties/i })
+    expect(compareBtn).toBeEnabled()
+
+    // Free tier should block selecting a third.
+    expect(cb3).toBeDisabled()
+
+    await user.click(compareBtn)
+    expect(screen.getByRole('dialog', { name: /Compare properties/i })).toBeInTheDocument()
+    expect(screen.getByText(/Compare saved analyses — no quota used/i)).toBeInTheDocument()
   })
 
   it('shows sort dropdown when properties exist', async () => {
