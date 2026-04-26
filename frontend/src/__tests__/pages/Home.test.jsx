@@ -69,8 +69,8 @@ describe('Home page', () => {
   it('renders all three metric labels', () => {
     renderHome()
     expect(screen.getByText(/Strongest segment/i)).toBeInTheDocument()
-    // Use case-sensitive regex to avoid matching "multi-family" in the feature description.
-    expect(screen.getByText(/Multi-family/)).toBeInTheDocument()
+    // Exact match to avoid collisions with feature description text.
+    expect(screen.getByText(/^2-family homes$/i)).toBeInTheDocument()
     expect(screen.getByText(/^Segment models$/i)).toBeInTheDocument()
   })
 

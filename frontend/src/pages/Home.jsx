@@ -9,7 +9,7 @@ const features = [
     icon: BarChart3,
     title: 'ML-Powered Valuation',
     description:
-      'XGBoost ensemble models trained on real NYC sales data route to the best segment model for your property type — one family, multi-family, condo/co-op, or rental (walkup and elevator pooled).',
+      'XGBoost ensemble models trained on real NYC sales data route to the best segment model — one family, two-family, three-family, condo/co-op, or rental (walkup and elevator pooled).',
   },
   {
     icon: Brain,
@@ -36,20 +36,20 @@ const modelMetrics = [
     detail: 'Highest accuracy on NYC residential sales — time-based holdout',
   },
   {
-    label: 'Multi-family',
-    segment: '2–3 unit buildings',
-    target: 0.61,
+    label: '2-family homes',
+    segment: 'Most common multi-family',
+    target: 0.68,
     decimals: 2,
     suffix: 'R²',
-    detail: 'Ensemble model + rare-neighbourhood collapse to reduce overfitting',
+    detail: 'Sprint A: + sales hygiene, comparable-sales pack, market trend pack — median APE 16.4%',
   },
   {
     label: 'Segment models',
     segment: 'Production routing',
-    target: 4,
+    target: 5,
     decimals: 0,
     suffix: 'models',
-    detail: 'One global fallback + four dedicated segments, overfitting-gated',
+    detail: 'One global fallback + five dedicated segments (2-family now its own model)',
   },
 ]
 

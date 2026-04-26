@@ -290,6 +290,20 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         "dof_bldg_class":  np.nan,   # OHE: handle_unknown="ignore" → zero vector
         "dof_tax_class":   np.nan,
         "pluto_bldgclass": np.nan,
+
+        # ── Sprint A: comp + trend features ───────────────────────────────────
+        # Default to NaN; populated below when (bbl, as_of_date) are provided
+        # and a precomputed snapshot exists in gold_comps_features /
+        # gold_market_trends.  XGBoost's median-imputer handles missing values
+        # so the model still produces a valid prediction without these signals.
+        "comp_count":          np.nan,
+        "comp_median_price":   np.nan,
+        "comp_median_ppsqft":  np.nan,
+        "comp_search_dist_km": np.nan,
+        "comp_recency_days":   np.nan,
+        "nbhd_median_l365":    np.nan,
+        "nbhd_yoy_growth":     np.nan,
+        "borough_yoy_growth":  np.nan,
     }
 
     # ── Pooled rental flag ────────────────────────────────────────────────────
@@ -300,6 +314,13 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         row["is_elevator"] = 1.0 if bc.startswith("08") or "ELEVATOR" in bc.upper() else 0.0
 
     # ── Optional BBL + as_of_date → Silver / PLUTO as-of features ───────────
+    # Resolve borough name → number for trend-table lookup (trend table is
+    # keyed on int borough 1-5).  Mirrors BOROUGH_NAMES in train_spine_models.py.
+    _BOROUGH_NUM = {
+        "manhattan": 1, "bronx": 2, "brooklyn": 3, "queens": 4, "staten island": 5,
+    }
+    borough_num = _BOROUGH_NUM.get((payload.borough or "").strip().lower())
+
     bbl_raw, as_of_raw = payload.bbl, payload.as_of_date
     if (bbl_raw and not as_of_raw) or (as_of_raw and not bbl_raw):
         join_meta["bbl_join_status"] = "incomplete"
@@ -311,7 +332,22 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         else:
             join_meta["bbl_normalized"] = bbl_n
             join_meta["as_of_date"] = str(as_of)
-            gold_feats, status = build_spine_gold_features_from_bbl(bbl_n, as_of)
+            # Map model_key → spine segment expected by derive_comp_segment.
+            #   two_family / three_family / one_family / condo_coop are passed
+            #   verbatim; multi_family routes to "multi_family" (legacy combined
+            #   model not in Sprint A scope, so comp/trend join no-ops).
+            spine_segment = (
+                "multi_family" if model_key in {"two_family", "three_family"}
+                else model_key
+            )
+            gold_feats, status = build_spine_gold_features_from_bbl(
+                bbl_n,
+                as_of,
+                segment=spine_segment,
+                building_class=getattr(payload, "building_class", None),
+                borough=borough_num,
+                neighborhood=neighborhood,
+            )
             join_meta["bbl_join_status"] = status
             for k, v in gold_feats.items():
                 if v is None:

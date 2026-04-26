@@ -73,7 +73,7 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - **Supabase Auth** integrated: register / login, JWT sessions, `GET`/`PATCH /auth/me` profiles, per-user saved properties; optional **admin** via `profiles.role` and/or `ADMIN_USER_IDS` in server env (full portfolio visibility for admins)
 - **Paid tier feature** complete: `user` / `paid` / `admin` roles enforced on LLM quota; `GET /auth/quota` endpoint; quota pill on Analyze page; Paid badge in Navbar; tier card + quota bar + Stripe placeholder on Profile page
 - **Medallion data pipeline** implemented: Bronze → Silver normalizers (DOF, ACRIS, J-51, PLUTO) → Gold as-of feature builders → spine-based training
-- **Spine v4 models** trained on Gold features with strict time-based splits; overfitting-gate guardrails applied — all metrics are honest forward-time R² values. New anti-overfitting measures: 5-seed VotingRegressor ensemble, rare-neighbourhood collapse, pooled `rentals_all` model
+- **Spine v5/v6 models** trained on Gold features with strict time-based splits; overfitting-gate guardrails applied — all metrics are honest forward-time R² values. `multi_family` split into dedicated `two_family` (R²=0.677, Sprint A) and `three_family` models. Anti-overfitting measures: 5-seed VotingRegressor, rare-neighbourhood collapse, transit feature pack, k-NN comparable-sales pack, neighbourhood/borough trend pack
 - **BBL inference enrichment**: optional `bbl` + `as_of_date` on `POST /predict-price-v2` and `POST /analyze-property-v2` triggers on-the-fly Silver/PLUTO feature loading at request time, closing the train/inference feature gap
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
@@ -253,30 +253,51 @@ The `warnings` field in `ProductionPredictionResponse` is populated based on mod
 
 ## 📈 Model Performance
 
-### Spine v4 results — time-based split (train ≤ 2024-12-31 / test ≥ 2025-01-31)
+### Current model scorecard — time-based split (train ≤ 2024-12-31 / test ≥ 2025-01-31)
 
 | Segment | Test R² | Test MAE | Test Median APE | Target | ΔR² gap | Worst-fold R² | Notes |
 |---|---|---|---|---|---|---|---|
-| `one_family` | **0.765** | $238k | 17.2% | sales_price | 0.109 ✅ | 0.755 ✅ | Protected — not retrained |
-| `condo_coop` | **0.633** | $421k | 21.4% | sales_price | 0.044 ✅ | 0.594 ✅ | Most stable model |
-| `multi_family` | **0.608** | $346k | 20.8% | sales_price | 0.138 ✅ | 0.541 ✅ | v4: 5-seed ensemble + rare-nbhd collapse |
-| `rentals_all` | **0.456** | $110k/unit | 25.7% | price_per_unit | 0.131 ✅ | 0.456 ✅ | v4: pooled walkup+elevator, no lat/lon, ensemble |
+| `one_family` | **0.768** | $237k | 17.3% | sales_price | 0.111 ✅ | 0.746 ✅ | Protected — not retrained |
+| `condo_coop` | **0.637** | $419k | 21.2% | sales_price | 0.043 ✅ | 0.596 ✅ | Most stable model |
+| `two_family` | **0.677** | $264k | 16.4% | sales_price | 0.131 ✅ | 0.519 ✅ | v2 (Sprint A): + sales hygiene + comp pack + market trends; +5.6% R², −16% MAE |
+| `three_family` | **0.395** | $486k | 23.2% | sales_price | 0.158 ⚠️ | 0.395 ⚠️ | v1: class 03 only; limited by missing rental income data; fold-mean R²=0.470 |
+| `rentals_all` | **0.458** | $110k/unit | 25.9% | price_per_unit | 0.140 ✅ | 0.458 ✅ | v5: full transit pack — `subway_cbd_dist_km` ranks #5 in importance |
 
-> All metrics are from a **strict time-based holdout** — no random splits. Train rows: sales up to 2024-12-31. Test rows: sales on or after 2025-01-31 (30-day reporting-lag gap enforced). The ΔR² gap and worst rolling-origin fold R² are the anti-overfitting gates that must both pass before any model is promoted.
+> All metrics are from a **strict time-based holdout** — no random splits. Train rows: sales up to 2024-12-31. Test rows: sales on or after 2025-01-31 (30-day reporting-lag gap enforced). Gates: ΔR² ≤ 0.15 AND worst-fold R² ≥ 0.40.
 
-> **`rentals_all`** replaces the previous separate `rental_walkup` and `rental_elevator` models. Pooling eliminated the ~350-row data starvation problem for elevator rentals (worst-fold R² improved from 0.280 → 0.456). Both building classes `07` and `08` route to this shared model via the `is_elevator` binary feature.
+> **`two_family` v2 (Sprint A):** Three layered improvements stacked on the v1 split model — (1) sales hygiene filter that drops $1/$10/$50k non-arms-length transfers (~545 rows, 1.8% of class-02 sales); (2) k-NN **comparable-sales pack** (5 features) which finds the 5 nearest 2-family sales within 1km in the prior 365 days and adds median price, $/sqft, search distance, and recency as signals; (3) **market-trend pack** which captures neighbourhood and borough YoY price growth as direction signals. Lift: R² 0.641 → 0.677, MAE $316k → $264k, median APE 20.6% → 16.4%. New features `nbhd_median_l365` (#3) and `comp_median_price` (#4) earn real importance, confirming the model is using local market context as designed.
+
+> **`two_family` vs `multi_family`:** The old combined multi_family segment (0.604 R²) mixed two fundamentally different buyer markets — 2-family owner-occupiers and 3-family investors. Splitting them by building class gives `two_family` a dedicated model with cleaner signal — first to 0.641 (v1), then to 0.677 with Sprint A enrichments — on the 80% of multi-family traffic (30,873 transactions).
+
+> **`three_family`:** 3-family investor pricing is driven by rental income yields not observable in our feature set. The model achieves fold-mean R²=0.470 across historical years but struggled with the 2025 test period where investor market dynamics shifted with higher rates. Wider prediction intervals are expected for this segment.
+
+> **`rentals_all`** replaces the previous separate `rental_walkup` and `rental_elevator` models. Both building classes `07` and `08` route here via the `is_elevator` binary feature. `subway_cbd_dist_km` ranks #5 in importance, confirming outer-borough commute access drives rental building pricing.
 
 Rental models predict **price per unit** ($/unit) and multiply by `total_units` at inference to recover the full building sale price.
 
-### Anti-overfitting measures (v4)
+### Anti-overfitting measures
 
 | Measure | Segments |
 |---|---|
-| 5-seed VotingRegressor ensemble | `multi_family`, `rentals_all` |
-| Rare-neighbourhood collapse (< 30 train rows → `Other_<Borough>`) | `multi_family` |
+| 5-seed VotingRegressor ensemble | `two_family`, `three_family`, `rentals_all` |
+| Rare-neighbourhood collapse (< 30 train rows → `Other_<Borough>`) | `two_family`, `three_family` |
 | lat/lon excluded (prevents geographic memorisation in small datasets) | `rentals_all` |
+| Transit density counts (`n_500m`, `n_1km`) excluded to avoid lat/lon collinearity | `two_family`, `three_family` |
+| Sales hygiene filter (drops nominal/non-arms-length sales below $100k) | `two_family` |
+| Curated lean comp pack (5 features) — drops collinear p25/p75 to avoid gap widening | `two_family` |
 | Time-based split instead of random 80/20 | All |
 | Rolling-origin fold scorecard gates: ΔR² ≤ 0.15, worst-fold R² ≥ 0.40 | All |
+
+### Model routing
+
+| Building Class | Segment | Model |
+|---|---|---|
+| `01 ONE FAMILY DWELLINGS` | `one_family` | Promoted ✅ |
+| `02 TWO FAMILY DWELLINGS` | `two_family` | Promoted ✅ |
+| `03 THREE FAMILY DWELLINGS` | `three_family` | Active ⚠️ (wider intervals) |
+| `09`, `10`, `12`, `13`, `15`, `17` (Condo/Co-op) | `condo_coop` | Promoted ✅ |
+| `07 RENTALS - WALKUP`, `08 RENTALS - ELEVATOR` | `rentals_all` | Promoted ✅ |
+| All others | `global` | Fallback |
 
 ### Feature set
 
@@ -287,8 +308,14 @@ Rental models predict **price per unit** ($/unit) and multiply by `total_units` 
 | DOF roll | `dof_curmkttot`, `dof_curacttot`, `dof_curactland`, `dof_gross_sqft`, `dof_bld_story`, `dof_units`, `dof_yrbuilt`, `dof_bldg_class`, `dof_tax_class` | All |
 | ACRIS | `acris_prior_sale_cnt`, `acris_last_deed_amt`, `acris_days_since_last_deed`, `acris_mortgage_cnt`, `acris_last_mtge_amt` | All |
 | J-51 | `j51_active_flag`, `j51_last_abate_amt`, `j51_total_abatement` | All |
-| PLUTO geo | `pluto_latitude`, `pluto_longitude`, `subway_dist_km`, `pluto_numfloors`, `pluto_builtfar`, `pluto_bldg_footprint`, `pluto_bldgarea`, `pluto_lotarea`, `pluto_bldgclass` | All except `rentals_all` (no lat/lon) |
+| PLUTO geo | `pluto_latitude`, `pluto_longitude`, `pluto_numfloors`, `pluto_builtfar`, `pluto_bldg_footprint`, `pluto_bldgarea`, `pluto_lotarea`, `pluto_bldgclass` | All except `rentals_all` (no lat/lon) |
+| Transit pack | `subway_dist_km`, `subway_k3_mean_dist_km`, `subway_hub_flag`, `subway_cbd_dist_km` | `two_family`, `three_family`, `one_family`, `condo_coop` |
+| Transit density | `subway_n_500m`, `subway_n_1km` | `rentals_all` only |
+| **Comp pack** (Sprint A) | `comp_count`, `comp_median_price`, `comp_median_ppsqft`, `comp_search_dist_km`, `comp_recency_days` | `two_family` |
+| **Market trends** (Sprint A) | `nbhd_median_l365`, `nbhd_yoy_growth`, `borough_yoy_growth` | `two_family` |
 | Rental only | `total_units`, `residential_units`, `is_elevator` | `rentals_all` |
+
+> **Sprint A — Comp + trend feature packs.** Two new Gold builders (`gold_comps_features.py`, `gold_market_trends.py`) compute as-of-safe k-NN comparable-sales aggregates and per-neighbourhood/borough rolling-window medians + YoY growth. Comps are matched per `comp_segment` so 2-family comps come from 2-family sales only. Look-back window is 365 days; spatial cap is 5 km; minimum comp price is $100k (mirrors the hygiene filter). At inference time `bbl_feature_builder.py` reads the most recent matching snapshot for the target (BBL, segment) — a yesterday-snapshot proxy for today is acceptable because the underlying signals (recent sales, neighbourhood medians, YoY rates) move slowly. Missing snapshots fall through to NaN; XGBoost imputes via the column's training median so the prediction stays valid.
 
 ### Explainability
 Feature importance CSVs for each segment are saved to `ml/artifacts/spine_models/` after training and are loaded at inference time to drive the LLM explanation.

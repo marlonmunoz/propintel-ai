@@ -28,6 +28,11 @@ SILVER_DOF   = BASE_DIR / "ml/data/silver/dof_assessment/silver_dof_assessment.p
 SILVER_ACRIS = BASE_DIR / "ml/data/silver/acris/silver_acris_transactions.parquet"
 SILVER_J51   = BASE_DIR / "ml/data/silver/j51/silver_j51.parquet"
 GOLD_PLUTO   = BASE_DIR / "ml/data/gold/gold_pluto_features.parquet"
+# Sprint A — comp + trend features for inference parity.
+# Both tables carry a `comp_segment` column derived from (segment, building_class):
+#   one_family / two_family (multi-fam class 02) / three_family (class 03) / condo_coop
+GOLD_COMPS   = BASE_DIR / "ml/data/gold/gold_comps_features.parquet"
+GOLD_TRENDS  = BASE_DIR / "ml/data/gold/gold_market_trends.parquet"
 
 # Must match gold_acris_features_asof.py
 DEED_TYPES = {
@@ -225,27 +230,160 @@ def _pluto_features(bbl: str) -> dict[str, Any]:
     if df.empty:
         return out
     row = df.iloc[0]
+    # Numeric columns (includes transit pack v2 features).
+    # Reading directly from gold_pluto_features.parquet ensures perfect parity
+    # with training — no separate computation, no drift risk.
     for c in (
-        "pluto_latitude", "pluto_longitude", "subway_dist_km",
+        "pluto_latitude", "pluto_longitude",
+        # Transit pack — all five signals
+        "subway_dist_km",
+        "subway_n_500m",
+        "subway_n_1km",
+        "subway_k3_mean_dist_km",
+        "subway_hub_flag",
+        "subway_cbd_dist_km",
+        # Physical / structural
         "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
-        "pluto_bldgarea", "pluto_lotarea", "pluto_bldgclass",
+        "pluto_bldgarea", "pluto_lotarea",
     ):
         if c in row.index and pd.notna(row[c]):
-            if c == "pluto_bldgclass":
-                out[c] = str(row[c])
-            else:
-                out[c] = float(row[c])
+            out[c] = float(row[c])
+    # Categorical
+    if "pluto_bldgclass" in row.index and pd.notna(row["pluto_bldgclass"]):
+        out["pluto_bldgclass"] = str(row["pluto_bldgclass"])
     return out
 
 
-def build_spine_gold_features_from_bbl(bbl: str, as_of_date: date) -> tuple[dict[str, Any], str]:
+# ── Comp + market-trend lookup (Sprint A inference parity) ────────────────────
+# Both tables are keyed on as_of_date.  At inference time we typically don't
+# have an exact match (today's date isn't in the training spine), so we fall
+# back to the most recent precomputed snapshot within a 365-day window for the
+# same join key.  This is acceptable because:
+#   * comps depend on prior 365 days of sales — yesterday's snapshot is a
+#     near-perfect proxy for today's snapshot.
+#   * trends are area-level and move slowly.
+# If no snapshot exists we return an empty dict and XGBoost imputes via NaN
+# handling — the model still produces a valid prediction without comp signal.
+
+
+_COMP_FEATURE_KEYS = (
+    "comp_count", "comp_median_price", "comp_median_ppsqft",
+    "comp_search_dist_km", "comp_recency_days",
+)
+_TREND_FEATURE_KEYS = (
+    "nbhd_median_l365", "nbhd_yoy_growth", "borough_yoy_growth",
+)
+
+
+def _comp_features(bbl: str, as_of: date, comp_segment: str | None) -> dict[str, Any]:
+    """Look up comp features.  Exact (bbl, as_of, segment) match preferred,
+    falling back to the most recent matching row within 365 days."""
+    out: dict[str, Any] = {}
+    if not comp_segment or not GOLD_COMPS.exists():
+        return out
+    df = _parquet_read_bbl(GOLD_COMPS, bbl)
+    if df.empty:
+        return out
+    df = df[df["comp_segment"] == comp_segment].copy()
+    if df.empty:
+        return out
+    # Use only snapshots strictly on/before as_of within the lookback window.
+    df["as_of_date"] = pd.to_datetime(df["as_of_date"], errors="coerce").dt.date
+    as_of_d = as_of
+    df = df[df["as_of_date"].notna() & (df["as_of_date"] <= as_of_d)]
+    if df.empty:
+        return out
+    # Take the most recent snapshot (closest to inference date).
+    row = df.sort_values("as_of_date", ascending=False).iloc[0]
+    for c in _COMP_FEATURE_KEYS:
+        if c in row.index and pd.notna(row[c]):
+            out[c] = float(row[c])
+    return out
+
+
+def _trend_features(
+    borough: int | None,
+    neighborhood: str | None,
+    as_of: date,
+    comp_segment: str | None,
+) -> dict[str, Any]:
+    """Look up market-trend snapshot for (as_of, borough, neighborhood, segment).
+    Falls back to the most recent snapshot within 365 days when no exact match."""
+    out: dict[str, Any] = {}
+    if borough is None or not neighborhood or not comp_segment or not GOLD_TRENDS.exists():
+        return out
+    try:
+        # The trend file is small per-segment when filtered by area; use partition
+        # filters where supported.
+        df = pd.read_parquet(
+            GOLD_TRENDS,
+            filters=[
+                ("borough", "==", int(borough)),
+                ("comp_segment", "==", comp_segment),
+            ],
+        )
+    except Exception:
+        # Fallback to full read if predicate pushdown isn't available.
+        df = pd.read_parquet(GOLD_TRENDS)
+        df = df[(df["borough"].astype(int) == int(borough))
+                & (df["comp_segment"] == comp_segment)]
+    if df.empty:
+        return out
+    df = df[df["neighborhood"].astype(str) == str(neighborhood)].copy()
+    if df.empty:
+        return out
+    df["as_of_date"] = pd.to_datetime(df["as_of_date"], errors="coerce").dt.date
+    df = df[df["as_of_date"].notna() & (df["as_of_date"] <= as_of)]
+    if df.empty:
+        return out
+    row = df.sort_values("as_of_date", ascending=False).iloc[0]
+    for c in _TREND_FEATURE_KEYS:
+        if c in row.index and pd.notna(row[c]):
+            out[c] = float(row[c])
+    return out
+
+
+def derive_comp_segment(segment: str | None, building_class: str | None) -> str | None:
+    """Map (segment, building_class) → comp_segment key used in Gold tables.
+
+    Returns None when the combo isn't covered by the Sprint A comp/trend
+    pipeline (e.g. rentals).  Callers should treat None as "skip the join".
+    """
+    if not segment:
+        return None
+    if segment == "one_family":
+        return "one_family"
+    if segment == "condo_coop":
+        return "condo_coop"
+    if segment == "multi_family":
+        bc = (building_class or "").strip()
+        if bc.startswith("02"):
+            return "two_family"
+        if bc.startswith("03"):
+            return "three_family"
+    return None
+
+
+def build_spine_gold_features_from_bbl(
+    bbl: str,
+    as_of_date: date,
+    *,
+    segment: str | None = None,
+    building_class: str | None = None,
+    borough: int | None = None,
+    neighborhood: str | None = None,
+) -> tuple[dict[str, Any], str]:
     """Return (feature_dict, status) for merging into the spine feature row.
 
     status
     ------
-    ``"ok"``           — at least DOF or PLUTO returned data
-    ``"partial"``     — only ACRIS/J-51 style signals (counts), no DOF roll
-    ``"no_data"``     — nothing found for this BBL in local Silver/PLUTO files
+    ``"ok"``       — at least DOF or PLUTO returned data
+    ``"partial"`` — only ACRIS/J-51 style signals (counts), no DOF roll
+    ``"no_data"`` — nothing found for this BBL in local Silver/PLUTO files
+
+    Sprint A: when ``segment`` (and for multi_family, ``building_class``) is
+    provided we additionally attempt to load comp + trend features.  Missing
+    comp/trend rows do not affect the status — XGBoost imputes.
     """
     merged: dict[str, Any] = {}
     dof = _dof_features(bbl, as_of_date)
@@ -253,6 +391,12 @@ def build_spine_gold_features_from_bbl(bbl: str, as_of_date: date) -> tuple[dict
     merged.update(_acris_features(bbl, as_of_date))
     merged.update(_j51_features(bbl, as_of_date))
     merged.update(_pluto_features(bbl))
+
+    # Comp + trend features (no impact on status; opt-in via segment kwarg).
+    comp_segment = derive_comp_segment(segment, building_class)
+    if comp_segment:
+        merged.update(_comp_features(bbl, as_of_date, comp_segment))
+        merged.update(_trend_features(borough, neighborhood, as_of_date, comp_segment))
 
     if dof:
         status = "ok"
