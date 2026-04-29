@@ -451,6 +451,13 @@ class ProductionAnalyzeResponse(BaseModel):
         ...,
         description="LLM-generated narrative explanation of the opportunity and risk."
     )
+    explanation_status: Literal["ok", "quota_exhausted", "unavailable"] = Field(
+        ...,
+        description=(
+            "How the narrative explanation was produced: successful LLM output (ok), "
+            "daily quota exhausted (quota_exhausted), or safe fallback (unavailable)."
+        ),
+    )
     metadata: ResponseMetadata = Field(
         ...,
         description="Metadata about the model and analysis run."
@@ -506,6 +513,7 @@ class ProductionAnalyzeResponse(BaseModel):
                     "recommendation": "Approach cautiously and negotiate closer to model-estimated value.",
                     "confidence": "medium"
                 },
+                "explanation_status": "ok",
                 "metadata": {
                     "model_version": "v1"
                 }

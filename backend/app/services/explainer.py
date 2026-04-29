@@ -149,19 +149,19 @@ def _check_and_increment(db, user_id: str, limit: int) -> bool:
 # ---------------------------------------------------------------------------
 # Output validation
 # ---------------------------------------------------------------------------
-def _validate_output(raw: dict) -> dict:
+def _validate_output(raw: dict) -> tuple[dict, bool]:
     """
     Validate and coerce the LLM output against LLMExplanation.
-    Returns the validated dict on success, or _SAFE_FALLBACK on failure.
+    Returns (dict, True) on success, or (_SAFE_FALLBACK copy, False) on failure.
     """
     from backend.app.schemas.prediction import LLMExplanation
 
     try:
         validated = LLMExplanation(**raw)
-        return validated.model_dump()
+        return validated.model_dump(), True
     except (ValidationError, TypeError) as exc:
         logger.warning("LLM output failed schema validation: %s | raw=%s", exc, raw)
-        return _SAFE_FALLBACK
+        return dict(_SAFE_FALLBACK), False
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ def generate_explanation(
     role: str = "user",
     auth_method: str = "jwt",
     db=None,
-) -> dict:
+) -> tuple[dict, str]:
     """
     Generate an LLM-powered investment explanation.
 
@@ -182,8 +182,12 @@ def generate_explanation(
     If the caller is exempt (admin / api_key) or quota is not configured,
     the LLM is called unconditionally.
 
-    Always returns a dict with the same five keys as _SAFE_FALLBACK so callers
-    never need to handle None or a missing-key response.
+    Returns (explanation_dict, status) where status is one of:
+      - "ok" — LLM output validated
+      - "quota_exhausted" — daily limit reached (same shape as _QUOTA_FALLBACK)
+      - "unavailable" — no API key, LLM error, invalid JSON, or schema failure
+
+    The explanation dict always has the same five keys as _SAFE_FALLBACK.
     """
     # ── 1. Quota gate ────────────────────────────────────────────────────────
     if user_id and db is not None:
@@ -191,7 +195,7 @@ def generate_explanation(
         if limit is not None:
             allowed = _check_and_increment(db, user_id, limit)
             if not allowed:
-                return _QUOTA_FALLBACK
+                return dict(_QUOTA_FALLBACK), "quota_exhausted"
 
     # ── 2. Build prompt and call OpenAI ─────────────────────────────────────
     prompt = build_prompt(data)
@@ -199,7 +203,7 @@ def generate_explanation(
 
     if client is None:
         logger.warning("LLM client unavailable: OPENAI_API_KEY not set")
-        return _SAFE_FALLBACK
+        return dict(_SAFE_FALLBACK), "unavailable"
 
     try:
         response = client.responses.create(
@@ -213,10 +217,11 @@ def generate_explanation(
 
     except json.JSONDecodeError as exc:
         logger.error("LLM returned non-JSON output: %s", exc)
-        return _SAFE_FALLBACK
+        return dict(_SAFE_FALLBACK), "unavailable"
     except Exception as exc:
         logger.error("LLM API call failed: %s", exc, exc_info=True)
-        return _SAFE_FALLBACK
+        return dict(_SAFE_FALLBACK), "unavailable"
 
     # ── 3. Validate output schema ────────────────────────────────────────────
-    return _validate_output(raw_dict)
+    out, ok = _validate_output(raw_dict)
+    return out, "ok" if ok else "unavailable"

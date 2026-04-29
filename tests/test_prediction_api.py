@@ -369,6 +369,7 @@ class MockPredictionServiceGlobal:
                 "recommendation": "Hold",
                 "confidence": "Medium",
             },
+            "explanation_status": "ok",
             "metadata": {
                 "model_version": "v1",
             },
@@ -505,6 +506,7 @@ def test_analyze_property_v2():
     assert "risks" in data["explanation"]
     assert "recommendation" in data["explanation"]
     assert "confidence" in data["explanation"]
+    assert data["explanation_status"] == "ok"
 
     assert data["metadata"]["model_version"] == "v1"
     
