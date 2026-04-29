@@ -115,35 +115,66 @@ def _resolve_quota_limit(role: str, auth_method: str) -> int | None:
 
 def _check_and_increment(db, user_id: str, limit: int) -> bool:
     """
-    Return True if the call is within quota and increment the counter.
-    Return False if the daily limit is already reached.
+    Atomically increment the daily counter if below ``limit``.
+
+    Uses ``UPDATE … WHERE call_count < limit`` so concurrent requests cannot
+    overshoot; first call of the day ``INSERT``s a row (``IntegrityError`` →
+    retry ``UPDATE``). Safe on SQLite (tests) and Postgres (production).
     """
+    from sqlalchemy import insert, update
+    from sqlalchemy.exc import IntegrityError
+
     from backend.app.db.models import LLMUsage
 
-    today = date.today().isoformat()
-    row = (
-        db.query(LLMUsage)
-        .filter(LLMUsage.user_id == user_id, LLMUsage.period_date == today)
-        .first()
-    )
-    if row is None:
-        row = LLMUsage(user_id=user_id, period_date=today, call_count=0)
-        db.add(row)
-        db.flush()
+    if limit <= 0:
+        logger.warning("LLM quota disabled (limit<=0) | user_id=%s", user_id)
+        return False
 
-    if row.call_count >= limit:
+    today = date.today().isoformat()
+
+    upd = (
+        update(LLMUsage)
+        .where(LLMUsage.user_id == user_id)
+        .where(LLMUsage.period_date == today)
+        .where(LLMUsage.call_count < limit)
+        .values(call_count=LLMUsage.call_count + 1)
+    )
+    result = db.execute(upd)
+    if result.rowcount == 1:
+        db.commit()
+        return True
+
+    try:
+        db.execute(
+            insert(LLMUsage).values(
+                user_id=user_id,
+                period_date=today,
+                call_count=1,
+            )
+        )
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        result = db.execute(upd)
+        if result.rowcount == 1:
+            db.commit()
+            return True
+
+        row = (
+            db.query(LLMUsage)
+            .filter(LLMUsage.user_id == user_id, LLMUsage.period_date == today)
+            .first()
+        )
+        cnt = row.call_count if row else 0
         logger.warning(
             "LLM quota exceeded | user_id=%s date=%s count=%d limit=%d",
             user_id,
             today,
-            row.call_count,
+            cnt,
             limit,
         )
         return False
-
-    row.call_count += 1
-    db.commit()
-    return True
 
 
 # ---------------------------------------------------------------------------

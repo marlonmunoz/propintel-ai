@@ -3,45 +3,64 @@ import { supabase } from './supabase'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 /**
- * Headers for authenticated FastAPI calls: Bearer from Supabase session, else X-API-Key.
+ * Headers for FastAPI calls.
+ * @param {Record<string, string>} [extra]
+ * @param {{ allowApiKeyFallback?: boolean }} [opts] - If false, no X-API-Key when logged out (use for /auth/*).
  */
-export async function getAuthHeaders(extra = {}) {
+export async function getAuthHeaders(extra = {}, { allowApiKeyFallback = true } = {}) {
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
   const token = session?.access_token
-  return {
+  const base = {
     'Content-Type': 'application/json',
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : { 'X-API-Key': import.meta.env.VITE_API_KEY }),
     ...extra,
   }
+  if (token) {
+    return { ...base, Authorization: `Bearer ${token}` }
+  }
+  if (allowApiKeyFallback && import.meta.env.VITE_API_KEY) {
+    return { ...base, 'X-API-Key': import.meta.env.VITE_API_KEY }
+  }
+  return base
 }
 
 /**
- * Parse FastAPI / Starlette error JSON into a single message string.
+ * Parse FastAPI / Starlette error bodies (JSON detail or plain text).
  * @param {Response} response
- * @param {string | null} [fallbackMessage] - Used when body has no usable detail (e.g. per-endpoint UX copy).
+ * @param {string | null} [fallbackMessage]
  */
 export async function parseApiErrorMessage(response, fallbackMessage = null) {
-  try {
-    const data = await response.json()
-    const d = data.detail
-    if (typeof d === 'string' && d.trim()) {
-      return d
-    }
-    if (Array.isArray(d) && d.length) {
-      return d.map((item) => item.msg ?? JSON.stringify(item)).join('; ')
-    }
-    if (data.message && String(data.message).trim()) {
-      return String(data.message)
-    }
-  } catch {
-    // use fallback below
-  }
   const code = typeof response.status === 'number' ? response.status : 'error'
+  let raw = ''
+  if (typeof response.text === 'function') {
+    raw = await response.text().catch(() => '')
+  } else if (typeof response.json === 'function') {
+    try {
+      raw = JSON.stringify(await response.json())
+    } catch {
+      raw = ''
+    }
+  }
+  const trimmed = String(raw).trim()
+  if (trimmed) {
+    try {
+      const data = JSON.parse(trimmed)
+      const d = data.detail
+      if (typeof d === 'string' && d.trim()) {
+        return d.trim()
+      }
+      if (Array.isArray(d) && d.length) {
+        return d.map((item) => item.msg ?? JSON.stringify(item)).join('; ')
+      }
+      if (data.message && String(data.message).trim()) {
+        return String(data.message).trim()
+      }
+    } catch {
+      return trimmed
+    }
+  }
   return fallbackMessage ?? `Request failed (${code})`
 }
 
@@ -49,11 +68,19 @@ export async function parseApiErrorMessage(response, fallbackMessage = null) {
  * JSON fetch helper: attaches auth, throws Error with best-effort message on failure.
  *
  * @param {string} path - e.g. `/analyze-property-v2` (no base URL)
- * @param {RequestInit & { json?: unknown }} options
+ * @param {RequestInit & { json?: unknown, errorFallback?: string, authAllowApiKeyFallback?: boolean }} options
  */
 export async function apiFetch(path, options = {}) {
-  const { json, headers: headerOverrides, errorFallback, ...rest } = options
-  const headers = await getAuthHeaders(headerOverrides)
+  const {
+    json,
+    headers: headerOverrides,
+    errorFallback,
+    authAllowApiKeyFallback = true,
+    ...rest
+  } = options
+  const headers = await getAuthHeaders(headerOverrides, {
+    allowApiKeyFallback: authAllowApiKeyFallback,
+  })
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
@@ -61,15 +88,16 @@ export async function apiFetch(path, options = {}) {
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   })
 
+  // 204 No Content — treat as success before `ok` (some test mocks set ok inconsistently).
+  if (response.status === 204) {
+    return undefined
+  }
+
   if (!response.ok) {
     const message = await parseApiErrorMessage(response, errorFallback ?? null)
     const err = new Error(message)
     err.status = response.status
     throw err
-  }
-
-  if (response.status === 204) {
-    return undefined
   }
 
   return response.json()

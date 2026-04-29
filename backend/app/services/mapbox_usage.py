@@ -4,8 +4,8 @@ import logging
 import os
 from datetime import date
 
-from sqlalchemy import func
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy import func, insert, update
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from backend.app.db.models import MapboxUsage
@@ -52,17 +52,37 @@ def usage_user_key(auth_method: str, user_id: str | None) -> str | None:
 def increment_mapbox_geocode_requests(db: Session, user_key: str) -> None:
     today = date.today().isoformat()
     try:
-        row = (
-            db.query(MapboxUsage)
-            .filter(MapboxUsage.user_id == user_key, MapboxUsage.period_date == today)
-            .first()
+        # Atomic increment to avoid lost updates under concurrent requests.
+        upd = (
+            update(MapboxUsage)
+            .where(MapboxUsage.user_id == user_key)
+            .where(MapboxUsage.period_date == today)
+            .values(call_count=MapboxUsage.call_count + 1)
         )
-        if row is None:
-            row = MapboxUsage(user_id=user_key, period_date=today, call_count=0)
-            db.add(row)
-            db.flush()
-        row.call_count += 1
-        db.commit()
+        result = db.execute(upd)
+        if result.rowcount == 1:
+            db.commit()
+            return
+
+        # First request for this user/day.
+        try:
+            db.execute(
+                insert(MapboxUsage).values(
+                    user_id=user_key,
+                    period_date=today,
+                    call_count=1,
+                )
+            )
+            db.commit()
+            return
+        except IntegrityError:
+            # Another request inserted first; retry atomic update.
+            db.rollback()
+            retry = db.execute(upd)
+            if retry.rowcount == 1:
+                db.commit()
+                return
+            db.rollback()
     except (ProgrammingError, OperationalError) as exc:
         db.rollback()
         logger.warning(

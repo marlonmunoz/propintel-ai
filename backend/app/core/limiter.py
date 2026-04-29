@@ -2,8 +2,9 @@ import logging
 
 import jwt as pyjwt
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from starlette.requests import Request
+
+from backend.app.core.client_ip import get_client_ip
 
 logger = logging.getLogger("propintel")
 
@@ -38,7 +39,7 @@ def _user_aware_key(request: Request) -> str:
     if request.headers.get("X-API-Key"):
         return "api_key:service"
 
-    return get_remote_address(request)
+    return get_client_ip(request)
 
 
 limiter = Limiter(key_func=_user_aware_key)

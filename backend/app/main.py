@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from backend.app.core.limiter import limiter
+from backend.app.core.client_ip import get_client_ip
 import json
 import os
 import time
@@ -63,7 +64,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             request.url.path,
             response.status_code,
             duration_ms,
-            request.client.host if request.client else "unknown",
+            get_client_ip(request),
             request_id,
         )
         response.headers["X-Request-ID"] = request_id

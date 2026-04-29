@@ -2,9 +2,9 @@ import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, Crown, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
+import { lookupHousing } from '../services/housingApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
 import { recordMapboxGeocodeUsage } from '../services/geocodeUsageApi'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -407,20 +407,9 @@ export default function Analyze() {
   // On success: fills year_built, gross_sqft, land_sqft, building_class, neighborhood.
   // On failure or no match: silently does nothing — fields stay blank for manual entry.
   async function fetchPropertyDetails(lat, lng, borough) {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL
-    if (!baseUrl) return
     setIsFetchingProperty(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const authHeader = session?.access_token
-        ? { Authorization: `Bearer ${session.access_token}` }
-        : { 'X-API-Key': import.meta.env.VITE_API_KEY }
-      const params = new URLSearchParams({ lat, lng })
-      if (borough) params.set('borough', borough)
-      const url = `${baseUrl}/housing/lookup?${params}`
-      const res = await fetch(url, { headers: authHeader })
-      if (!res.ok) return
-      const data = await res.json()
+      const data = await lookupHousing({ lat, lng, borough })
 
       setFormData((prev) => ({
         ...prev,
