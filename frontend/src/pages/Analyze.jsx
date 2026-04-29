@@ -49,6 +49,13 @@ const RENTAL_CLASSES = new Set([
   '08 RENTALS - ELEVATOR APARTMENTS',
 ])
 
+/** v2 API sets explanation_status; older responses only repeated quota text in summary. */
+function isQuotaExhaustedExplanation(result) {
+  if (result?.explanation_status === 'quota_exhausted') return true
+  const s = result?.explanation?.summary
+  return typeof s === 'string' && s.startsWith('Daily AI explanation quota reached')
+}
+
 const samplePresets = {
   Brooklyn: {
     borough: 'Brooklyn',
@@ -1095,7 +1102,7 @@ export default function Analyze() {
                       AI Explanation
                     </h3>
                   </div>
-                  {analysisResult.explanation.summary?.startsWith('Daily AI explanation quota reached') ? (
+                  {isQuotaExhaustedExplanation(analysisResult) ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800/50 dark:bg-amber-950/20">
                       <div className="flex items-start gap-3">
                         <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />

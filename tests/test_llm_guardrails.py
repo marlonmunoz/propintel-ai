@@ -84,7 +84,8 @@ class TestValidateOutput:
             "recommendation": "Buy",
             "confidence": "High",
         }
-        result = _validate_output(raw)
+        result, ok = _validate_output(raw)
+        assert ok is True
         assert result["recommendation"] == "Buy"
 
     def test_invalid_recommendation_returns_fallback(self):
@@ -95,11 +96,13 @@ class TestValidateOutput:
             "recommendation": "approach cautiously",
             "confidence": "High",
         }
-        result = _validate_output(raw)
+        result, ok = _validate_output(raw)
+        assert ok is False
         assert result == _SAFE_FALLBACK
 
     def test_empty_dict_returns_fallback(self):
-        result = _validate_output({})
+        result, ok = _validate_output({})
+        assert ok is False
         assert result == _SAFE_FALLBACK
 
     def test_wrong_confidence_case_returns_fallback(self):
@@ -110,7 +113,8 @@ class TestValidateOutput:
             "recommendation": "Hold",
             "confidence": "MEDIUM",
         }
-        result = _validate_output(raw)
+        result, ok = _validate_output(raw)
+        assert ok is False
         assert result == _SAFE_FALLBACK
 
 
@@ -212,8 +216,9 @@ class TestGenerateExplanation:
             instance.responses.create.return_value = mock_response
             mock_client.return_value = instance
 
-            result = generate_explanation(DATA)
+            result, status = generate_explanation(DATA)
 
+        assert status == "ok"
         assert result["recommendation"] == "Buy"
 
     def test_free_user_within_quota_calls_llm(self, db_session):
@@ -225,10 +230,11 @@ class TestGenerateExplanation:
             instance.responses.create.return_value = mock_response
             mock_client.return_value = instance
 
-            result = generate_explanation(
+            result, status = generate_explanation(
                 DATA, user_id="uid-free", role="user", auth_method="jwt", db=db_session
             )
 
+        assert status == "ok"
         assert result["recommendation"] == "Hold"
 
     def test_free_user_over_quota_returns_quota_fallback(self, db_session):
@@ -241,10 +247,11 @@ class TestGenerateExplanation:
             for _ in range(2):
                 exp_mod._check_and_increment(db_session, "uid-quota", limit=2)
 
-            result = exp_mod.generate_explanation(
+            result, status = exp_mod.generate_explanation(
                 DATA, user_id="uid-quota", role="user", auth_method="jwt", db=db_session
             )
 
+        assert status == "quota_exhausted"
         assert result["summary"].startswith("Daily AI explanation quota reached")
 
     def test_api_key_caller_bypasses_quota(self, db_session):
@@ -256,10 +263,11 @@ class TestGenerateExplanation:
             instance.responses.create.return_value = mock_response
             mock_client.return_value = instance
 
-            result = generate_explanation(
+            result, status = generate_explanation(
                 DATA, user_id=None, role="admin", auth_method="api_key", db=db_session
             )
 
+        assert status == "ok"
         assert result["recommendation"] == "Avoid"
 
     def test_llm_returns_invalid_output_falls_back(self, db_session):
@@ -271,13 +279,15 @@ class TestGenerateExplanation:
             instance.responses.create.return_value = mock_response
             mock_client.return_value = instance
 
-            result = generate_explanation(
+            result, status = generate_explanation(
                 DATA, user_id="uid-bad", role="user", auth_method="jwt", db=db_session
             )
 
+        assert status == "unavailable"
         assert result == _SAFE_FALLBACK
 
     def test_llm_unavailable_returns_safe_fallback(self):
         with patch("backend.app.services.explainer._get_openai_client", return_value=None):
-            result = generate_explanation(DATA)
+            result, status = generate_explanation(DATA)
+        assert status == "unavailable"
         assert result == _SAFE_FALLBACK

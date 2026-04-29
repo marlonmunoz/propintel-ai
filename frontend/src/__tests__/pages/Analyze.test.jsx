@@ -149,7 +149,10 @@ const QUOTA_EXHAUSTED_RESULT = {
     summary: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
     opportunity: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
     risks: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
+    recommendation: 'Hold',
+    confidence: 'Low',
   },
+  explanation_status: 'quota_exhausted',
   metadata: { model_version: 'v2' },
 }
 

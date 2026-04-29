@@ -556,7 +556,7 @@ class PredictionService:
             },
         ]
 
-        llm_explanation = generate_explanation(
+        llm_explanation, explanation_status = generate_explanation(
             {
                 "predicted_price":  predicted_price,
                 "market_price":     market_price,
@@ -611,6 +611,7 @@ class PredictionService:
                 "recommendation": llm_explanation.get("recommendation", "Hold"),
                 "confidence":     llm_explanation.get("confidence", "Low"),
             },
+            "explanation_status": explanation_status,
             "metadata": {
                 "model_version": prediction_result.get("model_version", "v3"),
             },
