@@ -705,6 +705,11 @@ LLM_QUOTA_PAID=200
 
 # Mapbox monthly org-wide geocoding cap (default: 100000)
 MAPBOX_MONTHLY_FREE_REQUEST_CAP=100000
+
+# ML artifacts (recommended for deploys)
+# The repo commits `ml/artifacts/metadata/` but NOT the trained `.pkl` binaries.
+# Point this at a mounted volume or a downloaded artifact bundle root.
+ML_ARTIFACT_ROOT=/app
 ```
 
 ### Frontend
@@ -714,7 +719,7 @@ cd frontend
 npm install
 ```
 
-Create a `frontend/.env` file:
+Create a `frontend/.env` file (start from `frontend/.env.example`). Note: Vite env vars are **build-time** — your deployed frontend must be built with the correct `VITE_API_BASE_URL`.
 
 ```
 VITE_API_BASE_URL=http://127.0.0.1:8000
@@ -857,6 +862,12 @@ docker run --rm -p 8000:8000 --env-file .env.docker propintel-api
 docker compose up --build
 docker compose down
 ```
+
+### Migrations on container boot (recommended)
+The Docker image runs `python -m backend.scripts.run_migrations` on startup by default (Postgres only; tracked in `schema_migrations`).
+
+- **Disable in a pinch**: set `RUN_MIGRATIONS=0`
+- **Railway note**: Railway injects `PORT`; the container starts uvicorn on `PORT` (defaults to 8000 locally)
 
 ---
 
