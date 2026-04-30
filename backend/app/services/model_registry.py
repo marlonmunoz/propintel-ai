@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
+import os
 import joblib
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -35,6 +36,7 @@ class RegisteredModel:
 class ModelRegistry:
     def __init__(self) -> None:
         self.base_dir = BASE_DIR
+        self.artifact_root = self._get_artifact_root()
         self.metadata_dir = BASE_DIR / "ml" / "artifacts" / "metadata"
         self._models = {
             "global":          self._load_metadata("global_model.json"),
@@ -59,11 +61,41 @@ class ModelRegistry:
                 self._models[seg] = self._load_metadata(f"{seg}_model.json")
         self._loaded_models = {}
 
+    def _get_artifact_root(self) -> Path:
+        """
+        Root directory for ML artifacts.
+
+        By default artifacts are resolved relative to the repo root (BASE_DIR),
+        e.g. `ml/artifacts/spine_models/...`.
+
+        In production you typically do NOT commit `.pkl` files; set
+        `ML_ARTIFACT_ROOT` to point at a mounted volume or a downloaded bundle.
+        """
+        raw = os.getenv("ML_ARTIFACT_ROOT", "").strip()
+        return Path(raw).expanduser().resolve() if raw else BASE_DIR
+
+    def _resolve_artifact_path(self, maybe_relative: str) -> Path:
+        p = Path(maybe_relative)
+        if p.is_absolute():
+            return p
+        return self.artifact_root / p
+
     def load_model(self, key: str):
         if key not in self._models:
             raise ValueError(f"Unknown model key: {key}")
         if key not in self._loaded_models:
-            artifact_path = BASE_DIR / self._models[key].artifact_path
+            artifact_path = self._resolve_artifact_path(self._models[key].artifact_path)
+            if not artifact_path.exists():
+                raise RuntimeError(
+                    "ML model artifact not found.\n\n"
+                    f"  model_key: {key}\n"
+                    f"  expected_path: {artifact_path}\n\n"
+                    "This deploy likely does not include the trained `.pkl` files.\n"
+                    "Fix options:\n"
+                    "- Mount a volume containing `ml/artifacts/` and set ML_ARTIFACT_ROOT\n"
+                    "- Or download artifacts at build/boot time into ML_ARTIFACT_ROOT\n"
+                    "- Or retrain locally to regenerate `ml/artifacts/spine_models/`\n"
+                )
             self._loaded_models[key] = joblib.load(artifact_path)
         return self._loaded_models[key]
 
@@ -136,21 +168,21 @@ class ModelRegistry:
         """Resolve the neighborhood stats JSON path for a model key."""
         m = self._models.get(key)
         if m and m.stats_path:
-            return BASE_DIR / m.stats_path
+            return self._resolve_artifact_path(m.stats_path)
         # Legacy fallback: subtype_models directory
-        legacy = BASE_DIR / f"ml/artifacts/subtype_models/{key}_neighborhood_stats.json"
+        legacy = self._resolve_artifact_path(f"ml/artifacts/subtype_models/{key}_neighborhood_stats.json")
         return legacy if legacy.exists() else None
 
     def feature_importance_path_for(self, key: str) -> Path | None:
         """Resolve the feature importance CSV path for a model key."""
         m = self._models.get(key)
         if m and m.feature_importance_path:
-            p = BASE_DIR / m.feature_importance_path
+            p = self._resolve_artifact_path(m.feature_importance_path)
             return p if p.exists() else None
         # Legacy fallbacks
         for p in [
-            BASE_DIR / f"ml/artifacts/subtype_models/{key}_feature_importance.csv",
-            BASE_DIR / "ml/artifacts/feature_importance.csv",
+            self._resolve_artifact_path(f"ml/artifacts/subtype_models/{key}_feature_importance.csv"),
+            self._resolve_artifact_path("ml/artifacts/feature_importance.csv"),
         ]:
             if p.exists():
                 return p
