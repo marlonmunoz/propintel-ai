@@ -36,6 +36,17 @@ API_KEY: str = os.getenv("API_KEY", "")
 
 _API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+# ---------------------------------------------------------------------------
+# JWKS client — singleton so the signing key is cached across requests.
+# A new PyJWKClient per-request ignores cache_keys=True and hits the JWKS
+# endpoint on every RS256/ES256 JWT verification (slow + fragile).
+# ---------------------------------------------------------------------------
+_jwks_client: PyJWKClient | None = (
+    PyJWKClient(f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json", cache_keys=True)
+    if SUPABASE_URL
+    else None
+)
+
 
 def _decode_supabase_access_token(token: str) -> dict:
     """
@@ -99,8 +110,8 @@ def _decode_supabase_access_token(token: str) -> dict:
             )
         jwks_url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
         try:
-            jwks_client = PyJWKClient(jwks_url, cache_keys=True)
-            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            client = _jwks_client or PyJWKClient(jwks_url, cache_keys=True)
+            signing_key = client.get_signing_key_from_jwt(token)
         except Exception as exc:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
