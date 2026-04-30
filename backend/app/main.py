@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,6 +28,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# OpenAPI docs — disabled by default in production.
+# Set DOCS_ENABLED=1 to expose /docs, /redoc, and /openapi.json.
+# ---------------------------------------------------------------------------
+_DOCS_ENABLED = os.getenv("DOCS_ENABLED", "0").strip() == "1"
+
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
@@ -45,10 +52,40 @@ logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger("propintel")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from backend.app.core.auth import SUPABASE_URL, SUPABASE_JWT_SECRET, API_KEY
+
+    if not SUPABASE_URL and not SUPABASE_JWT_SECRET:
+        logger.warning(
+            "AUTH CONFIG WARNING: Neither SUPABASE_URL nor SUPABASE_JWT_SECRET is set. "
+            "JWT authentication will fail for all users. "
+            "Set at least one of these in your environment."
+        )
+    elif not SUPABASE_URL:
+        logger.info("Auth mode: HS256 (SUPABASE_JWT_SECRET set, SUPABASE_URL not set)")
+    elif not SUPABASE_JWT_SECRET:
+        logger.info("Auth mode: RS256/ES256 via JWKS (SUPABASE_URL set)")
+    else:
+        logger.info("Auth mode: HS256 + RS256/ES256 JWKS both configured")
+
+    if not API_KEY:
+        logger.warning(
+            "AUTH CONFIG WARNING: API_KEY is not set. "
+            "X-API-Key authentication is disabled."
+        )
+
+    yield
+
+
 app = FastAPI(
     title="PropIntel AI",
     description="AI-powered real estate investment analysis platform",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
+    lifespan=lifespan,
 )
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -68,7 +105,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             request_id,
         )
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
         return response
+
+
 
 
 app.state.limiter = limiter
