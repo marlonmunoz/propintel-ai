@@ -53,3 +53,4 @@ xgboost==3.2.0
 slowapi==0.1.9
 PyJWT==2.12.1
 cryptography==46.0.6
+sentry-sdk[fastapi]==2.58.0

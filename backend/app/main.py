@@ -34,6 +34,11 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 _DOCS_ENABLED = os.getenv("DOCS_ENABLED", "0").strip() == "1"
 
+# ---------------------------------------------------------------------------
+# Logging — level controlled by LOG_LEVEL env var (default: INFO).
+# ---------------------------------------------------------------------------
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
@@ -48,8 +53,28 @@ class JSONFormatter(logging.Formatter):
 
 handler = logging.StreamHandler()
 handler.setFormatter(JSONFormatter())
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=getattr(logging, _LOG_LEVEL, logging.INFO), handlers=[handler])
 logger = logging.getLogger("propintel")
+
+# ---------------------------------------------------------------------------
+# Sentry — error tracking. Enabled only when SENTRY_DSN is set.
+# Captures unhandled exceptions with full FastAPI request context.
+# ---------------------------------------------------------------------------
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        send_default_pii=False,
+    )
+    logger.info("Sentry enabled (DSN configured)")
 
 
 @asynccontextmanager
@@ -154,14 +179,48 @@ def health():
 
 @app.get("/ready")
 def ready():
+    checks: dict = {}
+    failed: list[str] = []
+
+    # ── Database ──────────────────────────────────────────────────────────────
     try:
         from backend.app.db.database import SessionLocal
+        import sqlalchemy
         db = SessionLocal()
-        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db.execute(sqlalchemy.text("SELECT 1"))
         db.close()
-        return {"status": "ok", "database": "reachable"}
-    except Exception:
-        logger.exception("Readiness check failed")
+        checks["database"] = "reachable"
+    except Exception as exc:
+        checks["database"] = f"unreachable: {exc}"
+        failed.append("database")
+
+    # ── ML artifacts ─────────────────────────────────────────────────────────
+    try:
+        from backend.app.services.model_registry import ModelRegistry
+        registry = ModelRegistry()
+        metadata_dir = registry.metadata_dir
+        artifact_root = registry.artifact_root
+        missing = []
+        for key, meta in registry._models.items():
+            p = registry._resolve_artifact_path(meta.artifact_path)
+            if not p.exists():
+                missing.append(key)
+        if missing:
+            checks["ml_artifacts"] = f"missing models: {missing}"
+            failed.append("ml_artifacts")
+        else:
+            checks["ml_artifacts"] = f"ok ({len(registry._models)} models found)"
+    except Exception as exc:
+        checks["ml_artifacts"] = f"error: {exc}"
+        failed.append("ml_artifacts")
+
+    if failed:
+        logger.warning("Readiness check failed: %s | checks=%s", failed, checks)
         from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail="Database unreachable")
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "degraded", "failed": failed, "checks": checks},
+        )
+
+    return {"status": "ok", **checks}
 
