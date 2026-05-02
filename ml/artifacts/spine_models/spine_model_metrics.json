@@ -1,0 +1,14 @@
+[
+  {
+    "segment": "two_family",
+    "train_rows": 23239,
+    "test_rows": 7089,
+    "train_r2": 0.8076175029382914,
+    "test_r2": 0.6770243439855628,
+    "test_mae": 264229.3176355974,
+    "test_rmse": 468986.5381884636,
+    "test_median_ape": 0.1643954807692316,
+    "test_hit_10pct": 0.29482296515728595,
+    "model_path": "/Users/Marlon/Development/ai-projects/propintel-ai/ml/artifacts/spine_models/two_family_spine_price_model.pkl"
+  }
+]
