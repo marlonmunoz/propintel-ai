@@ -233,18 +233,18 @@ ml/data/pluto_raw/
 ml/data/processed/
 ml/data/external/
 
-# generated ML outputs (reproducible from pipelines — not committed)
+# generated ML outputs — Silver (1.8GB) stays ignored; Gold (70MB) is committed
+# for BBL PLUTO/geo enrichment in production.
 ml/data/features/
 ml/data/silver/
-ml/data/gold/
+# ml/data/gold/ — intentionally NOT ignored; baked into Docker image
 
-# ML artifact binaries and large outputs — not committed.
-# ml/artifacts/metadata/ IS committed (it controls which model the API serves).
-ml/artifacts/**/*.pkl
+# ML artifact binaries and large outputs.
+# ml/artifacts/metadata/    — committed (controls which model the API serves).
+# ml/artifacts/spine_models/ — committed (baked into Docker image for prod).
+# Everything else (eval reports, experimental, subtype legacy) stays ignored.
 ml/artifacts/**/*.joblib
-ml/artifacts/**/*.csv
 ml/artifacts/eval_reports/
-ml/artifacts/spine_models/
 ml/artifacts/spine_models_exp/
 ml/artifacts/subtype_models/
 
