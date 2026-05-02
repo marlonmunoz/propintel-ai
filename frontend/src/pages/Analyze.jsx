@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, Crown, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty } from '../services/analysisApi'
@@ -256,6 +256,14 @@ function validateForm(formData) {
 export default function Analyze() {
   const { quota, refreshQuota } = useAuth()
   const [formData, setFormData] = useState(initialForm)
+
+  const handleMapPinDragEnd = useCallback((nextLat, nextLng) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: nextLat.toFixed(6),
+      longitude: nextLng.toFixed(6),
+    }))
+  }, [])
   const [formErrors, setFormErrors] = useState({})
   const [analysisResult, setAnalysisResult] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -662,6 +670,7 @@ export default function Analyze() {
               <PropertyLocationMap
                 lat={Number(formData.latitude) || null}
                 lng={Number(formData.longitude) || null}
+                onCoordinatesChange={handleMapPinDragEnd}
               />
 
               {/* Loading banner — shown while backend housing/lookup is in flight.
