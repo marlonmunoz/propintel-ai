@@ -2,6 +2,14 @@ import { supabase } from './supabase'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
+if (!API_BASE_URL) {
+  console.error(
+    '[propintel] VITE_API_BASE_URL is not set. ' +
+    'Create frontend/.env with VITE_API_BASE_URL=http://127.0.0.1:8000 for local dev, ' +
+    'or set it at build time for production.'
+  )
+}
+
 /**
  * Headers for FastAPI calls.
  * @param {Record<string, string>} [extra]
@@ -81,6 +89,12 @@ export async function apiFetch(path, options = {}) {
   const headers = await getAuthHeaders(headerOverrides, {
     allowApiKeyFallback: authAllowApiKeyFallback,
   })
+
+  if (!API_BASE_URL) {
+    throw new Error(
+      'API is not configured. Set VITE_API_BASE_URL in your frontend .env file.'
+    )
+  }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,

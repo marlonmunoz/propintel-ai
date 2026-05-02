@@ -323,10 +323,18 @@ def _trend_features(
             ],
         )
     except Exception:
-        # Fallback to full read if predicate pushdown isn't available.
-        df = pd.read_parquet(GOLD_TRENDS)
-        df = df[(df["borough"].astype(int) == int(borough))
-                & (df["comp_segment"] == comp_segment)]
+        try:
+            # Fallback to full read if predicate pushdown isn't available.
+            df = pd.read_parquet(GOLD_TRENDS)
+            df = df[(df["borough"].astype(int) == int(borough))
+                    & (df["comp_segment"] == comp_segment)]
+        except Exception:
+            import logging
+            logging.getLogger("propintel").warning(
+                "bbl_feature_builder: could not read GOLD_TRENDS (%s) — trend features skipped",
+                GOLD_TRENDS,
+            )
+            return out
     if df.empty:
         return out
     df = df[df["neighborhood"].astype(str) == str(neighborhood)].copy()

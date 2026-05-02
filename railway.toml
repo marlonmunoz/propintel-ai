@@ -1,0 +1,43 @@
+[build]
+# Railway auto-detects the root Dockerfile.
+# No override needed unless you move the Dockerfile.
+builder = "dockerfile"
+
+[deploy]
+# The Dockerfile CMD already runs migrations then starts uvicorn.
+# Railway will inject PORT automatically.
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# ---------------------------------------------------------------------------
+# Required environment variables — set these in Railway's Variables UI.
+# ---------------------------------------------------------------------------
+# DATABASE_URL              = postgresql+psycopg://...   (Supabase connection string)
+# SUPABASE_URL              = https://YOUR_PROJECT.supabase.co
+# SUPABASE_JWT_SECRET       = (Supabase Dashboard → Project Settings → API → JWT Secret)
+# API_KEY                   = your-secret-internal-api-key
+# OPENAI_API_KEY            = sk-...
+# CORS_ORIGINS              = https://your-frontend.vercel.app
+# TRUST_PROXY_HEADERS       = 1
+# ML_ARTIFACT_ROOT          = /app     (or path to mounted volume)
+# ADMIN_USER_IDS            = your-supabase-uuid
+#
+# ---------------------------------------------------------------------------
+# Optional but recommended
+# ---------------------------------------------------------------------------
+# SENTRY_DSN                = https://xxxx@oXXX.ingest.sentry.io/YYYY
+# SENTRY_TRACES_SAMPLE_RATE = 0.1
+# LOG_LEVEL                 = INFO
+# LLM_QUOTA_FREE            = 10
+# LLM_QUOTA_PAID            = 200
+# MAPBOX_MONTHLY_FREE_REQUEST_CAP = 100000
+# DB_POOL_SIZE              = 5
+# DB_MAX_OVERFLOW           = 10
+#
+# ---------------------------------------------------------------------------
+# Keep these OFF in production (omit or set to 0)
+# ---------------------------------------------------------------------------
+# DOCS_ENABLED              = 0    (Swagger UI — leave unset in prod)
+# RUN_MIGRATIONS            = 1    (set to 0 only if you run migrations separately)
