@@ -10,3 +10,30 @@ __pycache__
 .gitignore
 tests
 notebooks
+
+# ML raw + silver data — large, not needed at runtime
+ml/data/silver/
+ml/data/bronze/
+ml/data/nyc_raw/
+ml/data/pluto_raw/
+ml/data/external/
+ml/data/processed/
+ml/data/features/
+
+# ML training code + experiment outputs — not needed at runtime
+ml/models/
+ml/pipelines/
+ml/artifacts/eval_reports/
+ml/artifacts/spine_models_exp/
+ml/artifacts/subtype_models/
+
+# Frontend source — built separately, not served by FastAPI
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Docs + misc
+docs/
+*.md
+.github/
+catboost_info/
