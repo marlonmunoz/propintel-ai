@@ -38,7 +38,7 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - ModelRegistry pattern: metadata-driven, segment-routable, lazy-loading model serving
 - **4 trained spine v4 models** with overfitting-gate guardrails: one_family, multi_family, condo_coop, rentals_all (pooled walkup + elevator)
 - Full building-class routing to dedicated segment models; `07` and `08` both route to the pooled `rentals_all` model
-- **Optional BBL + as_of_date on inference** — DOF / ACRIS / J-51 / PLUTO features loaded from Silver + Gold parquets at request time (same as-of rules as training)
+- **Optional BBL + as_of_date on inference** — Gold parquets (committed for prod/Docker) supply PLUTO/geo and related views; **Silver** parquets (~1.8GB) remain local/git-ignored — without them, DOF/ACRIS/J-51 roll features degrade gracefully (`bbl_feature_status=no_data`) while predictions still run
 - BallTree haversine subway-distance feature (MTA stations) at training and inference
 - Feature importance / explainability artifact persisted after training
 - Global explainability endpoint: `GET /model/feature-importance`
@@ -53,12 +53,17 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - **Mapbox server-side monthly cap** — `POST /geocode/usage` returns 429 when org-wide monthly usage hits `MAPBOX_MONTHLY_FREE_REQUEST_CAP`
 - Per-IP rate limiting with consistent JSON error envelope (slowapi)
 - CORS locked to explicit allowed origins, methods, and headers via environment variable
-- Unified error response envelope `{ error, status_code, message, detail }` for all error types
-- JSON structured logging with per-request UUID tracing and `X-Request-ID` response header
-- `/health` (liveness) and `/ready` (DB connectivity readiness) endpoints
-- **74 backend + 112 frontend automated tests** — pytest, monkeypatch, `app.dependency_overrides`; Vitest + React Testing Library
+- Unified error response envelope `{ error, status_code, message, detail, request_id }` for HTTP errors
+- JSON structured logging with `LOG_LEVEL` env control; optional **Sentry** (`SENTRY_DSN`) for unhandled exceptions
+- Security response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`)
+- Supabase JWT verification via **HS256 + JWKS (RS256)** with a **cached PyJWKClient**; OpenAPI `/docs` gated by **`DOCS_ENABLED`** (off by default in prod)
+- Proxy-aware client IP for rate limits when **`TRUST_PROXY_HEADERS=1`**
+- `/health` (liveness) and `/ready` (Postgres + **ML artifact presence** checks)
+- SQL migrations runner (`python -m backend.scripts.run_migrations`) — optional auto-run on Docker boot via **`RUN_MIGRATIONS`**
+- Docker image respects **`PORT`** (Railway); **`ML_ARTIFACT_ROOT`** overrides artifact paths when using volumes
+- **83 backend + 112 frontend automated tests** — pytest; Vitest + React Testing Library
 - GitHub Actions CI pipeline running tests on push and PR to `main`
-- Docker + Docker Compose for containerized local and cloud deployment
+- **`railway.toml`** + `.dockerignore` for lean builds; Docker + Docker Compose for local/container workflows
 
 ---
 
@@ -66,15 +71,15 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 
 🟢 **Active — Production-Hardened Full-Stack AI Platform**
 
-All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Full production hardening applied (authentication, rate limiting, CORS, error handling, structured logging). 186 total automated tests (74 backend, 112 frontend).
+All Priority 1 bugs resolved. ML model routing complete. Frontend live and integrated. Production hardening includes auth (JWT/JWKS), rate limiting, CORS, unified errors with `request_id`, observability hooks, Docker/Railway-oriented defaults, and interactive Analyze map (Mapbox Standard, draggable pin). **195 total automated tests** (83 backend, 112 frontend).
 
 **Current milestone:**
 - Full-stack platform live: React 19 frontend talking to FastAPI backend
 - **Supabase Auth** integrated: register / login, JWT sessions, `GET`/`PATCH /auth/me` profiles, per-user saved properties; optional **admin** via `profiles.role` and/or `ADMIN_USER_IDS` in server env (full portfolio visibility for admins)
-- **Paid tier feature** complete: `user` / `paid` / `admin` roles enforced on LLM quota; `GET /auth/quota` endpoint; quota pill on Analyze page; Paid badge in Navbar; tier card + quota bar + Stripe placeholder on Profile page
+- **Paid tier feature** complete: `user` / `paid` / `admin` roles enforced on LLM quota; `GET /auth/quota` endpoint; quota pill on Analyze page; Paid badge in Navbar; tier card + quota bar + Stripe placeholder on Profile page (billing integration deferred until LLC / Stripe account)
 - **Medallion data pipeline** implemented: Bronze → Silver normalizers (DOF, ACRIS, J-51, PLUTO) → Gold as-of feature builders → spine-based training
 - **Spine v5/v6 models** trained on Gold features with strict time-based splits; overfitting-gate guardrails applied — all metrics are honest forward-time R² values. `multi_family` split into dedicated `two_family` (R²=0.677, Sprint A) and `three_family` models. Anti-overfitting measures: 5-seed VotingRegressor, rare-neighbourhood collapse, transit feature pack, k-NN comparable-sales pack, neighbourhood/borough trend pack
-- **BBL inference enrichment**: optional `bbl` + `as_of_date` on `POST /predict-price-v2` and `POST /analyze-property-v2` triggers on-the-fly Silver/PLUTO feature loading at request time, closing the train/inference feature gap
+- **BBL inference enrichment**: optional `bbl` + `as_of_date` loads features from **Gold** (in repo/Docker) and **Silver** when present locally — full parity when Silver parquets exist; otherwise enriched PLUTO/geo paths still work with graceful degradation for roll-history columns
 - ModelRegistry + PredictionService + Explainer service layer fully implemented
 - Feature importance persisted as ML artifact and cached at runtime
 - LLM explanation layer live with structured JSON output
@@ -148,7 +153,7 @@ New frontend work should target **v2 only**. Legacy routes are not the primary c
         (Supabase)      (XGBoost PKLs)
                                │
                                ▼
-                     Silver / Gold Parquets
+                     Gold Parquets (deploy) · Silver (optional local)
                      (DOF · ACRIS · J-51 · PLUTO)
 ```
 
@@ -535,7 +540,8 @@ propintel-ai/
 │   ├── src/                         # pages, components, context (Auth), services, lib/supabase.js
 │   ├── public/
 │   ├── package.json
-│   └── .env                         # VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+│   ├── .env.example                 # Template — copy to frontend/.env (never commit secrets)
+│   └── .env                         # Local only: VITE_* (see Environment Setup)
 │
 ├── backend/
 │   └── app/
@@ -565,9 +571,12 @@ propintel-ai/
 │       │   └── mapbox_usage.py      # Mapbox daily counter + org-wide monthly cap check
 │       ├── scripts/
 │       │   └── load_data.py         # Bulk load housing CSV into PostgreSQL
-│       └── main.py                  # FastAPI app entry point
+│       └── main.py                  # FastAPI app entry point (lifespan, CORS, middleware)
 │
-├── backend/migrations/              # Supabase SQL: auth, mapbox, RLS (003–005), promote admin
+├── backend/scripts/
+│       └── run_migrations.py        # Postgres migration runner (schema_migrations)
+│
+├── backend/migrations/              # Numbered SQL (auth, mapbox, RLS, paid role, …)
 │
 ├── ml/
 │   ├── artifacts/
@@ -580,11 +589,11 @@ propintel-ai/
 │   │   │   ├── condo_coop_model.json      # v3 — points to spine_models/
 │   │   │   ├── rental_walkup_model.json   # v3 — points to spine_models/
 │   │   │   └── rental_elevator_model.json # v3 — points to spine_models/
-│   │   └── spine_models/            # ← git-ignored (regenerate with train_spine_models.py)
+│   │   └── spine_models/            # ← COMMITTED — segment .pkl + stats + feature CSVs for Docker/prod
 │   │       ├── *_spine_price_model.pkl
 │   │       ├── *_spine_neighborhood_stats.json
 │   │       ├── *_spine_feature_importance.csv
-│   │       └── spine_model_metrics.json
+│   │       └── spine_model_metrics.json (and Optuna JSON sidecars where present)
 │   ├── data/
 │   │   ├── nyc_raw/                 # NYC Rolling Sales Excel files — git-ignored
 │   │   │   └── historical/          # 2022–2024 annualized sales
@@ -598,12 +607,14 @@ propintel-ai/
 │   │   │   ├── dof_assessment/silver_dof_assessment.parquet
 │   │   │   ├── acris/silver_acris_transactions.parquet + silver_acris_parties.parquet
 │   │   │   └── j51/silver_j51.parquet
-│   │   ├── gold/                    # Feature-view parquets — git-ignored
+│   │   ├── gold/                    # Feature-view parquets — COMMITTED (BBL / PLUTO paths in prod)
 │   │   │   ├── training_spine_v1.parquet
 │   │   │   ├── gold_dof_assessment_asof.parquet
 │   │   │   ├── gold_acris_features_asof.parquet
 │   │   │   ├── gold_j51_features_asof.parquet
-│   │   │   └── gold_pluto_features.parquet
+│   │   │   ├── gold_pluto_features.parquet
+│   │   │   ├── gold_comps_features.parquet
+│   │   │   └── gold_market_trends.parquet
 │   │   ├── processed/               # Legacy merged datasets — git-ignored
 │   │   └── features/                # Legacy engineered datasets — git-ignored
 │   ├── features/
@@ -641,7 +652,9 @@ propintel-ai/
 │   ├── test_admin_api.py
 │   ├── test_quota_api.py
 │   ├── test_auth_me_api.py
-│   └── test_geocode_usage_api.py
+│   ├── test_geocode_usage_api.py
+│   ├── test_client_ip.py
+│   └── test_mapbox_usage_service.py
 │
 ├── .github/
 │   └── workflows/
@@ -649,6 +662,8 @@ propintel-ai/
 │
 ├── Dockerfile
 ├── docker-compose.yml
+├── railway.toml                     # Railway deploy hints + env checklist (comments)
+├── .dockerignore                    # Keeps build context small (excludes Silver/raw/ml training code)
 ├── requirements.txt
 ├── .env.example
 ├── .env.docker.example
@@ -659,15 +674,16 @@ propintel-ai/
 
 | Folder | Purpose |
 |---|---|
-| `frontend/` | React 19 UI — Home, Analyze (quota pill, save to Portfolio), Portfolio, Profile (tier + quota bar), Admin Dashboard |
+| `frontend/` | React 19 UI — Home, Analyze (quota pill, Mapbox Standard preview map + draggable pin, save to Portfolio), Portfolio, Profile, Admin Dashboard |
 | `api/` | FastAPI route handlers — prediction, properties, auth (`/me`, `/quota`), admin, geocode usage |
 | `core/` | JWT + API-key auth (`auth.py`), rate limiting, error handlers, path config |
 | `db/` | Database engine, session, and ORM models (`Profile`, `LLMUsage`, `MapboxUsage`, …) |
 | `schemas/` | Pydantic v2 request/response validation — includes optional `bbl`, `as_of_date` on prediction requests |
 | `services/` | ML prediction, investment scoring, BBL as-of feature lookup, LLM explanation (with role-based quota), Mapbox usage + cap |
 | `ml/artifacts/metadata/` | Committed metadata JSONs — controls which PKL file the API loads per segment |
-| `ml/data/silver/` | Normalised Silver parquets (DOF, ACRIS, J-51) — git-ignored, regenerated from pipelines |
-| `ml/data/gold/` | As-of Gold feature parquets + training spine — git-ignored, regenerated from pipelines |
+| `ml/artifacts/spine_models/` | Committed trained spine artifacts (`.pkl`, stats JSON, feature CSV) — baked into Docker |
+| `ml/data/silver/` | Normalised Silver parquets (DOF, ACRIS, J-51) — git-ignored (~1.8GB); regenerate locally for full BBL roll features |
+| `ml/data/gold/` | Gold feature parquets + training spine — **committed** for production inference / Docker |
 | `ml/models/` | Model training + Optuna tuning pipelines |
 | `ml/pipelines/` | Silver normalizers, Gold builders, spine builder, eval protocol, download scripts |
 
@@ -683,34 +699,28 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file at the project root (see also `.env.example`):
+Create a `.env` file at the project root. **Start from `.env.example`** — it stays in sync with the codebase.
 
-```
-DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
-OPENAI_API_KEY=sk-...
-API_KEY=your-secret-api-key-here
-CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174
-LLM_TEMPERATURE=0.3
+**Critical:** use the **`postgresql+psycopg://`** SQLAlchemy dialect (matches `psycopg` v3 in `requirements.txt`). A bare `postgresql://` URL makes SQLAlchemy look for `psycopg2`, which is not installed.
 
-# Supabase Auth — backend verifies access tokens (RS256 via JWKS or HS256 via secret)
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_JWT_SECRET=your-jwt-secret-from-supabase-dashboard
-
-# Optional: comma-separated Supabase user UUIDs treated as app admins
-ADMIN_USER_IDS=00000000-0000-0000-0000-000000000000
-
-# LLM daily quota limits per role (defaults: free=10, paid=200)
-LLM_QUOTA_FREE=10
-LLM_QUOTA_PAID=200
-
-# Mapbox monthly org-wide geocoding cap (default: 100000)
-MAPBOX_MONTHLY_FREE_REQUEST_CAP=100000
-
-# ML artifacts (recommended for deploys)
-# The repo commits `ml/artifacts/metadata/` but NOT the trained `.pkl` binaries.
-# Point this at a mounted volume or a downloaded artifact bundle root.
-ML_ARTIFACT_ROOT=/app
-```
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres DSN, e.g. `postgresql+psycopg://…` (Supabase pooler URL works) |
+| `OPENAI_API_KEY` | LLM explanations |
+| `API_KEY` | `X-API-Key` for scripts / OpenAPI when not using JWT |
+| `CORS_ORIGINS` | Comma-separated browser origins (add your production frontend URL when you deploy) |
+| `SUPABASE_URL` | Same host as `VITE_SUPABASE_URL` — enables JWKS for asymmetric JWTs |
+| `SUPABASE_JWT_SECRET` | HS256 verification (Dashboard → API → JWT Secret) |
+| `ADMIN_USER_IDS` | Optional comma-separated UUIDs with admin access before DB profile exists |
+| `LLM_QUOTA_*`, `LLM_TEMPERATURE` | Daily explanation quotas per tier |
+| `MAPBOX_MONTHLY_FREE_REQUEST_CAP` | Admin dashboard vs in-app geocode counter |
+| `DOCS_ENABLED` | Set `1` locally for `/docs` — omit or `0` in production |
+| `LOG_LEVEL` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` |
+| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE` | Optional error tracking |
+| `TRUST_PROXY_HEADERS` | Set `1` behind a trusted reverse proxy only |
+| `ML_ARTIFACT_ROOT` | Optional — override repo root for `.pkl` paths (volumes / custom layout) |
+| `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | SQLAlchemy pool tuning |
+| `RUN_MIGRATIONS` | Docker: `0` skips `run_migrations` on boot (default runs migrations) |
 
 ### Frontend
 
@@ -719,13 +729,16 @@ cd frontend
 npm install
 ```
 
-Create a `frontend/.env` file (start from `frontend/.env.example`). Note: Vite env vars are **build-time** — your deployed frontend must be built with the correct `VITE_API_BASE_URL`.
+Create `frontend/.env` from `frontend/.env.example`. **Vite bakes `VITE_*` at build time** — set `VITE_API_BASE_URL` to your deployed API origin in CI/hosting before `npm run build`.
 
-```
-VITE_API_BASE_URL=http://127.0.0.1:8000
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-```
+| Variable | Purpose |
+|---|---|
+| `VITE_API_BASE_URL` | FastAPI base URL (required — `apiFetch` throws if unset) |
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public, scoped by RLS) |
+| `VITE_MAPBOX_TOKEN` | Public token for geocoding + Analyze map |
+| `VITE_MAPBOX_STYLE` | Optional — defaults to Mapbox **Standard** (`mapbox://styles/mapbox/standard`); override e.g. `streets-v12` if needed |
+| `VITE_API_KEY` | Optional — must match server `API_KEY` for API-key auth without a session (**never treat as a secret** — it ships in the bundle) |
 
 ---
 
@@ -739,9 +752,9 @@ uvicorn backend.app.main:app --reload
 
 Available at:
 - API: `http://127.0.0.1:8000`
-- Swagger UI: `http://127.0.0.1:8000/docs`
+- Swagger UI: `http://127.0.0.1:8000/docs` — only when **`DOCS_ENABLED=1`** in `.env` (disabled by default)
 - Liveness: `http://127.0.0.1:8000/health`
-- Readiness (DB check): `http://127.0.0.1:8000/ready`
+- Readiness (DB + ML artifacts): `http://127.0.0.1:8000/ready`
 
 ### Frontend
 
@@ -754,9 +767,8 @@ Available at `http://localhost:5174`
 
 ### Initialize the database
 
-```bash
-python -m backend.app.db.init_db
-```
+- **Local SQLite / CI:** `python -m backend.app.db.init_db` creates tables for pytest.
+- **Postgres (Supabase / Docker / prod):** apply **`backend/migrations/*.sql`** via `python -m backend.scripts.run_migrations` (same runner the Docker image invokes on boot).
 
 ### Rebuild the ML pipeline from scratch
 
@@ -788,7 +800,7 @@ python ml/pipelines/eval_protocol.py
 ### Connection
 
 `backend/app/db/database.py` manages:
-- SQLAlchemy engine with `pool_pre_ping=True` and `pool_recycle=300`
+- SQLAlchemy engine with `pool_pre_ping=True`, `pool_recycle=300`, and tunable **`DB_POOL_SIZE`** / **`DB_MAX_OVERFLOW`**
 - Session factory with `autocommit=False`, `autoflush=False`
 - `get_db()` dependency injected into all route handlers via `Depends()`
 
@@ -823,8 +835,10 @@ pytest
 | `test_quota_api.py` | 7 | GET /auth/quota — free/paid/admin/api_key roles, usage states, 401 |
 | `test_auth_me_api.py` | 11 | GET/PATCH /auth/me — auto-creation, display-name backfill, admin promo, 400/401 |
 | `test_geocode_usage_api.py` | 1 | Mapbox usage recording + monthly cap 429 |
+| `test_client_ip.py` | 7 | Proxy-aware client IP for rate limiting |
+| `test_mapbox_usage_service.py` | 2 | Atomic Mapbox usage counter behaviour |
 
-**Total backend: 74 tests** (`pytest` from repo root)
+**Total backend: 83 tests** (`pytest` from repo root)
 
 ### Frontend test coverage
 
@@ -839,7 +853,7 @@ pytest
 | `AdminDashboard.test.jsx` | 5 | Heading, stat labels, error message, Refresh button |
 | Other (Login, Profile, authApiQuota, …) | 71 | Sign-in form, tier card, quota bar, profile service calls |
 
-**Total frontend: 112 tests** (`npm run test` from `frontend/`)
+**Total frontend: 112 tests** (`npm run test` from `frontend/` — production build runs with **sourcemaps disabled** in `vite.config.js`)
 
 ### CI Pipeline
 
@@ -851,25 +865,50 @@ Workflow: `.github/workflows/tests.yml`
 
 ## 🐳 Docker & Docker Compose
 
+Root **`Dockerfile`** copies the repo (respecting **`.dockerignore`**) so Silver/raw/training bulk stays **out** of the image while **`ml/artifacts/spine_models/`** and **`ml/data/gold/`** bake in for inference.
+
 ```bash
-# Build
-docker build -t propintel-api .
+# Build (example tag)
+docker build -t propintel-ai:latest .
 
-# Run with Supabase (cloud PostgreSQL)
-docker run --rm -p 8000:8000 --env-file .env.docker propintel-api
+# Run against Supabase or any Postgres — use a root .env with DATABASE_URL=postgresql+psycopg://…
+# NOTE: .env is excluded from the image via .dockerignore — always pass --env-file
+docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 
-# Run with Docker Compose (local PostgreSQL)
+# Compose path (local Postgres + api) — still supported
 docker compose up --build
 docker compose down
 ```
 
-### Migrations on container boot (recommended)
-The Docker image runs `python -m backend.scripts.run_migrations` on startup by default (Postgres only; tracked in `schema_migrations`).
+> **`docker` not found?** Docker Desktop must be running. If the CLI is still missing from your shell after launching it, add it to your PATH permanently:
+> ```bash
+> echo 'export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin"' >> ~/.zshrc && source ~/.zshrc
+> ```
 
-- **Disable in a pinch**: set `RUN_MIGRATIONS=0`
-- **Railway note**: Railway injects `PORT`; the container starts uvicorn on `PORT` (defaults to 8000 locally)
+### Migrations on container boot
+The image runs `python -m backend.scripts.run_migrations` **before** uvicorn unless **`RUN_MIGRATIONS=0`**. Migrations are Postgres-only and tracked in **`schema_migrations`**. See **`backend/migrations/README.md`**.
+
+### Runtime
+- **`PORT`** — injected by Railway (or map host port in `docker run`).
+- **`DATABASE_URL`** — must use **`postgresql+psycopg://`** for SQLAlchemy inside the container.
 
 ---
+
+## 🚀 Production & deployment (checklist)
+
+Deploy steps vary by host; this is the contract the repo expects:
+
+| Step | Notes |
+|---|---|
+| **Database** | Supabase Postgres or any Postgres; run migrations via Docker boot or `python -m backend.scripts.run_migrations` |
+| **API env** | `DATABASE_URL` (+psycopg dialect), `SUPABASE_*`, `OPENAI_API_KEY`, `API_KEY`, `CORS_ORIGINS` matching your real frontend origin |
+| **Frontend build** | Set `VITE_API_BASE_URL`, `VITE_SUPABASE_*`, `VITE_MAPBOX_TOKEN` at **build** time |
+| **Stripe / billing** | Not wired yet — Profile shows placeholder until LLC + Stripe account |
+| **Observability** | Optional `SENTRY_DSN`; structured logs to stdout |
+| **Railway** | **`railway.toml`** documents healthcheck path (`/health`) and env hints — adjust in Railway UI as needed |
+
+---
+
 
 ## ⚡ Performance Optimizations
 
