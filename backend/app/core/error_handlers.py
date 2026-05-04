@@ -3,11 +3,16 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.websockets import WebSocket
 
 logger = logging.getLogger("propintel")
 
+# Starlette registers the same handler for HTTP and WebSocket; stubs expect
+# (Request | WebSocket, Exception). We only emit JSON for HTTP Request.
+RequestOrWs = Request | WebSocket
 
-def _request_id(request: Request) -> str | None:
+
+def _request_id(request: RequestOrWs) -> str | None:
     return getattr(request.state, "request_id", None)
 
 
@@ -23,14 +28,23 @@ def error_response(status_code: int, message: str, detail=None, request_id: str 
     return JSONResponse(status_code=status_code, content=content)
 
 
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+async def http_exception_handler(request: RequestOrWs, exc: Exception):
+    if not isinstance(request, Request):
+        raise exc
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc
     return error_response(
         status_code=exc.status_code,
         message=str(exc.detail),
         request_id=_request_id(request),
     )
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+
+async def validation_exception_handler(request: RequestOrWs, exc: Exception):
+    if not isinstance(request, Request):
+        raise exc
+    if not isinstance(exc, RequestValidationError):
+        raise exc
     return error_response(
         status_code=422,
         message="Validation error - check your request body",
@@ -38,14 +52,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         request_id=_request_id(request),
     )
 
-async def internal_error_handler(request: Request, exc: Exception):
+
+async def internal_error_handler(request: RequestOrWs, exc: Exception):
     rid = _request_id(request)
-    logger.exception(
-        "Unhandled exception on %s %s | request_id=%s",
-        request.method,
-        request.url.path,
-        rid,
-    )
+    if isinstance(request, Request):
+        logger.exception(
+            "Unhandled exception on %s %s | request_id=%s",
+            request.method,
+            request.url.path,
+            rid,
+        )
+    else:
+        logger.exception("Unhandled exception on WebSocket | request_id=%s", rid)
     return error_response(
         status_code=500,
         message="An unexpected error occurred. Please try again later.",
@@ -53,7 +71,9 @@ async def internal_error_handler(request: Request, exc: Exception):
     )
 
 
-async def rate_limit_exceeded_handler(request: Request, exc: Exception):
+async def rate_limit_exceeded_handler(request: RequestOrWs, exc: Exception):
+    if not isinstance(request, Request):
+        raise exc
     return error_response(
         status_code=429,
         message="Too many requests. Please slow down and try again later.",
