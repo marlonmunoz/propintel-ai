@@ -286,3 +286,9 @@ dist-ssr
 # Un-ignore frontend source folders that match generic Python venv rules above
 !frontend/src/lib/
 !frontend/src/lib/**
+
+# Staging secrets (never commit — templates are *.env.staging.example, whitelisted by !.env.*.example)
+.env.staging
+frontend/.env.staging
+!.env.staging.example
+!frontend/.env.staging.example

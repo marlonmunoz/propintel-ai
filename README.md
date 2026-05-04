@@ -770,6 +770,13 @@ npm run dev
 
 Available at `http://localhost:5174`
 
+### Staging smoke test (local UI → staging API, no Vercel required)
+
+1. Copy **`frontend/.env.staging.example`** → **`frontend/.env.staging`** (gitignored) and fill in staging `VITE_*` values.  
+2. Copy **`.env.staging.example`** → **`.env.staging`** at the repo root if you run the backend locally against staging Postgres; otherwise configure the same variables on your host (e.g. Railway).  
+3. From **`frontend/`**: **`npm run dev:staging`** — this runs Vite with **`--mode staging`**, which loads **`.env.staging`** on top of `.env` (same keys in staging win; plain **`npm run dev`** never loads `.env.staging`).  
+4. Ensure the staging API’s **`CORS_ORIGINS`** includes `http://localhost:5174` and `http://127.0.0.1:5174` while you test from your machine.
+
 ### Initialize the database
 
 - **Local SQLite / CI:** `python -m backend.app.db.init_db` creates tables for pytest.
