@@ -22,6 +22,7 @@ NNN_short_description.sql
 | `004_mapbox_usage_rls.sql` | Enable RLS on `mapbox_usage` |
 | `005_enable_rls_all_public_app_tables.sql` | Enable RLS on all app tables |
 | `006_add_paid_role.sql` | Expand `profiles.role` CHECK constraint to allow `'paid'` |
+| `007_rls_verify_no_public_policies.sql` | Read-only audit: RLS must be ON; warns if permissive `anon` / `authenticated` policies exist on app tables |
 
 ---
 
@@ -59,7 +60,7 @@ SQLAlchemy `CREATE TABLE IF NOT EXISTS` handles the full schema for tests. SQL m
 
 ## Adding a new migration
 
-1. Create the next numbered file: `007_my_change.sql`
+1. Create the next numbered file: `008_my_change.sql` (increment from the highest existing `NNN_*.sql`)
 2. Write idempotent SQL (`IF NOT EXISTS`, `IF EXISTS`, `ON CONFLICT DO NOTHING`, etc.)
 3. Test locally with `--dry-run` first, then apply
 4. Commit the file — the runner will pick it up on the next deploy
@@ -68,4 +69,4 @@ SQLAlchemy `CREATE TABLE IF NOT EXISTS` handles the full schema for tests. SQL m
 
 ## Rolling back
 
-There is no automated rollback. Write a companion `007_rollback_my_change.sql` if a manual rollback is needed, apply it via the SQL Editor, and then remove or skip the original file from future runs.
+There is no automated rollback. Write a companion `008_rollback_my_change.sql` if a manual rollback is needed, apply it via the SQL Editor, and then remove or skip the original file from future runs.

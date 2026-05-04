@@ -52,13 +52,13 @@ PropIntel AI is an end-to-end AI engineering platform for real estate investment
 - **Role-based access tiers**: `user` (free, 10 AI analyses/day), `paid` (200/day), `admin` (unlimited) — enforced at the LLM service layer and surfaced via `GET /auth/quota`
 - **Mapbox server-side monthly cap** — `POST /geocode/usage` returns 429 when org-wide monthly usage hits `MAPBOX_MONTHLY_FREE_REQUEST_CAP`
 - Per-IP rate limiting with consistent JSON error envelope (slowapi)
-- CORS locked to explicit allowed origins, methods, and headers via environment variable
+- CORS locked to explicit allowed origins, methods, and headers via **`CORS_ORIGINS`**; startup logs the resolved origin list; preflight allowlist includes **`sentry-trace`** / **`baggage`** (Sentry browser SDK) plus **`Authorization`**, **`X-API-Key`**, **`X-Request-ID`**, **`Accept`**, **`Content-Type`**; **`X-Request-ID`** is exposed to the client via **`Access-Control-Expose-Headers`**
 - Unified error response envelope `{ error, status_code, message, detail, request_id }` for HTTP errors
-- JSON structured logging with `LOG_LEVEL` env control; optional **Sentry** (`SENTRY_DSN`) for unhandled exceptions
+- JSON structured logging with `LOG_LEVEL` env control; optional **Sentry** (`SENTRY_DSN`) with **`before_send` PII scrubbing** (Authorization / API key / cookies; redacted Postgres URLs in exception text), **`SENTRY_ENVIRONMENT`**, optional **`SENTRY_RELEASE`**
 - Security response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`)
 - Supabase JWT verification via **HS256 + JWKS (RS256)** with a **cached PyJWKClient**; OpenAPI `/docs` gated by **`DOCS_ENABLED`** (off by default in prod)
 - Proxy-aware client IP for rate limits when **`TRUST_PROXY_HEADERS=1`**
-- `/health` (liveness) and `/ready` (Postgres + **ML artifact presence** checks)
+- **`/health`** (liveness) and **`/ready`** (Postgres + **ML artifact presence** checks) — both omitted from OpenAPI; **`/ready`** returns sanitized failure messages (full errors logged server-side only)
 - SQL migrations runner (`python -m backend.scripts.run_migrations`) — optional auto-run on Docker boot via **`RUN_MIGRATIONS`**
 - Docker image respects **`PORT`** (Railway); **`ML_ARTIFACT_ROOT`** overrides artifact paths when using volumes
 - **83 backend + 112 frontend automated tests** — pytest; Vitest + React Testing Library
@@ -423,8 +423,8 @@ For analysis requests, `PredictionService.analyze()` additionally:
 ### Health & Readiness
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Liveness check — confirms process is alive |
-| `GET` | `/ready` | Readiness check — confirms DB is reachable |
+| `GET` | `/health` | Liveness — process is alive (use for load-balancer / Railway **liveness** probes) |
+| `GET` | `/ready` | Readiness — Postgres `SELECT 1` + registered ML artifacts on disk; returns **503** with `{ status, failed, checks }` if degraded; error details are **not** echoed to clients (check server logs) |
 
 ### Auth (JWT or API key)
 | Method | Endpoint | Description |
@@ -708,7 +708,7 @@ Create a `.env` file at the project root. **Start from `.env.example`** — it s
 | `DATABASE_URL` | Postgres DSN, e.g. `postgresql+psycopg://…` (Supabase pooler URL works) |
 | `OPENAI_API_KEY` | LLM explanations |
 | `API_KEY` | `X-API-Key` for scripts / OpenAPI when not using JWT |
-| `CORS_ORIGINS` | Comma-separated browser origins (add your production frontend URL when you deploy) |
+| `CORS_ORIGINS` | Comma-separated **exact** browser origins (`scheme://host:port`, no trailing slash). Include **both** `http://localhost:5174` and `http://127.0.0.1:5174` if you use either. Add staging/production HTTPS origins when you deploy. Mismatch causes **OPTIONS preflight 400** in the browser |
 | `SUPABASE_URL` | Same host as `VITE_SUPABASE_URL` — enables JWKS for asymmetric JWTs |
 | `SUPABASE_JWT_SECRET` | HS256 verification (Dashboard → API → JWT Secret) |
 | `ADMIN_USER_IDS` | Optional comma-separated UUIDs with admin access before DB profile exists |
@@ -716,7 +716,10 @@ Create a `.env` file at the project root. **Start from `.env.example`** — it s
 | `MAPBOX_MONTHLY_FREE_REQUEST_CAP` | Admin dashboard vs in-app geocode counter |
 | `DOCS_ENABLED` | Set `1` locally for `/docs` — omit or `0` in production |
 | `LOG_LEVEL` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` |
-| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE` | Optional error tracking |
+| `SENTRY_DSN` | Optional — when set, unhandled exceptions go to Sentry with PII scrubbing |
+| `SENTRY_ENVIRONMENT` | e.g. `local`, `staging`, `production` (defaults to `production` if unset) |
+| `SENTRY_RELEASE` | Optional — app version / git SHA for release tracking |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.0`–`1.0` (default `0.1`) |
 | `TRUST_PROXY_HEADERS` | Set `1` behind a trusted reverse proxy only |
 | `ML_ARTIFACT_ROOT` | Optional — override repo root for `.pkl` paths (volumes / custom layout) |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | SQLAlchemy pool tuning |
@@ -754,7 +757,7 @@ Available at:
 - API: `http://127.0.0.1:8000`
 - Swagger UI: `http://127.0.0.1:8000/docs` — only when **`DOCS_ENABLED=1`** in `.env` (disabled by default)
 - Liveness: `http://127.0.0.1:8000/health`
-- Readiness (DB + ML artifacts): `http://127.0.0.1:8000/ready`
+- Readiness (DB + ML artifacts): `http://127.0.0.1:8000/ready` — use for **readiness** probes; expect **200** only when DB and on-disk models are OK
 
 ### Frontend
 
@@ -768,7 +771,9 @@ Available at `http://localhost:5174`
 ### Initialize the database
 
 - **Local SQLite / CI:** `python -m backend.app.db.init_db` creates tables for pytest.
-- **Postgres (Supabase / Docker / prod):** apply **`backend/migrations/*.sql`** via `python -m backend.scripts.run_migrations` (same runner the Docker image invokes on boot).
+- **Postgres (Supabase / Docker / prod):** apply **`backend/migrations/*.sql`** via `python -m backend.scripts.run_migrations` (same runner the Docker image invokes on boot). Migration **`007_rls_verify_no_public_policies.sql`** is a read-only audit: asserts RLS is enabled on app tables and warns if permissive `anon` / `authenticated` policies would expose rows via PostgREST.
+
+**Staging vs production:** keep separate Supabase projects (or at least separate DB roles + env files). Copy **`.env.example`** — the bottom **env matrix** table lists variables that typically differ per environment (`CORS_ORIGINS`, `VITE_API_BASE_URL`, `SENTRY_*`, `DOCS_ENABLED`, etc.).
 
 ### Rebuild the ML pipeline from scratch
 
@@ -901,11 +906,11 @@ Deploy steps vary by host; this is the contract the repo expects:
 | Step | Notes |
 |---|---|
 | **Database** | Supabase Postgres or any Postgres; run migrations via Docker boot or `python -m backend.scripts.run_migrations` |
-| **API env** | `DATABASE_URL` (+psycopg dialect), `SUPABASE_*`, `OPENAI_API_KEY`, `API_KEY`, `CORS_ORIGINS` matching your real frontend origin |
+| **API env** | `DATABASE_URL` (+psycopg dialect), `SUPABASE_*`, `OPENAI_API_KEY`, `API_KEY`, **`CORS_ORIGINS` exactly matching the browser origin** (see `.env.example`), `SENTRY_DSN` + `SENTRY_ENVIRONMENT` in non-local envs |
 | **Frontend build** | Set `VITE_API_BASE_URL`, `VITE_SUPABASE_*`, `VITE_MAPBOX_TOKEN` at **build** time |
 | **Stripe / billing** | Not wired yet — Profile shows placeholder until LLC + Stripe account |
 | **Observability** | Optional `SENTRY_DSN`; structured logs to stdout |
-| **Railway** | **`railway.toml`** documents healthcheck path (`/health`) and env hints — adjust in Railway UI as needed |
+| **Railway** | **`railway.toml`** sets **`healthcheckPath = /health`** (liveness). Use **`/ready`** manually or via an external monitor for DB + ML readiness; Railway’s single built-in check does not replace a full readiness probe |
 
 ---
 
