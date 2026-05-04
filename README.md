@@ -699,6 +699,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+**Python dependencies:** `requirements.txt` is the full stack (API + ML pipelines). The Docker image installs only **`requirements-api.txt`** (API + inference). When you add a **new third-party import** under `backend/app/` (or anything the API container runs), add the same pinned package to **`requirements-api.txt`**. If the package is only for `ml/` or offline scripts, add it to **`requirements.txt`** only. Keep versions aligned between both files when a package appears in both.
+
 Create a `.env` file at the project root. **Start from `.env.example`** — it stays in sync with the codebase.
 
 **Critical:** use the **`postgresql+psycopg://`** SQLAlchemy dialect (matches `psycopg` v3 in `requirements.txt`). A bare `postgresql://` URL makes SQLAlchemy look for `psycopg2`, which is not installed.

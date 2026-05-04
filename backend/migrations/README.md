@@ -12,12 +12,22 @@ NNN_short_description.sql
 
 `NNN` is a zero-padded integer (001, 002, …). Files are applied in lexicographic order.
 
+### When you must use the Supabase SQL Editor
+
+If a migration (or any SQL snippet) **must** be pasted and run manually in **Supabase Dashboard → SQL Editor** — for example one-off data fixes, rollbacks, or templates where you substitute your own UUID — the file begins with a header line:
+
+```text
+-- MANUAL_SUPABASE: <short reason>
+```
+
+Migrations without that line are intended to run only via **`python -m backend.scripts.run_migrations`** (or Docker on boot) against `DATABASE_URL`. If you add a manual-only script, include the header so operators know not to rely on the runner alone.
+
 ### Current migration history
 
 | File | Purpose |
 |---|---|
 | `001_add_auth.sql` | Add `user_id` to `properties`; create `profiles` table |
-| `002_promote_admin.sql` | Utility snippet — promote your own account to `admin` (run once manually) |
+| `002_promote_admin.sql` | **`MANUAL_SUPABASE`** — replace `YOUR_SUPABASE_USER_UUID`, then run in SQL Editor (not applied meaningfully by the runner) |
 | `003_mapbox_usage.sql` | Create `mapbox_usage` table |
 | `004_mapbox_usage_rls.sql` | Enable RLS on `mapbox_usage` |
 | `005_enable_rls_all_public_app_tables.sql` | Enable RLS on all app tables |
@@ -42,11 +52,11 @@ python -m backend.scripts.run_migrations
 
 Requires `DATABASE_URL` to be set (your `.env` file is loaded automatically).
 
-> **Note:** `002_promote_admin.sql` contains a placeholder UUID and is intentionally skipped the first time (it has no idempotency guard and is meant to be run manually once). If you need to re-apply it, replace `YOUR_SUPABASE_USER_UUID` first and run it directly in the Supabase SQL Editor.
+> **Note:** `002_promote_admin.sql` is marked **`MANUAL_SUPABASE`** — replace `YOUR_SUPABASE_USER_UUID` and run in the SQL Editor. For API admin access without editing SQL, set **`ADMIN_USER_IDS`** in the API environment instead.
 
 ### Option B — Supabase SQL Editor (manual)
 
-Paste and run each file in order in **Supabase Dashboard → SQL Editor**. Each file is safe to re-run except `002_promote_admin.sql` (see above).
+Paste and run each file in order in **Supabase Dashboard → SQL Editor** if you are not using the migration runner. Prefer the runner when possible. Files marked **`MANUAL_SUPABASE`** in the header (e.g. `002_promote_admin.sql`) are meant for the editor after you edit placeholders — do not expect them to do anything useful via the runner until customized.
 
 ### CI / SQLite
 

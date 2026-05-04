@@ -1,3 +1,4 @@
+-- MANUAL_SUPABASE: edit YOUR_SUPABASE_USER_UUID then run in Dashboard → SQL Editor (do not rely on migration runner for promotion)
 -- ============================================================================
 -- Promote your account to admin
 -- ============================================================================
