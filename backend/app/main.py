@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Any
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -20,11 +21,16 @@ from slowapi.middleware import SlowAPIMiddleware
 from backend.app.core.limiter import limiter
 from backend.app.core.client_ip import get_client_ip
 import json
+import logging
 import os
+import re
 import time
 import uuid
-import logging
+
+import sentry_sdk
 from dotenv import load_dotenv
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 load_dotenv()
 
@@ -64,17 +70,12 @@ logger = logging.getLogger("propintel")
 # ---------------------------------------------------------------------------
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
-    import re as _re
-    import sentry_sdk
-    from sentry_sdk.integrations.fastapi import FastApiIntegration
-    from sentry_sdk.integrations.starlette import StarletteIntegration
-
-    _CREDENTIAL_RE = _re.compile(
+    _CREDENTIAL_RE = re.compile(
         r"(postgresql\+?[a-z2]*://)[^@]+@",
-        _re.IGNORECASE,
+        re.IGNORECASE,
     )
 
-    def _scrub_event(event: dict, hint: dict) -> dict:
+    def _scrub_event(event: Any, hint: Any) -> Any:
         """Strip credentials from DB URLs and Authorization headers."""
         # Scrub request headers
         request = event.get("request", {})
