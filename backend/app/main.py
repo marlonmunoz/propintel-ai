@@ -59,22 +59,62 @@ logger = logging.getLogger("propintel")
 # ---------------------------------------------------------------------------
 # Sentry — error tracking. Enabled only when SENTRY_DSN is set.
 # Captures unhandled exceptions with full FastAPI request context.
+# PII scrubbing: strips Authorization headers and redacts DATABASE_URL from
+# any exception message/extra that might contain credentials.
 # ---------------------------------------------------------------------------
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
+    import re as _re
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    _CREDENTIAL_RE = _re.compile(
+        r"(postgresql\+?[a-z2]*://)[^@]+@",
+        _re.IGNORECASE,
+    )
+
+    def _scrub_event(event: dict, hint: dict) -> dict:
+        """Strip credentials from DB URLs and Authorization headers."""
+        # Scrub request headers
+        request = event.get("request", {})
+        headers = request.get("headers", {})
+        for key in list(headers):
+            if key.lower() in ("authorization", "x-api-key", "cookie"):
+                headers[key] = "[Filtered]"
+
+        # Scrub DB credentials from exception values
+        for exc_entry in event.get("exception", {}).get("values", []):
+            val = exc_entry.get("value", "")
+            if val:
+                exc_entry["value"] = _CREDENTIAL_RE.sub(r"\1[Filtered]@", val)
+
+        # Scrub any extra/breadcrumb data that may contain DATABASE_URL
+        for key in ("extra", "contexts"):
+            section = event.get(key, {})
+            if isinstance(section, dict):
+                for k, v in section.items():
+                    if isinstance(v, str):
+                        section[k] = _CREDENTIAL_RE.sub(r"\1[Filtered]@", v)
+
+        return event
+
     sentry_sdk.init(
         dsn=_SENTRY_DSN,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        release=os.getenv("SENTRY_RELEASE", None),
         integrations=[
             StarletteIntegration(transaction_style="endpoint"),
             FastApiIntegration(transaction_style="endpoint"),
         ],
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
         send_default_pii=False,
+        before_send=_scrub_event,
     )
-    logger.info("Sentry enabled (DSN configured)")
+    logger.info(
+        "Sentry enabled | environment=%s",
+        os.getenv("SENTRY_ENVIRONMENT", "production"),
+    )
 
 
 @asynccontextmanager
@@ -99,6 +139,15 @@ async def lifespan(app: FastAPI):
             "AUTH CONFIG WARNING: API_KEY is not set. "
             "X-API-Key authentication is disabled."
         )
+
+    # Log accepted CORS origins so misconfiguration is immediately visible in logs.
+    _cors_default = "http://localhost:5174,http://127.0.0.1:5174"
+    _origins = [
+        o.strip()
+        for o in os.getenv("CORS_ORIGINS", _cors_default).split(",")
+        if o.strip()
+    ]
+    logger.info("CORS allowed origins: %s", _origins)
 
     yield
 
@@ -161,7 +210,21 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
+    # Explicit header allowlist — wildcards are forbidden when allow_credentials=True.
+    # sentry-trace / baggage: W3C / Sentry distributed tracing headers sent by the
+    # browser automatically when Sentry is initialised on the frontend.
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "X-API-Key",
+        "X-Request-ID",
+        "sentry-trace",
+        "baggage",
+    ],
+    # Expose X-Request-ID so the browser (and Sentry) can read it for correlation.
+    expose_headers=["X-Request-ID"],
+    max_age=600,
 )
 
 app.include_router(prediction_router)
@@ -174,12 +237,12 @@ app.include_router(geocode_usage_router)
 def root():
     return {"message": "PropIntel AI running 🚀"}
 
-@app.get("/health")
+@app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok"}
 
 
-@app.get("/ready")
+@app.get("/ready", include_in_schema=False)
 def ready():
     checks: dict = {}
     failed: list[str] = []
@@ -193,27 +256,29 @@ def ready():
         db.close()
         checks["database"] = "reachable"
     except Exception as exc:
-        checks["database"] = f"unreachable: {exc}"
+        # Log full detail internally; never expose connection strings externally.
+        logger.error("Readiness DB check failed: %s", exc)
+        checks["database"] = "unreachable"
         failed.append("database")
 
     # ── ML artifacts ─────────────────────────────────────────────────────────
     try:
         from backend.app.services.model_registry import ModelRegistry
         registry = ModelRegistry()
-        metadata_dir = registry.metadata_dir
-        artifact_root = registry.artifact_root
         missing = []
         for key, meta in registry._models.items():
             p = registry._resolve_artifact_path(meta.artifact_path)
             if not p.exists():
                 missing.append(key)
         if missing:
+            logger.error("Readiness ML check: missing models %s", missing)
             checks["ml_artifacts"] = f"missing models: {missing}"
             failed.append("ml_artifacts")
         else:
             checks["ml_artifacts"] = f"ok ({len(registry._models)} models found)"
     except Exception as exc:
-        checks["ml_artifacts"] = f"error: {exc}"
+        logger.error("Readiness ML check failed: %s", exc)
+        checks["ml_artifacts"] = "error loading model registry"
         failed.append("ml_artifacts")
 
     if failed:
