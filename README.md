@@ -88,6 +88,17 @@ All Priority 1 bugs resolved. ML model routing complete. Frontend live and integ
 - Portfolio page redesigned: save analysis from Analyze page, view cards with score, valuations, deal label, and expandable AI explanation
 - CI pipeline passing on GitHub Actions
 
+### Recent deployment milestones (May 2026)
+- **Docker image slimmed + runtime deps split**: API container installs **`requirements-api.txt`** (keeps ML training deps out of the image).
+- **Migrations on boot**: container can run `python -m backend.scripts.run_migrations` before starting uvicorn (toggle with `RUN_MIGRATIONS`).
+- **Railway health hardening**: liveness is `/health`; readiness is `/ready` (DB + ML artifacts) with sanitized client output.
+- **RLS audit migration**: `007_rls_verify_no_public_policies.sql` verifies RLS is enabled and flags permissive policies.
+- **Sentry integrated** (optional): `SENTRY_DSN` enables error tracking with PII scrubbing + environment/release tags.
+- **CORS + preflight fixed**: strict allowlist + exposed `X-Request-ID`; **regex support for Vercel preview domains** via `CORS_ORIGIN_REGEX` to avoid redeploy-origin churn.
+- **Vercel SPA routing fix**: `frontend/vercel.json` rewrites all paths to `index.html` so hard-refresh on `/portfolio` (and other client routes) doesn’t 404.
+- **Production deployed**: Frontend on Vercel, API on Railway, Supabase Auth enabled end-to-end.
+- **Custom domain live**: `https://www.propintel-ai.com` connected via Cloudflare + Vercel.
+
 ---
 
 ## ✅ Primary API Contract (v2)
@@ -711,6 +722,7 @@ Create a `.env` file at the project root. **Start from `.env.example`** — it s
 | `OPENAI_API_KEY` | LLM explanations |
 | `API_KEY` | `X-API-Key` for scripts / OpenAPI when not using JWT |
 | `CORS_ORIGINS` | Comma-separated **exact** browser origins (`scheme://host:port`, no trailing slash). Include **both** `http://localhost:5174` and `http://127.0.0.1:5174` if you use either. Add staging/production HTTPS origins when you deploy. Mismatch causes **OPTIONS preflight 400** in the browser |
+| `CORS_ORIGIN_REGEX` | Optional regex for dynamic preview domains (e.g. Vercel). Default matches `https://propintel-.*\\.vercel\\.app`. Set empty to disable. |
 | `SUPABASE_URL` | Same host as `VITE_SUPABASE_URL` — enables JWKS for asymmetric JWTs |
 | `SUPABASE_JWT_SECRET` | HS256 verification (Dashboard → API → JWT Secret) |
 | `ADMIN_USER_IDS` | Optional comma-separated UUIDs with admin access before DB profile exists |
@@ -917,6 +929,8 @@ Deploy steps vary by host; this is the contract the repo expects:
 | **Database** | Supabase Postgres or any Postgres; run migrations via Docker boot or `python -m backend.scripts.run_migrations` |
 | **API env** | `DATABASE_URL` (+psycopg dialect), `SUPABASE_*`, `OPENAI_API_KEY`, `API_KEY`, **`CORS_ORIGINS` exactly matching the browser origin** (see `.env.example`), `SENTRY_DSN` + `SENTRY_ENVIRONMENT` in non-local envs |
 | **Frontend build** | Set `VITE_API_BASE_URL`, `VITE_SUPABASE_*`, `VITE_MAPBOX_TOKEN` at **build** time |
+| **SPA routes on Vercel** | `frontend/vercel.json` rewrites `/(.*)` → `/index.html` so React Router routes work on hard refresh |
+| **Custom domain** | Point Cloudflare DNS to Vercel (Auto Configure recommended), then add `https://yourdomain.com` and `https://www.yourdomain.com` to `CORS_ORIGINS` |
 | **Stripe / billing** | Not wired yet — Profile shows placeholder until LLC + Stripe account |
 | **Observability** | Optional `SENTRY_DSN`; structured logs to stdout |
 | **Railway** | **`railway.toml`** sets **`healthcheckPath = /health`** (liveness). Use **`/ready`** manually or via an external monitor for DB + ML readiness; Railway’s single built-in check does not replace a full readiness probe |
