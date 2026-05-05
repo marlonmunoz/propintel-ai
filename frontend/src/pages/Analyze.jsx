@@ -875,6 +875,13 @@ export default function Analyze() {
                     <FieldError message={formErrors.market_price} />
                   </div>
                 </div>
+                <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                  Valuations and AI text are informational only — not an appraisal or professional advice.{' '}
+                  <Link to="/disclaimer" className="font-medium text-cyan-600 hover:underline dark:text-cyan-400">
+                    Read the full disclaimer
+                  </Link>
+                  .
+                </p>
               </div>
 
               <div className="flex flex-col items-center gap-3">

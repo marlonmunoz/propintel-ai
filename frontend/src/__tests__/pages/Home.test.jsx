@@ -83,7 +83,7 @@ describe('Home page', () => {
     renderHome()
     const footer = screen.getByRole('contentinfo')
     expect(
-      within(footer).getByText(/not financial, legal, or investment advice/i)
+      within(footer).getByText(/not financial, legal, tax, or investment advice/i)
     ).toBeInTheDocument()
   })
 })

@@ -16,6 +16,7 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [marketingOptIn, setMarketingOptIn] = useState(false)
+  const [acceptedLegal, setAcceptedLegal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
@@ -32,6 +33,10 @@ export default function Register() {
     }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (!acceptedLegal) {
+      setError('Please agree to the Terms, Privacy Policy, and disclaimer to create an account.')
       return
     }
 
@@ -172,6 +177,30 @@ export default function Register() {
             <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
+                checked={acceptedLegal}
+                onChange={(e) => setAcceptedLegal(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-cyan-500"
+              />
+              <span className="text-sm text-slate-600 dark:text-slate-300">
+                I agree to the{' '}
+                <Link to="/terms" className="font-medium text-cyan-600 hover:underline dark:text-cyan-400">
+                  Terms of Service
+                </Link>
+                ,{' '}
+                <Link to="/privacy" className="font-medium text-cyan-600 hover:underline dark:text-cyan-400">
+                  Privacy Policy
+                </Link>
+                , and I have read the{' '}
+                <Link to="/disclaimer" className="font-medium text-cyan-600 hover:underline dark:text-cyan-400">
+                  Valuation &amp; AI disclaimer
+                </Link>
+                .
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
                 checked={marketingOptIn}
                 onChange={(e) => setMarketingOptIn(e.target.checked)}
                 className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-cyan-500"
@@ -189,12 +218,6 @@ export default function Register() {
               {loading ? 'Creating account…' : 'Create account'}
             </button>
           </form>
-
-          <p className="mt-4 text-center text-xs text-slate-400 dark:text-slate-500">
-            By signing up you agree to our{' '}
-            <span className="text-slate-500 dark:text-slate-400">Terms of Service</span> and{' '}
-            <span className="text-slate-500 dark:text-slate-400">Privacy Policy</span>.
-          </p>
 
           <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
             Already have an account?{' '}

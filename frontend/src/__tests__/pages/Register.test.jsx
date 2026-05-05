@@ -43,6 +43,10 @@ function renderRegister() {
   )
 }
 
+async function agreeToLegalTerms(user) {
+  await user.click(screen.getByRole('checkbox', { name: /I agree to the Terms of Service/i }))
+}
+
 describe('Register page', () => {
   it('renders the Create an account heading', () => {
     renderRegister()
@@ -84,6 +88,23 @@ describe('Register page', () => {
     )
   })
 
+  it('shows error when legal terms are not accepted', async () => {
+    renderRegister()
+    const user = userEvent.setup()
+
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'new@test.com')
+    await user.type(screen.getByPlaceholderText('Min. 8 characters'), STUB_PW_MATCH)
+    await user.type(screen.getByPlaceholderText('••••••••'), STUB_PW_MATCH)
+    await user.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Please agree to the Terms, Privacy Policy, and disclaimer/i)
+      ).toBeInTheDocument()
+    )
+    expect(mockSignUp).not.toHaveBeenCalled()
+  })
+
   it('shows success screen after successful sign-up', async () => {
     mockSignUp.mockResolvedValueOnce({ error: null })
     renderRegister()
@@ -92,6 +113,7 @@ describe('Register page', () => {
     await user.type(screen.getByPlaceholderText('you@example.com'), 'new@test.com')
     await user.type(screen.getByPlaceholderText('Min. 8 characters'), STUB_PW_MATCH)
     await user.type(screen.getByPlaceholderText('••••••••'), STUB_PW_MATCH)
+    await agreeToLegalTerms(user)
     await user.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() =>
@@ -107,6 +129,7 @@ describe('Register page', () => {
     await user.type(screen.getByPlaceholderText('you@example.com'), 'taken@test.com')
     await user.type(screen.getByPlaceholderText('Min. 8 characters'), STUB_PW_MATCH)
     await user.type(screen.getByPlaceholderText('••••••••'), STUB_PW_MATCH)
+    await agreeToLegalTerms(user)
     await user.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() =>
