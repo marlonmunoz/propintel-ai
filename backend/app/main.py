@@ -206,9 +206,18 @@ cors_origins = [
     if origin.strip()
 ]
 
+# CORS_ORIGIN_REGEX allows a regex pattern to match dynamic preview domains.
+# Default covers all Vercel preview deployments for this project.
+# Set CORS_ORIGIN_REGEX="" in production to disable if not needed.
+_cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://propintel-.*\.vercel\.app",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=_cors_origin_regex or None,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     # Explicit header allowlist — wildcards are forbidden when allow_credentials=True.

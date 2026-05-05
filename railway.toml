@@ -7,7 +7,10 @@ builder = "dockerfile"
 # The Dockerfile CMD already runs migrations then starts uvicorn.
 # Railway will inject PORT automatically.
 healthcheckPath = "/health"
-healthcheckTimeout = 30
+# Migrations run before uvicorn in the Dockerfile CMD; Supabase pooler + many
+# SQL files can exceed 30s on a cold deploy — Railway was marking the service
+# unhealthy before /health could respond.
+healthcheckTimeout = 180
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
