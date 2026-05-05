@@ -65,6 +65,9 @@ export default function Navbar() {
     navigate('/login', { replace: true })
   }
 
+  // Backend `DOCS_ENABLED` controls whether /docs exists. The SPA cannot read that;
+  // gate the nav link with a build-time flag so production hides it by default.
+  const showApiDocsLink = import.meta.env.VITE_SHOW_API_DOCS === '1'
   const apiDocsHref = `${import.meta.env.VITE_API_BASE_URL}/docs`
 
   return (
@@ -90,14 +93,16 @@ export default function Navbar() {
             </>
           )}
 
-          <a
-            href={apiDocsHref}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-          >
-            API Docs
-          </a>
+          {showApiDocsLink ? (
+            <a
+              href={apiDocsHref}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+            >
+              API Docs
+            </a>
+          ) : null}
 
           <button
             type="button"
@@ -243,15 +248,17 @@ export default function Navbar() {
                 {navLink('/portfolio', 'Portfolio')}
               </>
             )}
-            <a
-              href={apiDocsHref}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white"
-              onClick={() => setMobileNavOpen(false)}
-            >
-              API Docs
-            </a>
+            {showApiDocsLink ? (
+              <a
+                href={apiDocsHref}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                API Docs
+              </a>
+            ) : null}
 
             {user ? (
               <div className="mt-2 border-t border-slate-200 pt-3 dark:border-slate-800">
