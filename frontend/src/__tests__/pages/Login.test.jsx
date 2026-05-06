@@ -8,6 +8,7 @@ import { ThemeProvider } from '../../context/ThemeContext'
 // referenced inside its factory must be created with vi.hoisted() to avoid
 // "Cannot access before initialization" errors.
 const signInSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+const resendSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -17,6 +18,7 @@ vi.mock('../../lib/supabase', () => ({
         data: { subscription: { unsubscribe: vi.fn() } },
       }),
       signInWithPassword: signInSpy,
+      resend: resendSpy,
     },
   },
 }))
@@ -72,6 +74,14 @@ describe('Login page', () => {
     renderLogin()
     const createLink = screen.getByRole('link', { name: /Create one/i })
     expect(createLink).toHaveAttribute('href', '/register')
+  })
+
+  it('renders a link to forgot password', () => {
+    renderLogin()
+    expect(screen.getByRole('link', { name: /Forgot password/i })).toHaveAttribute(
+      'href',
+      '/forgot-password'
+    )
   })
 
   it('calls signInWithPassword with the entered credentials', async () => {

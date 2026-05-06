@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronDown, LayoutDashboard, LogOut, Menu, Moon, Sun, User, X } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
+import EmailVerificationBanner from './EmailVerificationBanner'
 
 export default function Navbar() {
   const location = useLocation()
@@ -71,7 +72,9 @@ export default function Navbar() {
   const apiDocsHref = `${import.meta.env.VITE_API_BASE_URL}/docs`
 
   return (
-    <header className="relative z-50 border-b border-slate-200 bg-slate-50/90 backdrop-blur-sm dark:border-slate-800 dark:bg-gradient-to-b dark:from-slate-900/80 dark:to-slate-950">
+    <>
+      <EmailVerificationBanner user={user} />
+      <header className="relative z-50 border-b border-slate-200 bg-slate-50/90 backdrop-blur-sm dark:border-slate-800 dark:bg-gradient-to-b dark:from-slate-900/80 dark:to-slate-950">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <Link to="/" className="flex min-w-0 items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500">
@@ -325,5 +328,6 @@ export default function Navbar() {
         </div>
       )}
     </header>
+    </>
   )
 }

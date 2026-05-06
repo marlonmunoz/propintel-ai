@@ -498,6 +498,24 @@ export default function Profile() {
               )}
             </div>
           </form>
+
+          {/* ── Close account (Supabase delete requires admin API — support-led for now) ── */}
+          <div className="rounded-2xl border border-rose-200/80 bg-rose-50/50 p-6 dark:border-rose-900/40 dark:bg-rose-950/20">
+            <p className="text-xs font-semibold uppercase tracking-widest text-rose-700 dark:text-rose-400">
+              Close account
+            </p>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              To delete your PropIntel account and associated saved analyses, email{' '}
+              <a
+                href="mailto:support@propintel-ai.com?subject=Account%20deletion%20request"
+                className="font-medium text-cyan-600 underline hover:text-cyan-500 dark:text-cyan-400"
+              >
+                support@propintel-ai.com
+              </a>{' '}
+              from your registered address. We will confirm identity and process deletion within a
+              reasonable time, subject to legal retention needs.
+            </p>
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -17,10 +17,50 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [flash, setFlash] = useState(null)
+  const [resendBusy, setResendBusy] = useState(false)
+
+  useEffect(() => {
+    const msg = location.state?.flash
+    if (!msg) return
+    setFlash(msg)
+    const rest = { ...(location.state ?? {}) }
+    delete rest.flash
+    navigate(location.pathname, {
+      replace: true,
+      state: Object.keys(rest).length ? rest : {},
+    })
+  }, [location.pathname, location.state, navigate])
 
   // Already logged in — redirect
   const from = location.state?.from?.pathname ?? '/analyze'
   if (session) return <Navigate to={from} replace />
+
+  const emailNotConfirmed =
+    typeof error === 'string' &&
+    /email not confirmed|confirm your email|not verified/i.test(error)
+
+  async function handleResendVerification() {
+    const trimmed = email.trim()
+    if (!trimmed) {
+      setError('Enter your email above, then tap resend verification.')
+      return
+    }
+    setResendBusy(true)
+    setError(null)
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmed,
+      })
+      if (resendError) throw resendError
+      setFlash('Verification email sent. Check your inbox (and spam).')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not resend verification email.')
+    } finally {
+      setResendBusy(false)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -66,9 +106,27 @@ export default function Login() {
             Sign in to your PropIntel account
           </p>
 
+          {flash && (
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+              {flash}
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-900/20 dark:text-rose-400">
               {error}
+              {emailNotConfirmed ? (
+                <p className="mt-2">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendBusy}
+                    className="font-semibold text-cyan-700 underline hover:text-cyan-600 disabled:opacity-50 dark:text-cyan-400"
+                  >
+                    {resendBusy ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                </p>
+              ) : null}
             </div>
           )}
 
@@ -105,6 +163,15 @@ export default function Login() {
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
+
+            <div className="text-center">
+              <Link
+                to="/forgot-password"
+                className="text-sm font-medium text-cyan-600 hover:text-cyan-500 dark:text-cyan-400"
+              >
+                Forgot password?
+              </Link>
+            </div>
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
