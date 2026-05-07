@@ -15,6 +15,7 @@ from backend.app.api.properties import router as properties_router
 from backend.app.api.auth_router import router as auth_router
 from backend.app.api.admin import router as admin_router
 from backend.app.api.geocode_usage import router as geocode_usage_router
+from backend.app.api.contact import router as contact_router
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -242,6 +243,7 @@ app.include_router(properties_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(geocode_usage_router)
+app.include_router(contact_router)
 
 @app.get("/")
 def root():

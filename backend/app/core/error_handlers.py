@@ -40,6 +40,29 @@ async def http_exception_handler(request: RequestOrWs, exc: Exception):
     )
 
 
+def _safe_validation_errors(errors: list) -> list:
+    """
+    Pydantic v2 ``@field_validator`` puts the raw ``ValueError`` into
+    ``ctx['error']``, which is not JSON-serialisable.  Walk the error list
+    and stringify any exception values so ``JSONResponse`` can encode them.
+    """
+    result = []
+    for error in errors:
+        safe: dict = {}
+        for key, val in error.items():
+            if key == "url":
+                continue  # strip pydantic doc URLs from API responses
+            if key == "ctx" and isinstance(val, dict):
+                safe["ctx"] = {
+                    ck: str(cv) if isinstance(cv, Exception) else cv
+                    for ck, cv in val.items()
+                }
+            else:
+                safe[key] = val
+        result.append(safe)
+    return result
+
+
 async def validation_exception_handler(request: RequestOrWs, exc: Exception):
     if not isinstance(request, Request):
         raise exc
@@ -48,7 +71,7 @@ async def validation_exception_handler(request: RequestOrWs, exc: Exception):
     return error_response(
         status_code=422,
         message="Validation error - check your request body",
-        detail=exc.errors(),
+        detail=_safe_validation_errors(exc.errors()),
         request_id=_request_id(request),
     )
 
