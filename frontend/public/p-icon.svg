@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Dark navy outline -->
+  <rect x="8" y="8" width="184" height="184" rx="36" ry="36" fill="#0d1123"/>
+  <!-- Light blue rounded square -->
+  <rect x="16" y="16" width="168" height="168" rx="30" ry="30" fill="#3cb2d9"/>
+  <!-- White bold P -->
+  <text
+    x="100"
+    y="148"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="148"
+    text-anchor="middle"
+    fill="#ffffff"
+  >P</text>
+</svg>
