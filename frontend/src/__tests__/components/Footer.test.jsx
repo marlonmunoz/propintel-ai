@@ -39,6 +39,14 @@ describe('Footer', () => {
     expect(nav.querySelector('a[href="/disclaimer"]')).toBeTruthy()
   })
 
+  it('exposes a Contact link routing to /contact', () => {
+    renderFooter()
+    const nav = screen.getByRole('navigation', { name: /legal/i })
+    const contactLink = nav.querySelector('a[href="/contact"]')
+    expect(contactLink).toBeTruthy()
+    expect(contactLink).toHaveTextContent(/contact/i)
+  })
+
   it('uses a <footer> element', () => {
     const { container } = renderFooter()
     expect(container.querySelector('footer')).toBeInTheDocument()

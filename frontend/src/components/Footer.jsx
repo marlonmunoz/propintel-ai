@@ -10,6 +10,9 @@ export default function Footer() {
     <footer className="mt-auto border-t border-slate-200 bg-slate-50/90 dark:border-slate-800 dark:bg-gradient-to-t dark:from-slate-900/80 dark:to-slate-950">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 py-8 text-center sm:px-6">
         <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1" aria-label="Legal">
+          <Link to="/contact" className={legalLink}>
+            Contact
+          </Link>
           <Link to="/terms" className={legalLink}>
             Terms of Service
           </Link>

@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import { Link } from 'react-router-dom'
+import SupportLink from './SupportLink'
 
 /**
  * Catches uncaught errors in the route tree and shows a recovery UI instead of a blank screen.
@@ -36,6 +37,14 @@ export default class ErrorBoundary extends Component {
           <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             The app hit an unexpected error. You can try reloading the page or return home.
             If this keeps happening, check the browser console for details.
+          </p>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            Need a hand? Email{' '}
+            <SupportLink
+              subject="App error"
+              body="Briefly describe what you were doing when the error appeared:"
+            />
+            {' '}and we&rsquo;ll take a look.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button

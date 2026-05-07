@@ -4,6 +4,7 @@ import { ArrowLeft, Zap, ShieldCheck, Crown, Lock } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import PasswordInput from '../components/PasswordInput'
+import SupportLink from '../components/SupportLink'
 import { useAuth } from '../context/AuthContext'
 import {
   updateProfile,
@@ -506,14 +507,9 @@ export default function Profile() {
             </p>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
               To delete your PropIntel account and associated saved analyses, email{' '}
-              <a
-                href="mailto:support@propintel-ai.com?subject=Account%20deletion%20request"
-                className="font-medium text-cyan-600 underline hover:text-cyan-500 dark:text-cyan-400"
-              >
-                support@propintel-ai.com
-              </a>{' '}
-              from your registered address. We will confirm identity and process deletion within a
-              reasonable time, subject to legal retention needs.
+              <SupportLink subject="Account deletion request" /> from your registered address. We will
+              confirm identity and process deletion within a reasonable time, subject to legal
+              retention needs.
             </p>
           </div>
         </div>

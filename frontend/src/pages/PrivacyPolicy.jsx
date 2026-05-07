@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import LegalPageShell, { LegalH2, LegalP, LegalUl } from '../components/LegalPageShell'
+import SupportLink from '../components/SupportLink'
 
 export default function PrivacyPolicy() {
   return (
@@ -98,8 +99,9 @@ export default function PrivacyPolicy() {
       <div>
         <LegalH2>Contact</LegalH2>
         <LegalP>
-          Privacy inquiries: use the contact method listed on our website. (Replace with a dedicated
-          privacy inbox before launch.)
+          For privacy inquiries, data access, deletion, or export requests, email{' '}
+          <SupportLink subject="Privacy inquiry" /> from your registered address. We will respond within
+          a reasonable time, subject to applicable law.
         </LegalP>
       </div>
     </LegalPageShell>

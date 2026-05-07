@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { Moon, Sun } from 'lucide-react'
 import Footer from '../components/Footer'
 import PasswordInput from '../components/PasswordInput'
+import SupportLink from '../components/SupportLink'
 
 export default function Login() {
   const { session } = useAuth()
@@ -39,6 +40,10 @@ export default function Login() {
   const emailNotConfirmed =
     typeof error === 'string' &&
     /email not confirmed|confirm your email|not verified/i.test(error)
+
+  const accountLocked =
+    typeof error === 'string' &&
+    /(locked|disabled|suspend(ed)?|banned|too many attempts|rate limit)/i.test(error)
 
   async function handleResendVerification() {
     const trimmed = email.trim()
@@ -125,6 +130,16 @@ export default function Login() {
                   >
                     {resendBusy ? 'Sending…' : 'Resend verification email'}
                   </button>
+                </p>
+              ) : null}
+              {accountLocked ? (
+                <p className="mt-2">
+                  Need help getting back in? Email{' '}
+                  <SupportLink
+                    subject="Login issue"
+                    body="Briefly describe what happened (any error messages help us a lot):"
+                    className="font-semibold text-cyan-700 underline hover:text-cyan-600 dark:text-cyan-400"
+                  />
                 </p>
               ) : null}
             </div>

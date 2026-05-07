@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import LegalPageShell, { LegalH2, LegalP, LegalUl } from '../components/LegalPageShell'
+import SupportLink from '../components/SupportLink'
 
 export default function TermsOfService() {
   return (
@@ -102,8 +103,8 @@ export default function TermsOfService() {
       <div>
         <LegalH2>Contact</LegalH2>
         <LegalP>
-          Questions about these Terms: use the contact method listed on our website or your account
-          correspondence. (Update this paragraph with a legal/contact inbox before launch.)
+          Questions about these Terms? Email <SupportLink subject="Terms of Service question" /> and we
+          will respond within a reasonable time.
         </LegalP>
       </div>
     </LegalPageShell>

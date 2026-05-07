@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import SupportLink from './SupportLink'
 
 /**
  * Shown when the user is signed in but Supabase has not marked the email as confirmed.
@@ -48,7 +49,18 @@ export default function EmailVerificationBanner({ user }) {
       {msg ? (
         <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">{msg}</p>
       ) : null}
-      {err ? <p className="mt-1 text-xs text-rose-700 dark:text-rose-400">{err}</p> : null}
+      {err ? (
+        <p className="mt-1 text-xs text-rose-700 dark:text-rose-400">
+          {err}
+          {' — '}
+          <SupportLink
+            subject="Email verification not arriving"
+            className="font-semibold underline underline-offset-2 hover:text-rose-800 dark:hover:text-rose-300"
+          >
+            Contact support
+          </SupportLink>
+        </p>
+      ) : null}
     </div>
   )
 }

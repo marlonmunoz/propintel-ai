@@ -13,6 +13,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import TermsOfService from './pages/TermsOfService'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import ValuationDisclaimer from './pages/ValuationDisclaimer'
+import Contact from './pages/Contact'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/disclaimer" element={<ValuationDisclaimer />} />
+        <Route path="/contact" element={<Contact />} />
 
         {/* Protected — requires a valid Supabase session */}
         <Route

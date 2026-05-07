@@ -125,4 +125,24 @@ describe('Login page', () => {
 
     expect(screen.getByRole('button', { name: /Signing in/i })).toBeInTheDocument()
   })
+
+  it('surfaces a support mailto when the error indicates a locked account', async () => {
+    signInSpy.mockResolvedValueOnce({
+      error: { message: 'Your account has been locked due to too many attempts.' },
+    })
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.type(screen.getByPlaceholderText(/you@example.com/i), 'locked@example.com')
+    await user.type(screen.getByPlaceholderText(/••••••••/), STUB_WRONG_VALUE)
+    await user.click(screen.getByRole('button', { name: /Sign in/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/account has been locked/i)).toBeInTheDocument()
+    })
+
+    const supportLink = screen.getByRole('link', { name: /support@propintel-ai\.com/i })
+    expect(supportLink.getAttribute('href')).toContain('mailto:support@propintel-ai.com')
+    expect(supportLink.getAttribute('href')).toContain('subject=')
+  })
 })
