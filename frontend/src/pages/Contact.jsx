@@ -10,7 +10,7 @@ const TOPICS = [
     label: 'Customer support',
     description:
       'Account help, billing questions, bug reports, or anything that isn\u2019t working as expected.',
-    icon: LifeBuoy,
+    Icon: LifeBuoy,
     iconBg: 'bg-cyan-500/15',
     iconColor: 'text-cyan-600 dark:text-cyan-400',
   },
@@ -19,7 +19,7 @@ const TOPICS = [
     label: 'Press, partnerships \u0026 investors',
     description:
       'Media inquiries, partnership opportunities, or investor outreach — reach the founder directly.',
-    icon: Briefcase,
+    Icon: Briefcase,
     iconBg: 'bg-violet-500/15',
     iconColor: 'text-violet-600 dark:text-violet-400',
   },
@@ -79,29 +79,29 @@ export default function Contact() {
 
           {/* ── Topic cards (click to pre-select + scroll to form) ─────────── */}
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
-            {TOPICS.map(({ value, label, description, icon: Icon, iconBg, iconColor }) => (
+            {TOPICS.map((topic) => (
               <button
-                key={value}
+                key={topic.value}
                 type="button"
-                onClick={() => handleTopicCard(value)}
+                onClick={() => handleTopicCard(topic.value)}
                 className={[
                   'flex flex-col rounded-2xl border p-6 text-left shadow-sm transition',
                   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500',
-                  form.topic === value
+                  form.topic === topic.value
                     ? 'border-cyan-400 bg-cyan-50 dark:border-cyan-600 dark:bg-cyan-950/30'
                     : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800/60',
                 ].join(' ')}
-                aria-pressed={form.topic === value}
+                aria-pressed={form.topic === topic.value}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
-                    <Icon className={`h-5 w-5 ${iconColor}`} aria-hidden />
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${topic.iconBg}`}>
+                    <topic.Icon className={`h-5 w-5 ${topic.iconColor}`} aria-hidden />
                   </div>
                   <span className="text-base font-semibold text-slate-900 dark:text-white">
-                    {label}
+                    {topic.label}
                   </span>
                 </div>
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{description}</p>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{topic.description}</p>
                 <span className="mt-4 text-xs font-medium text-cyan-600 dark:text-cyan-400">
                   Send a message →
                 </span>
