@@ -292,3 +292,7 @@ dist-ssr
 frontend/.env.staging
 !.env.staging.example
 !frontend/.env.staging.example
+
+# Docs + generated files
+docs/PRICING_PLAN.md
+docs/PRICING_STRATEGY.md
