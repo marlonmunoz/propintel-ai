@@ -14,6 +14,8 @@ import TermsOfService from './pages/TermsOfService'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import ValuationDisclaimer from './pages/ValuationDisclaimer'
 import Contact from './pages/Contact'
+import BillingSuccess from './pages/BillingSuccess'
+import BillingCanceled from './pages/BillingCanceled'
 
 export default function App() {
   return (
@@ -55,6 +57,10 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* Billing return URLs — public so Stripe redirects always render (session is per-origin;
+            refreshProfile/refreshQuota no-op when logged out). */}
+        <Route path="/billing/success" element={<BillingSuccess />} />
+        <Route path="/billing/canceled" element={<BillingCanceled />} />
         <Route
           path="/admin"
           element={

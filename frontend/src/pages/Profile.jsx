@@ -12,6 +12,7 @@ import {
   requestPasswordReauthNonce,
   isPasswordChangeReauthRequired,
 } from '../services/authApi'
+import { createCheckoutSession, createPortalSession } from '../services/billingApi'
 
 const TIER_CONFIG = {
   admin: {
@@ -109,6 +110,21 @@ function QuotaBar({ quota }) {
 }
 
 function UpgradeCta() {
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState(null)
+
+  async function goCheckout() {
+    setErr(null)
+    setLoading(true)
+    try {
+      const { url } = await createCheckoutSession()
+      window.location.href = url
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not start checkout.')
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-800/50 dark:bg-emerald-950/20">
       <div className="flex items-start gap-4">
@@ -116,10 +132,10 @@ function UpgradeCta() {
           <Crown className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-900 dark:text-white">Upgrade to Paid</p>
+          <p className="font-semibold text-slate-900 dark:text-white">Upgrade to Pro</p>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Get 200 AI analyses per day — 20× more than the free tier. Ideal for active investors
-            analyzing multiple properties daily.
+            $29/month — 200 AI analyses per day, unlimited saved properties, and priority support.
+            Secure checkout powered by Stripe.
           </p>
           <ul className="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-400">
             <li className="flex items-center gap-2">
@@ -132,27 +148,69 @@ function UpgradeCta() {
             </li>
             <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-              Priority support
+              Cancel anytime in the billing portal
             </li>
           </ul>
+
+          {err && (
+            <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-900/30 dark:text-rose-200">
+              {err}
+            </p>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled
-              title="Stripe checkout — coming soon"
-              className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white opacity-60 transition"
-              aria-label="Upgrade to Paid — payment integration coming soon"
+              disabled={loading}
+              onClick={() => void goCheckout()}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Upgrade with Stripe Checkout"
             >
               <Crown className="h-4 w-4" />
-              Upgrade — coming soon
+              {loading ? 'Redirecting…' : 'Upgrade with Stripe'}
             </button>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Stripe payment integration in progress
-            </p>
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ManageSubscriptionCta() {
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState(null)
+
+  async function openPortal() {
+    setErr(null)
+    setLoading(true)
+    try {
+      const { url } = await createPortalSession()
+      window.location.href = url
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not open billing portal.')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <p className="font-semibold text-slate-900 dark:text-white">Subscription</p>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        Update your payment method, download invoices, or cancel at the end of your billing period.
+      </p>
+      {err && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-900/30 dark:text-rose-200">
+          {err}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => void openPortal()}
+        className="mt-4 inline-flex rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+      >
+        {loading ? 'Opening…' : 'Manage subscription'}
+      </button>
     </div>
   )
 }
@@ -293,6 +351,7 @@ export default function Profile() {
   const tier = TIER_CONFIG[role] ?? TIER_CONFIG.user
   const { Icon } = tier
   const isFree = role === 'user'
+  const isPaid = role === 'paid'
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
@@ -323,8 +382,9 @@ export default function Profile() {
           {/* ── Quota usage bar ───────────────────────────────────────────── */}
           <QuotaBar quota={quota} />
 
-          {/* ── Upgrade CTA (free users only) ─────────────────────────────── */}
+          {/* ── Billing (free: upgrade / paid: portal) ───────────────────── */}
           {isFree && <UpgradeCta />}
+          {isPaid && <ManageSubscriptionCta />}
 
           {/* ── Profile edit form ─────────────────────────────────────────── */}
           <form

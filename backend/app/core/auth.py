@@ -282,8 +282,9 @@ async def get_current_user_with_role(
             user.role = "admin"
         else:
             profile = get_profile_for_jwt_user(db, user)
-            if profile and profile.role:
-                user.role = profile.role.strip().lower()
+            role_val = str(profile.role).strip().lower() if profile is not None else ""
+            if role_val:
+                user.role = role_val
     return user
 
 

@@ -71,6 +71,37 @@ class LLMUsage(Base):
     call_count  = Column(Integer, nullable=False, default=0)
 
 
+class BillingCustomer(Base):
+    """
+    Stripe customer + subscription mirror for JWT users (Supabase UUID in user_id).
+
+    Updated by webhooks; checkout creates the Stripe Customer row on first upgrade.
+    """
+    __tablename__ = "billing_customers"
+
+    user_id = Column(Text, primary_key=True, index=True)
+    stripe_customer_id = Column(String, nullable=False, unique=True, index=True)
+    stripe_subscription_id = Column(String, nullable=True, index=True)
+    subscription_status = Column(String, nullable=True)
+    price_id = Column(String, nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+    cancel_at_period_end = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True)
+
+
+class BillingEvent(Base):
+    """Append-only Stripe webhook log; stripe_event_id is the idempotency key."""
+    __tablename__ = "billing_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stripe_event_id = Column(String, nullable=False, unique=True, index=True)
+    event_type = Column(String, nullable=False)
+    user_id = Column(Text, nullable=True, index=True)
+    payload_summary = Column(JSON, nullable=True)
+    received_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+
+
 class MapboxUsage(Base):
     """
     Per-user daily Mapbox Geocoding forward-search request counter.
