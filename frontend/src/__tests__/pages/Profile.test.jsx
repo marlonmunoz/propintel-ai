@@ -115,17 +115,18 @@ describe('Profile page — change password', () => {
 describe('Profile page — upgrade CTA', () => {
   it('shows upgrade CTA for free users', () => {
     renderProfile({ role: 'user' })
-    expect(screen.getByText(/Upgrade to Paid/)).toBeTruthy()
-    expect(screen.getByText(/Stripe payment integration/)).toBeTruthy()
+    expect(screen.getByText(/Upgrade to Pro/)).toBeTruthy()
+    expect(screen.getByText(/Secure checkout powered by Stripe/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Upgrade with Stripe/i })).toBeInTheDocument()
   })
 
   it('hides upgrade CTA for paid users', () => {
     renderProfile({ role: 'paid' })
-    expect(screen.queryByText(/Stripe payment integration/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Upgrade with Stripe/i })).toBeNull()
   })
 
   it('hides upgrade CTA for admin users', () => {
     renderProfile({ role: 'admin' })
-    expect(screen.queryByText(/Stripe payment integration/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Upgrade with Stripe/i })).toBeNull()
   })
 })
