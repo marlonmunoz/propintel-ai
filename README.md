@@ -29,6 +29,7 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 - [Highlights](#highlights)
 - [Product surface](#product-surface)
 - [Contact form & email](#contact-form--email)
+- [Billing & subscriptions (Stripe)](#billing--subscriptions-stripe)
 - [System architecture](#system-architecture)
 - [Medallion data pipeline](#medallion-data-pipeline)
 - [API endpoints](#api-endpoints)
@@ -53,7 +54,9 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 - **Inference:** `ModelRegistry` routes by building class to spine segment models; optional **`bbl` + `as_of_date`** enriches from committed Gold parquets (Silver optional locally).
 - **Analysis:** Deterministic investment score, `deal_label`, OpenAI narrative (quota-aware), Mapbox geocoding with org-wide monthly cap via **`POST /geocode/usage`**.
 - **Contact:** Public **`POST /contact`** delivers visitor messages via **Resend** (no Supabase table required); **`/contact`** page + **`SupportLink`** component across legal/error/login flows.
+- **Billing:** **Stripe Live** — hosted Checkout ($29/mo Pro), Customer Portal (cancel / payment method / invoices), webhooks sync **`profiles.role`** and **`billing_customers`**; Profile UI for upgrade and manage subscription.
 - **Ops:** slowapi rate limits, CORS allowlist + optional **`CORS_ORIGIN_REGEX`** (Vercel previews), unified JSON errors with **`request_id`**, optional Sentry with PII scrubbing, **`/health`** + **`/ready`**, JSON logs, security headers, proxy-aware IP when **`TRUST_PROXY_HEADERS=1`**.
+- **Production (May 2026):** Frontend on **Vercel** (`www.propintel-ai.com`), API on **Railway** (`api.propintel-ai.com`), Supabase Auth + Postgres, secrets rotated and verified end-to-end (auth, LLM, email, Live billing).
 - **Quality:** **93** backend pytest tests + **145** frontend Vitest tests (**238** total); GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
 
 ---
@@ -75,7 +78,8 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 |------|---------|
 | `/analyze` | Property analysis (Mapbox map, quota pill, save to portfolio) |
 | `/portfolio` | Saved analyses |
-| `/profile` | Account, tier/quota, preferences |
+| `/profile` | Account, tier/quota, **Upgrade to Pro** / **Manage subscription** (Stripe) |
+| `/billing/success`, `/billing/canceled` | Post-Checkout redirects |
 | `/admin` | Admin dashboard (admin JWT or API key) |
 
 ### Support email UX
@@ -122,6 +126,62 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 
 ---
 
+## Billing & subscriptions (Stripe)
+
+PropIntel AI Pro is **$29 USD/month** (Free tier: 10 LLM analyses/day; Pro: 200/day). See **`docs/PRICING_PLAN.md`** for tier copy and Stripe Dashboard setup.
+
+### Behaviour
+
+1. Free users open **Profile → Upgrade with Stripe** → **`POST /billing/checkout`** returns a hosted Checkout URL.
+2. After payment, Stripe redirects to **`/billing/success`**; webhooks set **`profiles.role`** to **`paid`** and upsert **`billing_customers`**.
+3. Pro users use **Profile → Manage subscription** → **`POST /billing/portal`** → Stripe Customer Portal (cancel at period end, update card, invoices).
+4. Cancellation webhooks revert role to **`user`** when the subscription ends (or per Stripe event handling in **`billing.py`**).
+
+Card data never touches the API — Checkout and Portal are Stripe-hosted.
+
+### Production URLs (Live)
+
+| Item | Value |
+|------|--------|
+| Site | `https://www.propintel-ai.com` |
+| API | `https://api.propintel-ai.com` |
+| Webhook | `POST https://api.propintel-ai.com/billing/webhook` |
+| Checkout success | `https://www.propintel-ai.com/billing/success` |
+| Checkout cancel | `https://www.propintel-ai.com/billing/canceled` |
+| Portal return | `https://www.propintel-ai.com/profile` |
+
+### Backend env (Railway)
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| **`STRIPE_SECRET_KEY`** | Yes | `sk_live_...` (test: `sk_test_...` locally) |
+| **`STRIPE_PRICE_PAID_MONTHLY`** | Yes | Live `price_...` for PropIntel AI Pro |
+| **`STRIPE_WEBHOOK_SECRET`** | Yes | Live `whsec_...` from Dashboard webhook |
+| **`STRIPE_AUTOMATIC_TAX`** | Optional | Set **`0`** at launch if not using Stripe Tax yet; default in code is `1` |
+| **`BILLING_SUCCESS_URL`** | Recommended | Production success URL (see table above) |
+| **`BILLING_CANCEL_URL`** | Recommended | Production cancel URL |
+| **`BILLING_PORTAL_RETURN_URL`** | Recommended | Usually `/profile` on the live site |
+
+### Supabase Auth email (Resend SMTP)
+
+Auth emails (signup, password reset) use **Supabase → Authentication → Email → Custom SMTP** (`smtp.resend.com`, username `resend`, password = Resend API key). Contact form uses the same key via **`RESEND_API_KEY`** on Railway.
+
+### Stripe Dashboard (Live)
+
+- **Customer portal** enabled (cancellations, payment methods, invoices; plan switching off for single-plan launch).
+- **Payout bank account** linked for **PropIntel AI LLC** (business checking); automatic daily payouts to your bank.
+- **Test vs Live:** `billing_customers.stripe_customer_id` from Test mode does not work with Live API keys — reset test rows before Live checkout tests.
+
+### Related files
+
+| Layer | Path |
+|-------|------|
+| API | `backend/app/api/billing.py` |
+| Migration | `backend/migrations/008_add_billing_tables.sql` |
+| Frontend | `frontend/src/services/billingApi.js`, `frontend/src/pages/Profile.jsx`, `BillingSuccess` / `BillingCanceled` routes in `App.jsx` |
+
+---
+
 ## System architecture
 
 ```text
@@ -162,6 +222,8 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
                      (DOF · ACRIS · J-51 · PLUTO)
 
         Contact form ──► POST /contact ──► Resend ──► Workspace inboxes
+
+        Profile ──► POST /billing/checkout|portal ──► Stripe ──► webhooks ──► profiles + billing_customers
 ```
 
 ---
@@ -248,6 +310,15 @@ See the tables in version-controlled docs / prior releases for full MAE, APE, an
 | `GET` | `/auth/me` | Profile (creates row on first hit) |
 | `PATCH` | `/auth/me` | Update profile |
 | `GET` | `/auth/quota` | LLM quota status |
+
+### Billing
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/billing/checkout` | JWT — Stripe Checkout Session URL |
+| `POST` | `/billing/portal` | JWT — Customer Portal URL |
+| `GET` | `/billing/status` | JWT — subscription mirror + effective role |
+| `POST` | `/billing/webhook` | Stripe signature — lifecycle events (**no JWT**) |
 
 ### Geocode usage
 
@@ -370,7 +441,8 @@ propintel-ai/
 │   │   ├── auth_router.py
 │   │   ├── admin.py
 │   │   ├── geocode_usage.py
-│   │   └── contact.py           # POST /contact → Resend
+│   │   ├── contact.py           # POST /contact → Resend
+│   │   └── billing.py           # Stripe Checkout, Portal, webhooks
 │   ├── core/                    # auth, limiter, error_handlers, config
 │   ├── db/
 │   ├── schemas/
@@ -426,6 +498,11 @@ Copy **`.env.example`** → **`.env`** at the repo root. Use **`postgresql+psyco
 | `LOG_LEVEL` | Log verbosity |
 | `SENTRY_*` | Optional observability |
 | `TRUST_PROXY_HEADERS` | `1` behind trusted reverse proxy only |
+| **`STRIPE_SECRET_KEY`** | Stripe API (Live on Railway) |
+| **`STRIPE_PRICE_PAID_MONTHLY`** | Pro monthly `price_...` |
+| **`STRIPE_WEBHOOK_SECRET`** | Webhook signature verification |
+| **`STRIPE_AUTOMATIC_TAX`** | `0` or `1` — launch used **`0`** |
+| **`BILLING_SUCCESS_URL`**, **`BILLING_CANCEL_URL`**, **`BILLING_PORTAL_RETURN_URL`** | Checkout / Portal redirects |
 | `ML_ARTIFACT_ROOT` | Override artifact root |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | Pool tuning |
 | `RUN_MIGRATIONS` | Docker: skip migrations if `0` |
@@ -487,6 +564,8 @@ Default dev server: `http://localhost:5174` (match **`CORS_ORIGINS`**).
 | `llm_usage` | `LLMUsage` | Daily LLM counts |
 | `mapbox_usage` | `MapboxUsage` | Geocode usage reporting |
 | `housing_data` | `HousingData` | Reference / lookup data |
+| **`billing_customers`** | **`BillingCustomer`** | Stripe customer + subscription mirror per user |
+| **`billing_events`** | **`BillingEvent`** | Append-only webhook event log |
 
 Contact submissions are **not** persisted in Postgres by default.
 
@@ -544,16 +623,37 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 
 ## Production & deployment checklist
 
+### Live stack (verified May 2026)
+
+| Layer | Host | URL |
+|-------|------|-----|
+| Frontend | Vercel | `https://www.propintel-ai.com` |
+| API | Railway | `https://api.propintel-ai.com` |
+| Database + Auth | Supabase | Postgres pooler + JWT signing keys (ES256) |
+| Email | Resend | Contact API + Supabase SMTP (`noreply@propintel-ai.com`) |
+| Payments | Stripe Live | Checkout, Portal, webhooks → `paid` role |
+
+### Pre-launch / rotation checklist
+
 | Area | Notes |
 |------|--------|
-| **Database** | Run migrations (`RUN_MIGRATIONS` or manual `run_migrations`) |
-| **API** | `DATABASE_URL`, `SUPABASE_*`, `OPENAI_API_KEY`, `API_KEY`, **`CORS_ORIGINS`** exact match to the live site + **`TRUST_PROXY_HEADERS=1`** behind Railway |
-| **Email** | **`RESEND_API_KEY`**, **`CONTACT_FROM_EMAIL`** on the API host; domain verified in Resend |
-| **Frontend** | Set all **`VITE_*`** at **build** time on Vercel |
+| **Database** | Run migrations (`008_add_billing_tables.sql` via `run_migrations` or `RUN_MIGRATIONS` on deploy) |
+| **API (Railway)** | `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET` (HS256 fallback), `OPENAI_API_KEY`, `API_KEY`, `RESEND_API_KEY`, `CONTACT_FROM_EMAIL`, Stripe vars, **`CORS_ORIGINS`** = `https://www.propintel-ai.com,https://propintel-ai.com`, **`TRUST_PROXY_HEADERS=1`** |
+| **Auth** | Rotate JWT **signing keys** in Supabase (standby → rotate → revoke previous); keep **`SUPABASE_URL`** on Railway for JWKS |
+| **Email** | Resend domain verified; Supabase SMTP password = same `re_...` key as **`RESEND_API_KEY`** |
+| **Frontend (Vercel)** | `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_MAPBOX_TOKEN`, optional `VITE_SITE_URL` — no Stripe secrets on frontend |
+| **Stripe Live** | Product **PropIntel AI Pro** $29/mo; webhook to `/billing/webhook`; Customer Portal enabled; business bank for payouts; **`STRIPE_AUTOMATIC_TAX=0`** until NY tax is configured |
 | **SPA** | **`frontend/vercel.json`** rewrites to `index.html` |
-| **Domains** | Add production origins to **`CORS_ORIGINS`** (e.g. `https://www.propintel-ai.com`) |
-| **Observability** | Optional `SENTRY_DSN` |
-| **Billing** | Stripe not wired yet — Profile placeholders |
+| **Observability** | Optional `SENTRY_DSN` on Railway |
+| **Secrets** | Never commit `.env` / `frontend/.env` (see **`.cursorignore`**) |
+
+### Smoke tests (production)
+
+- Login, **Analyze**, **Profile** / quota
+- **`POST /contact`** → Resend delivery
+- Forgot-password email (Supabase SMTP)
+- **Upgrade with Stripe** (Live) → success page → `profiles.role = paid` + `billing_customers` row
+- **Manage subscription** → cancel at period end (portal)
 
 ---
 
