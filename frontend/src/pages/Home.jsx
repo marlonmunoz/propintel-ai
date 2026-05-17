@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3, Brain, ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import HeroVisual from '../components/HeroVisual'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 
 const features = [
   {
@@ -120,18 +122,6 @@ function CountUpMetric({ target, decimals, suffix, start, staggerMs = 0 }) {
   )
 }
 
-function usePrefersReducedMotion() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-      mq.addEventListener('change', onChange)
-      return () => mq.removeEventListener('change', onChange)
-    },
-    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    () => false
-  )
-}
-
 function FeatureCard({ icon, title, description, className = '' }) {
   const Icon = icon
   return (
@@ -229,42 +219,70 @@ function MobileFeatureCarousel({ items }) {
   )
 }
 
+const HERO_RIPPLE_NAV_MS = 720
+
 export default function Home() {
+  const navigate = useNavigate()
+  const reducedMotion = usePrefersReducedMotion()
   const [metricsRef, metricsInView] = useInViewOnce()
+  const [heroCtaRippleKey, setHeroCtaRippleKey] = useState(0)
+  const rippleNavTimeoutRef = useRef(null)
+
+  useEffect(
+    () => () => {
+      if (rippleNavTimeoutRef.current) window.clearTimeout(rippleNavTimeoutRef.current)
+    },
+    []
+  )
+
+  const onAnalyzeCtaClick = useCallback(
+    (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+
+      const isLg = window.matchMedia('(min-width: 1024px)').matches
+      if (!isLg || reducedMotion) return
+
+      e.preventDefault()
+      setHeroCtaRippleKey((k) => k + 1)
+      if (rippleNavTimeoutRef.current) window.clearTimeout(rippleNavTimeoutRef.current)
+      rippleNavTimeoutRef.current = window.setTimeout(() => {
+        navigate('/analyze')
+      }, HERO_RIPPLE_NAV_MS)
+    },
+    [navigate, reducedMotion]
+  )
 
   return (
     <div className="flex min-h-screen min-w-0 flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
       <div className="flex min-w-0 flex-1 flex-col">
-      {/* Hero — top-aligned so metrics/features stay above the fold on more screens */}
-      <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-12 pt-16 text-center sm:px-6 sm:pb-14 sm:pt-20">
+      {/* Hero — copy + 2.5D visual on lg; stacked on mobile */}
+      <section className="mx-auto max-w-6xl px-4 pb-12 pt-12 sm:px-6 sm:pb-14 sm:pt-16 lg:pt-20">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+          <div className="text-center lg:text-left">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-cyan-600 dark:text-cyan-400">
           PropIntel AI
         </p>
-        <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
           Buy, hold, or sell—with NYC sales data behind your instinct
         </h1>
-        <p className="mt-5 max-w-xl text-sm leading-relaxed text-slate-500 sm:text-base dark:text-slate-400">
+        <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-slate-500 sm:text-base lg:mx-0 dark:text-slate-400">
           Valuations, deal signals, and plain language—whether you are buying a home or sizing an
           investment—grounded in NYC residential sales. Decision support, not a crystal ball. Not
           financial, legal, or investment advice.
         </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
           <Link
             to="/analyze"
+            onClick={onAnalyzeCtaClick}
             className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
           >
             Analyze Property
           </Link>
-          {/* <a
-            href={`${import.meta.env.VITE_API_BASE_URL}/docs`}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl border border-slate-200 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
-          >
-            View API Docs
-          </a> */}
+        </div>
+          </div>
+          <HeroVisual ctaRippleKey={heroCtaRippleKey} />
         </div>
       </section>
 
