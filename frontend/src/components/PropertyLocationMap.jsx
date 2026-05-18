@@ -1,5 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import {
+  findNearestSubwayStation,
+  formatSubwayDistance,
+  loadSubwayStationsGeoJson,
+} from '../utils/subwayStations'
 
 let mapboxgl = null
 async function getMapboxGL() {
@@ -14,6 +19,88 @@ const LARGE_JUMP_DEG = 0.003
 
 const DEFAULT_STYLE = 'mapbox://styles/mapbox/standard'
 
+function addSubwayLayers(map) {
+  if (map.getSource('subway-stations')) return
+
+  map.addSource('subway-nearest-line', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+  map.addLayer({
+    id: 'subway-walk-line',
+    type: 'line',
+    source: 'subway-nearest-line',
+    paint: {
+      'line-color': '#06b6d4',
+      'line-width': 2,
+      'line-dasharray': [2, 2],
+      'line-opacity': 0.85,
+    },
+  })
+
+  map.addSource('subway-stations', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+  map.addLayer({
+    id: 'subway-stations-circle',
+    type: 'circle',
+    source: 'subway-stations',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 2, 15, 3.5, 17, 5],
+      'circle-color': '#0e7490',
+      'circle-opacity': 0.6,
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#f8fafc',
+      'circle-stroke-opacity': 0.85,
+    },
+  })
+
+  map.addSource('subway-nearest-point', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+  map.addLayer({
+    id: 'subway-nearest-circle',
+    type: 'circle',
+    source: 'subway-nearest-point',
+    paint: {
+      'circle-radius': 7,
+      'circle-color': '#06b6d4',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
+    },
+  })
+}
+
+function updateNearestSubwayOverlay(map, geojson, lat, lng) {
+  const nearest = findNearestSubwayStation(geojson, lat, lng)
+  if (!nearest) return null
+
+  const { feature, km } = nearest
+  const [stationLng, stationLat] = feature.geometry.coordinates
+
+  map.getSource('subway-nearest-line')?.setData({
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [lng, lat],
+        [stationLng, stationLat],
+      ],
+    },
+  })
+  map.getSource('subway-nearest-point')?.setData({
+    type: 'FeatureCollection',
+    features: [feature],
+  })
+
+  const name = feature.properties?.name ?? 'Subway'
+  const lines = feature.properties?.lines
+  const lineSuffix = lines ? ` (${lines})` : ''
+  return `${name}${lineSuffix} · ${formatSubwayDistance(km)}`
+}
+
 /**
  * Interactive preview map for geocoded coordinates.
  *
@@ -24,8 +111,12 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
   const mapRef = useRef(null)
   const markerRef = useRef(null)
   const prevLngLatRef = useRef(null)
+  const subwayGeoRef = useRef(null)
   const onCoordinatesChangeRef = useRef(onCoordinatesChange)
   onCoordinatesChangeRef.current = onCoordinatesChange
+
+  const [nearestSubway, setNearestSubway] = useState(null)
+  const [subwayLoadError, setSubwayLoadError] = useState(false)
 
   const token = import.meta.env.VITE_MAPBOX_TOKEN
   const mapStyle = import.meta.env.VITE_MAPBOX_STYLE || DEFAULT_STYLE
@@ -40,6 +131,7 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
         mapRef.current = null
         markerRef.current = null
         prevLngLatRef.current = null
+        subwayGeoRef.current = null
       }
       return undefined
     }
@@ -91,6 +183,23 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
       markerRef.current = marker
       mapRef.current = map
       prevLngLatRef.current = [lng, lat]
+
+      map.on('load', () => {
+        if (cancelled) return
+        addSubwayLayers(map)
+        loadSubwayStationsGeoJson()
+          .then((geojson) => {
+            if (cancelled || !mapRef.current) return
+            subwayGeoRef.current = geojson
+            map.getSource('subway-stations')?.setData(geojson)
+            const label = updateNearestSubwayOverlay(map, geojson, lat, lng)
+            setNearestSubway(label)
+            setSubwayLoadError(false)
+          })
+          .catch(() => {
+            if (!cancelled) setSubwayLoadError(true)
+          })
+      })
     })
 
     return () => {
@@ -100,6 +209,7 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
         mapRef.current = null
         markerRef.current = null
         prevLngLatRef.current = null
+        subwayGeoRef.current = null
       }
     }
     // lat/lng updates are handled by the following effect; `hasCoords` only toggles map mount.
@@ -115,6 +225,11 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
     const prev = prevLngLatRef.current
 
     markerRef.current?.setLngLat(center)
+
+    if (subwayGeoRef.current && map.getSource('subway-stations')) {
+      const label = updateNearestSubwayOverlay(map, subwayGeoRef.current, lat, lng)
+      setNearestSubway(label)
+    }
 
     if (!prev) {
       prevLngLatRef.current = center
@@ -159,12 +274,22 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
   return (
     <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
       <div ref={containerRef} className="h-[min(52vw,320px)] min-h-[240px] w-full" />
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-1.5 dark:bg-slate-900">
-        <p className="text-[10px] leading-tight text-slate-400 dark:text-slate-500">
+      <div className="flex flex-col gap-1 bg-slate-50 px-3 py-2 dark:bg-slate-900">
+        <p className="text-[10px] leading-tight text-slate-500 dark:text-slate-500">
           {onCoordinatesChange
-            ? 'Drag the pin to fine-tune coordinates. Pan, zoom, and tilt the map — not a surveyed boundary.'
-            : 'Pan, zoom, and tilt the map. Pin shows approximate geocoded location.'}
+            ? 'Drag the pin to fine-tune coordinates. Cyan dots are NYC subway stops.'
+            : 'Cyan dots are NYC subway stops. Pin shows approximate geocoded location.'}
         </p>
+        {nearestSubway ? (
+          <p className="text-[10px] font-medium leading-tight text-cyan-800 dark:text-cyan-400">
+            Nearest subway: {nearestSubway}
+          </p>
+        ) : null}
+        {subwayLoadError ? (
+          <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-400">
+            Subway stops could not be loaded.
+          </p>
+        ) : null}
       </div>
     </div>
   )
