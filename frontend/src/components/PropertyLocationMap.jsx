@@ -19,6 +19,7 @@ async function getMapboxGL() {
 const MICRO_MOVE_DEG = 0.00008
 const LARGE_JUMP_DEG = 0.003
 const MAP_APPEARANCE_KEY = 'propintel-map-appearance'
+const MAP_APPEARANCE_MODE_KEY = 'propintel-map-appearance-mode'
 
 const DAY_STYLE =
   import.meta.env.VITE_MAPBOX_STYLE_DAY ||
@@ -27,7 +28,16 @@ const DAY_STYLE =
 const NIGHT_STYLE =
   import.meta.env.VITE_MAPBOX_STYLE_NIGHT || 'mapbox://styles/mapbox/dark-v11'
 
-function readStoredMapAppearance(fallback) {
+function themeToMapAppearance(theme) {
+  return theme === 'dark' ? 'night' : 'day'
+}
+
+function readAppearanceMode() {
+  if (typeof window === 'undefined') return 'auto'
+  return window.localStorage.getItem(MAP_APPEARANCE_MODE_KEY) === 'manual' ? 'manual' : 'auto'
+}
+
+function readStoredManualAppearance(fallback) {
   if (typeof window === 'undefined') return fallback
   const saved = window.localStorage.getItem(MAP_APPEARANCE_KEY)
   if (saved === 'day' || saved === 'night') return saved
@@ -144,6 +154,7 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
   const prevLngLatRef = useRef(null)
   const subwayGeoRef = useRef(null)
   const mapAppearanceRef = useRef('day')
+  const appearanceModeRef = useRef('auto')
   const coordsRef = useRef({ lat, lng })
   const onCoordinatesChangeRef = useRef(onCoordinatesChange)
   onCoordinatesChangeRef.current = onCoordinatesChange
@@ -151,11 +162,16 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
 
   const [nearestSubway, setNearestSubway] = useState(null)
   const [subwayLoadError, setSubwayLoadError] = useState(false)
-  const [mapAppearance, setMapAppearance] = useState(() =>
-    readStoredMapAppearance(theme === 'dark' ? 'night' : 'day')
+  const [appearanceMode, setAppearanceMode] = useState(readAppearanceMode)
+  const [manualAppearance, setManualAppearance] = useState(() =>
+    readStoredManualAppearance(themeToMapAppearance(theme))
   )
 
+  const mapAppearance =
+    appearanceMode === 'auto' ? themeToMapAppearance(theme) : manualAppearance
+
   mapAppearanceRef.current = mapAppearance
+  appearanceModeRef.current = appearanceMode
 
   const token = import.meta.env.VITE_MAPBOX_TOKEN
   const hasCoords = lat != null && lng != null
@@ -216,17 +232,43 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
   )
 
   const toggleMapAppearance = useCallback(() => {
-    setMapAppearance((prev) => {
-      const next = prev === 'night' ? 'day' : 'night'
-      window.localStorage.setItem(MAP_APPEARANCE_KEY, next)
-      mapAppearanceRef.current = next
+    const next = mapAppearanceRef.current === 'night' ? 'day' : 'night'
 
-      const map = mapRef.current
-      if (map) applyMapAppearance(map, next)
+    window.localStorage.setItem(MAP_APPEARANCE_MODE_KEY, 'manual')
+    window.localStorage.setItem(MAP_APPEARANCE_KEY, next)
+    appearanceModeRef.current = 'manual'
+    mapAppearanceRef.current = next
 
-      return next
-    })
+    setAppearanceMode('manual')
+    setManualAppearance(next)
+
+    const map = mapRef.current
+    if (map) applyMapAppearance(map, next)
   }, [applyMapAppearance])
+
+  const followSiteTheme = useCallback(() => {
+    const next = themeToMapAppearance(theme)
+
+    window.localStorage.removeItem(MAP_APPEARANCE_MODE_KEY)
+    window.localStorage.removeItem(MAP_APPEARANCE_KEY)
+    appearanceModeRef.current = 'auto'
+    mapAppearanceRef.current = next
+
+    setAppearanceMode('auto')
+    setManualAppearance(next)
+
+    const map = mapRef.current
+    if (map) applyMapAppearance(map, next)
+  }, [theme, applyMapAppearance])
+
+  useEffect(() => {
+    mapAppearanceRef.current = mapAppearance
+
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+
+    applyMapAppearance(map, mapAppearance)
+  }, [mapAppearance, applyMapAppearance])
 
   // Create map once while coords exist.
   useEffect(() => {
@@ -361,16 +403,18 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
   if (!token || lat == null || lng == null) return null
 
   const isNightMap = mapAppearance === 'night'
+  const isAutoMode = appearanceMode === 'auto'
 
   return (
     <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="relative">
         <div ref={containerRef} className="h-[min(52vw,320px)] min-h-[240px] w-full" />
-        <button
-          type="button"
-          onClick={toggleMapAppearance}
-          className={[
-            'absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5',
+        <div className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
+          <button
+            type="button"
+            onClick={toggleMapAppearance}
+            className={[
+              'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5',
             'text-xs font-semibold shadow-md backdrop-blur-sm transition',
             'border-slate-200/90 bg-white/95 text-slate-800 hover:bg-white',
             'dark:border-slate-600/80 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-800',
@@ -390,7 +434,17 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
               Night
             </>
           )}
-        </button>
+          </button>
+          {!isAutoMode ? (
+            <button
+              type="button"
+              onClick={followSiteTheme}
+              className="rounded-md border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm hover:bg-white dark:border-slate-600/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Follow theme
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="flex flex-col gap-1 bg-slate-50 px-3 py-2 dark:bg-slate-900">
         <p className="text-[10px] leading-tight text-slate-500 dark:text-slate-500">
@@ -398,7 +452,8 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
             ? 'Drag the pin to fine-tune coordinates. Cyan dots are NYC subway stops.'
             : 'Cyan dots are NYC subway stops. Pin shows approximate geocoded location.'}
           {' '}
-          Map day/night is independent of site theme.
+          Map lighting:{' '}
+          {isAutoMode ? 'follows site theme (sun/moon in navbar).' : 'manual — use Follow theme to sync again.'}
         </p>
         {nearestSubway ? (
           <p className="text-[10px] font-medium leading-tight text-cyan-800 dark:text-cyan-400">
