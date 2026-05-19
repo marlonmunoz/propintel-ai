@@ -4,7 +4,7 @@ import SupportLink from '../components/SupportLink'
 
 export default function TermsOfService() {
   return (
-    <LegalPageShell title="Terms of Service" lastUpdated="May 5, 2026">
+    <LegalPageShell title="Terms of Service" lastUpdated="May 19, 2026">
       <LegalP>
         These Terms of Service (&ldquo;Terms&rdquo;) govern your use of the websites, applications, and
         services offered by PropIntel AI LLC (&ldquo;PropIntel,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;)
@@ -64,6 +64,19 @@ export default function TermsOfService() {
           We may offer free and paid features. If we charge fees, we will describe them before you
           commit. We may change or discontinue features of the Service; where required, we will provide
           notice.
+        </LegalP>
+      </div>
+      <div>
+        <LegalH2>Subscriptions & refunds</LegalH2>
+        <LegalP>
+          Paid subscriptions (for example, PropIntel AI Pro) are billed in advance on a recurring monthly
+          basis. Fees for the current billing period are non-refundable once charged. You may cancel your
+          subscription at any time through your account settings; cancellation takes effect at the end of
+          your then-current billing period, and you will retain access to paid features until that date. We
+          do not provide prorated refunds for unused time in a billing period. If you believe you were
+          charged in error or did not authorize a charge, email{' '}
+          <SupportLink subject="Billing or refund request" /> within seven (7) days of the charge and we
+          will review your request in good faith.
         </LegalP>
       </div>
       <div>
