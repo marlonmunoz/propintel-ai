@@ -1,26 +1,38 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
-import Home from './pages/Home'
-import Analyze from './pages/Analyze'
-import Portfolio from './pages/Portfolio'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import Profile from './pages/Profile'
-import AdminDashboard from './pages/AdminDashboard'
-import TermsOfService from './pages/TermsOfService'
-import PrivacyPolicy from './pages/PrivacyPolicy'
-import ValuationDisclaimer from './pages/ValuationDisclaimer'
-import Contact from './pages/Contact'
-import BillingSuccess from './pages/BillingSuccess'
-import BillingCanceled from './pages/BillingCanceled'
+
+// Each page is its own JS chunk — only downloaded when the user navigates to it.
+const Home = lazy(() => import('./pages/Home'))
+const Analyze = lazy(() => import('./pages/Analyze'))
+const Portfolio = lazy(() => import('./pages/Portfolio'))
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Profile = lazy(() => import('./pages/Profile'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const TermsOfService = lazy(() => import('./pages/TermsOfService'))
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
+const ValuationDisclaimer = lazy(() => import('./pages/ValuationDisclaimer'))
+const Contact = lazy(() => import('./pages/Contact'))
+const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
+const BillingCanceled = lazy(() => import('./pages/BillingCanceled'))
+
+function PageSpinner() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+    </div>
+  )
+}
 
 export default function App() {
   return (
     <AuthProvider>
-      <Routes>
+      <Suspense fallback={<PageSpinner />}>
+        <Routes>
         {/* Public */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -69,7 +81,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-      </Routes>
+        </Routes>
+      </Suspense>
     </AuthProvider>
   )
 }
