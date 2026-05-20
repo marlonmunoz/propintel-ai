@@ -16,7 +16,8 @@ async function getMapboxGL() {
 
 const MICRO_MOVE_DEG = 0.00008
 const LARGE_JUMP_DEG = 0.003
-const MAP_PITCH = 52
+// const MAP_PITCH = 52
+const MAP_PITCH = 30
 const MAP_BEARING = -17
 
 const MAP_STYLE =
