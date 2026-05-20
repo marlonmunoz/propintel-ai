@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import 'mapbox-gl/dist/mapbox-gl.css'
 import {
   findNearestSubwayStation,
   formatSubwayDistance,
@@ -9,6 +8,9 @@ import {
 let mapboxgl = null
 async function getMapboxGL() {
   if (mapboxgl) return mapboxgl
+  // Load CSS dynamically alongside the JS so it stays out of the critical chunk.
+  // Vite deduplicates repeated dynamic imports, so this only fires once.
+  await import('mapbox-gl/dist/mapbox-gl.css')
   const mod = await import('mapbox-gl')
   mapboxgl = mod.default
   return mapboxgl
