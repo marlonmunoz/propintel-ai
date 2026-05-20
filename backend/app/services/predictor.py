@@ -10,6 +10,15 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
+from backend.app.services.explainer import generate_explanation
+from backend.app.schemas.prediction import ProductionPredictionRequest
+from backend.app.services.bbl_feature_builder import (
+    build_spine_gold_features_from_bbl,
+    normalize_bbl,
+    parse_as_of_date,
+)
+from backend.app.services.model_registry import ModelRegistry, RegisteredModel
+
 # Must match REFERENCE_YEAR in train_spine_models.py so property_age at
 # inference equals the values seen during training.
 REFERENCE_YEAR = 2024
@@ -19,14 +28,6 @@ SUBWAY_CSV = BASE_DIR / "ml/data/external/nyc_subway_stations.csv"
 EARTH_RADIUS_KM = 6_371.0
 
 logger = logging.getLogger("propintel")
-from backend.app.services.explainer import generate_explanation
-from backend.app.schemas.prediction import ProductionPredictionRequest
-from backend.app.services.bbl_feature_builder import (
-    build_spine_gold_features_from_bbl,
-    normalize_bbl,
-    parse_as_of_date,
-)
-from backend.app.services.model_registry import ModelRegistry, RegisteredModel
 
 VALUATION_INTERVAL_MAE_MULTIPLIER = 1.0
 VALUATION_INTERVAL_NOTE = (
@@ -39,12 +40,24 @@ load_dotenv()
 
 # ─── Neighborhood stats helpers ───────────────────────────────────────────────
 
+@lru_cache(maxsize=32)
+def _load_neighborhood_stats_from_path(path: Path) -> dict:
+    """Read and cache a neighborhood stats JSON by absolute path.
+
+    Exceptions are intentionally not caught here — lru_cache must not store
+    a failed result, so error handling lives in the caller.
+    """
+    with open(path) as f:
+        return json.load(f)
+
+
 def _load_neighborhood_stats(model_key: str,
                               registry: ModelRegistry | None = None) -> dict:
     """Load the neighborhood stats JSON for a model key.
 
     Prefers the path recorded in the model metadata (spine models).
     Falls back to the legacy subtype_models directory.
+    Result is cached per path so disk is only read once per unique file.
     """
     if registry is not None:
         path = registry.stats_path_for(model_key)
@@ -52,8 +65,10 @@ def _load_neighborhood_stats(model_key: str,
         path = BASE_DIR / f"ml/artifacts/subtype_models/{model_key}_neighborhood_stats.json"
     if path is None or not path.exists():
         return {}
-    with open(path) as f:
-        return json.load(f)
+    try:
+        return _load_neighborhood_stats_from_path(path)
+    except Exception:
+        return {}
 
 
 def lookup_neighborhood_median(model_key: str, neighborhood: str,
@@ -86,7 +101,10 @@ def lookup_subway_dist_km(lat: float | None, lon: float | None) -> float | None:
     """Return distance (km) to the nearest NYC subway station via BallTree haversine."""
     if lat is None or lon is None:
         return None
-    stations = _load_subway_stations()
+    try:
+        stations = _load_subway_stations()
+    except Exception:
+        return None
     if stations is None:
         return None
     from sklearn.neighbors import BallTree
@@ -97,19 +115,31 @@ def lookup_subway_dist_km(lat: float | None, lon: float | None) -> float | None:
 
 @lru_cache(maxsize=1)
 def _load_subway_stations():
-    """Load and cache a BallTree over NYC subway station coordinates."""
+    """Load and cache a BallTree over NYC subway station coordinates.
+
+    Exceptions are intentionally not caught here — lru_cache must not store
+    a failed result, so error handling lives in the caller (lookup_subway_dist_km).
+    """
     if not SUBWAY_CSV.exists():
         return None
-    try:
-        from sklearn.neighbors import BallTree
-        df = pd.read_csv(SUBWAY_CSV, usecols=["GTFS Latitude", "GTFS Longitude"]).dropna()
-        coords = np.radians(df[["GTFS Latitude", "GTFS Longitude"]].values)
-        return BallTree(coords, metric="haversine")
-    except Exception:
-        return None
+    from sklearn.neighbors import BallTree
+    df = pd.read_csv(SUBWAY_CSV, usecols=["GTFS Latitude", "GTFS Longitude"]).dropna()
+    coords = np.radians(df[["GTFS Latitude", "GTFS Longitude"]].values)
+    return BallTree(coords, metric="haversine")
 
 
 # ─── Feature importance ───────────────────────────────────────────────────────
+
+@lru_cache(maxsize=32)
+def _load_feature_importance_from_path(path: Path, top_n: int) -> list[dict]:
+    """Read, sort, and cache feature importance CSV by absolute path + top_n.
+
+    Exceptions are intentionally not caught here — lru_cache must not store
+    a failed result, so error handling lives in the caller.
+    """
+    df = pd.read_csv(path).sort_values("importance", ascending=False).head(top_n)
+    return df[["feature", "importance"]].to_dict(orient="records")  # type: ignore[call-overload]
+
 
 def load_model_feature_importance(model_key: str, top_n: int = 3,
                                    registry: ModelRegistry | None = None) -> list[dict]:
@@ -122,8 +152,7 @@ def load_model_feature_importance(model_key: str, top_n: int = 3,
     if path is None:
         return []
     try:
-        df = pd.read_csv(path).sort_values("importance", ascending=False).head(top_n)
-        return df[["feature", "importance"]].to_dict(orient="records")
+        return _load_feature_importance_from_path(path, top_n)
     except Exception:
         return []
 
