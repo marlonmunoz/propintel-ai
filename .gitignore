@@ -296,3 +296,4 @@ frontend/.env.staging
 # Docs + generated files
 docs/PRICING_PLAN.md
 docs/PRICING_STRATEGY.md
+docs/IMPROVEMENTS.md 

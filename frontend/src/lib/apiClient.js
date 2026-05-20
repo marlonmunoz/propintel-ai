@@ -28,7 +28,7 @@ export async function getAuthHeaders(extra = {}, { allowApiKeyFallback = true } 
   if (token) {
     return { ...base, Authorization: `Bearer ${token}` }
   }
-  if (allowApiKeyFallback && import.meta.env.VITE_API_KEY) {
+  if (allowApiKeyFallback && import.meta.env.DEV && import.meta.env.VITE_API_KEY) {
     return { ...base, 'X-API-Key': import.meta.env.VITE_API_KEY }
   }
   return base
