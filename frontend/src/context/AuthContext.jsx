@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchProfile, fetchQuota } from '../services/authApi'
+import { setSessionToken } from '../lib/apiClient'
 
 const AuthContext = createContext(null)
 
@@ -12,6 +13,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      setSessionToken(session?.access_token ?? null)
       setSession(session)
       setLoading(false)
     })
@@ -19,6 +21,7 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionToken(session?.access_token ?? null)
       setSession(session)
     })
 

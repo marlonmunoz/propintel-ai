@@ -10,17 +10,32 @@ if (!API_BASE_URL) {
   )
 }
 
+// Module-level token cache — written by AuthContext via setSessionToken() on
+// every auth state change so getAuthHeaders() never needs to await getSession().
+let _cachedToken = null
+
+/**
+ * Called by AuthContext whenever the Supabase session changes.
+ * Keeps the module-level cache in sync without any async work at call time.
+ * @param {string | null} token
+ */
+export function setSessionToken(token) {
+  _cachedToken = token ?? null
+}
+
 /**
  * Headers for FastAPI calls.
  * @param {Record<string, string>} [extra]
  * @param {{ allowApiKeyFallback?: boolean }} [opts] - If false, no X-API-Key when logged out (use for /auth/*).
  */
 export async function getAuthHeaders(extra = {}, { allowApiKeyFallback = true } = {}) {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  const token = session?.access_token
+  // Read from cache first; fall back to a live getSession() only when the
+  // cache is empty (e.g. very first call before AuthContext has mounted).
+  let token = _cachedToken
+  if (!token) {
+    const { data: { session } } = await supabase.auth.getSession()
+    token = session?.access_token ?? null
+  }
   const base = {
     'Content-Type': 'application/json',
     ...extra,
