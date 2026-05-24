@@ -87,11 +87,23 @@ export async function parseApiErrorMessage(response, fallbackMessage = null) {
   return fallbackMessage ?? `Request failed (${code})`
 }
 
+// Gateway-level errors worth retrying — the request never reached the app.
+// 500 Internal Server Error is intentionally excluded: the server ran the
+// handler and it crashed, so retrying a POST could cause duplicate side-effects.
+const RETRYABLE_STATUS = new Set([502, 503, 504])
+const MAX_RETRIES = 1
+const RETRY_DELAY_MS = 800
+
 /**
  * JSON fetch helper: attaches auth, throws Error with best-effort message on failure.
  *
+ * - Pass `signal` (AbortSignal) to cancel in-flight requests on navigation /
+ *   component unmount.  Wire it from a `useEffect` cleanup AbortController.
+ * - Automatically retries once on transient 5xx errors (500/502/503/504)
+ *   after a short delay.  Retry is skipped when the signal has been aborted.
+ *
  * @param {string} path - e.g. `/analyze-property-v2` (no base URL)
- * @param {RequestInit & { json?: unknown, errorFallback?: string, authAllowApiKeyFallback?: boolean }} options
+ * @param {RequestInit & { json?: unknown, errorFallback?: string, authAllowApiKeyFallback?: boolean, signal?: AbortSignal }} options
  */
 export async function apiFetch(path, options = {}) {
   const {
@@ -99,6 +111,7 @@ export async function apiFetch(path, options = {}) {
     headers: headerOverrides,
     errorFallback,
     authAllowApiKeyFallback = true,
+    signal,
     ...rest
   } = options
   const headers = await getAuthHeaders(headerOverrides, {
@@ -111,23 +124,44 @@ export async function apiFetch(path, options = {}) {
     )
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const url = `${API_BASE_URL}${path}`
+  const init = {
     ...rest,
     headers,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
-  })
-
-  // 204 No Content — treat as success before `ok` (some test mocks set ok inconsistently).
-  if (response.status === 204) {
-    return undefined
+    signal,
   }
 
-  if (!response.ok) {
-    const message = await parseApiErrorMessage(response, errorFallback ?? null)
-    const err = new Error(message)
-    err.status = response.status
-    throw err
+  let lastResponse
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Do not retry if the caller has already aborted the request.
+    if (signal?.aborted) {
+      throw new DOMException('Request was aborted', 'AbortError')
+    }
+
+    lastResponse = await fetch(url, init)
+
+    // 204 No Content — treat as success immediately.
+    if (lastResponse.status === 204) {
+      return undefined
+    }
+
+    if (lastResponse.ok) {
+      return lastResponse.json()
+    }
+
+    // Retry on transient server errors — but not if this was the last attempt
+    // or if the status is not in our retryable set.
+    if (attempt < MAX_RETRIES && RETRYABLE_STATUS.has(lastResponse.status)) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+      continue
+    }
+
+    break
   }
 
-  return response.json()
+  const message = await parseApiErrorMessage(lastResponse, errorFallback ?? null)
+  const err = new Error(message)
+  err.status = lastResponse.status
+  throw err
 }

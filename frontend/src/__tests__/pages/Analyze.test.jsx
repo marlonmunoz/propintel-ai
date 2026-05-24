@@ -26,8 +26,10 @@ vi.mock('../../services/authApi', () => ({
 
 // ── analysisApi ──────────────────────────────────────────────────────────────
 const mockAnalyzeProperty = vi.hoisted(() => vi.fn())
+const mockFetchExplanation = vi.hoisted(() => vi.fn())
 vi.mock('../../services/analysisApi', () => ({
   analyzeProperty: mockAnalyzeProperty,
+  fetchExplanation: mockFetchExplanation,
 }))
 
 // ── propertiesApi ────────────────────────────────────────────────────────────
@@ -123,7 +125,9 @@ describe('Analyze page — quota pill', () => {
 
 // ── Quota-exceeded explanation card ──────────────────────────────────────────
 
-const QUOTA_EXHAUSTED_RESULT = {
+// Fast path (analyzeProperty) always returns explanation_status:'pending'.
+// The quota check happens in the second call (fetchExplanation).
+const FAST_RESULT = {
   valuation: {
     predicted_price: 1200000,
     market_price: 1250000,
@@ -146,19 +150,32 @@ const QUOTA_EXHAUSTED_RESULT = {
     global_context: ['Stable market'],
   },
   explanation: {
-    summary: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
-    opportunity: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
-    risks: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
+    summary: 'AI explanation loading…',
+    opportunity: 'N/A',
+    risks: 'N/A',
     recommendation: 'Hold',
     confidence: 'Low',
   },
-  explanation_status: 'quota_exhausted',
+  explanation_status: 'pending',
   metadata: { model_version: 'v2' },
 }
 
 describe('Analyze page — quota-exceeded explanation card', () => {
-  it('renders upgrade card instead of explanation panels when backend returns quota text', async () => {
-    mockAnalyzeProperty.mockResolvedValueOnce(QUOTA_EXHAUSTED_RESULT)
+  it('renders upgrade card instead of explanation panels when explanation call returns quota_exhausted', async () => {
+    // Phase 1: fast valuation call returns immediately (no LLM)
+    mockAnalyzeProperty.mockResolvedValueOnce(FAST_RESULT)
+    // Phase 2: explanation call returns quota_exhausted
+    mockFetchExplanation.mockResolvedValueOnce({
+      explanation: {
+        summary: 'Daily AI explanation quota reached. Upgrade to a paid plan for more analyses.',
+        opportunity: 'N/A',
+        risks: 'N/A',
+        recommendation: 'Hold',
+        confidence: 'Low',
+      },
+      explanation_status: 'quota_exhausted',
+    })
+
     renderAnalyze({ daily_limit: 10, used_today: 10, remaining: 0 })
     const user = userEvent.setup()
 
