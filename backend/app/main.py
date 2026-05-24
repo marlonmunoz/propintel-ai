@@ -320,8 +320,16 @@ def ready():
         failed.append("database")
 
     # ── ML artifacts ─────────────────────────────────────────────────────────
+    # Two-tier check:
+    #   1. Existence — verify every registered .pkl file is present on disk.
+    #   2. Deserialize — actually joblib.load() one small model to catch corrupt
+    #      artifacts that pass the existence check but would crash on first use.
+    #      We pick "one_family" as the probe because it is the smallest model;
+    #      if it loads cleanly the serialisation format is almost certainly valid
+    #      for the others too.
     try:
         from backend.app.services.model_registry import ModelRegistry
+        import joblib
         registry = ModelRegistry()
         missing = []
         for key, meta in registry._models.items():
@@ -333,7 +341,16 @@ def ready():
             checks["ml_artifacts"] = f"missing models: {missing}"
             failed.append("ml_artifacts")
         else:
-            checks["ml_artifacts"] = f"ok ({len(registry._models)} models found)"
+            # Probe-load the smallest model to catch corrupt .pkl files.
+            probe_key = "one_family" if "one_family" in registry._models else next(iter(registry._models))
+            probe_path = registry._resolve_artifact_path(registry._models[probe_key].artifact_path)
+            try:
+                joblib.load(probe_path)
+                checks["ml_artifacts"] = f"ok ({len(registry._models)} models found, probe '{probe_key}' loaded)"
+            except Exception as load_exc:
+                logger.error("Readiness ML probe-load failed for '%s': %s", probe_key, load_exc)
+                checks["ml_artifacts"] = f"corrupt artifact: '{probe_key}' failed to deserialize"
+                failed.append("ml_artifacts")
     except Exception as exc:
         logger.error("Readiness ML check failed: %s", exc)
         checks["ml_artifacts"] = "error loading model registry"

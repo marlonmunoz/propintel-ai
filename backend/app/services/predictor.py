@@ -25,6 +25,15 @@ from backend.app.services.model_registry import ModelRegistry, RegisteredModel
 REFERENCE_YEAR = 2024
 BASE_DIR = Path(__file__).resolve().parents[3]
 
+# Models whose training feature set includes comp + trend signals
+# (comp_count, comp_median_price, nbhd_median_l365, etc.).
+# one_family was not trained with comp/trend features — those keys must
+# not be added to its inference row so XGBoost's booster.feature_names
+# stays consistent with what it was trained on.
+_COMP_AWARE_MODELS = frozenset({
+    "two_family", "three_family", "condo_coop", "rentals_all",
+})
+
 SUBWAY_CSV = BASE_DIR / "ml/data/external/nyc_subway_stations.csv"
 EARTH_RADIUS_KM = 6_371.0
 
@@ -321,20 +330,25 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         "dof_tax_class":   np.nan,
         "pluto_bldgclass": np.nan,
 
-        # ── Sprint A: comp + trend features ───────────────────────────────────
-        # Default to NaN; populated below when (bbl, as_of_date) are provided
-        # and a precomputed snapshot exists in gold_comps_features /
-        # gold_market_trends.  XGBoost's median-imputer handles missing values
-        # so the model still produces a valid prediction without these signals.
-        "comp_count":          np.nan,
-        "comp_median_price":   np.nan,
-        "comp_median_ppsqft":  np.nan,
-        "comp_search_dist_km": np.nan,
-        "comp_recency_days":   np.nan,
-        "nbhd_median_l365":    np.nan,
-        "nbhd_yoy_growth":     np.nan,
-        "borough_yoy_growth":  np.nan,
     }
+
+    # ── Sprint A: comp + trend features ───────────────────────────────────────
+    # Only added for models that were trained with these signals.
+    # one_family's training set does not include comp/trend keys, so adding
+    # them here would introduce columns XGBoost never saw — safe but noisy.
+    # Populated below when (bbl, as_of_date) are provided and a precomputed
+    # snapshot exists in gold_comps_features / gold_market_trends.
+    if model_key in _COMP_AWARE_MODELS:
+        row.update({
+            "comp_count":          np.nan,
+            "comp_median_price":   np.nan,
+            "comp_median_ppsqft":  np.nan,
+            "comp_search_dist_km": np.nan,
+            "comp_recency_days":   np.nan,
+            "nbhd_median_l365":    np.nan,
+            "nbhd_yoy_growth":     np.nan,
+            "borough_yoy_growth":  np.nan,
+        })
 
     # ── Pooled rental flag ────────────────────────────────────────────────────
     # When the rentals_all model is active, the is_elevator feature is required.

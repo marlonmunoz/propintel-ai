@@ -251,6 +251,12 @@ def _record_event(
 ) -> bool:
     """
     Insert webhook audit row. Returns True if inserted, False if duplicate event id.
+
+    ``payload_summary`` must never contain the raw Stripe payload — it is a
+    small, hand-constructed dict of non-sensitive audit fields (event type,
+    customer ID, etc.).  Storing the full payload would embed card-brand /
+    last-4 and other PCI-adjacent data in our own Postgres table, which is
+    outside Stripe's PCI-compliance boundary for connected accounts.
     """
     row = BillingEvent(
         stripe_event_id=stripe_event_id,

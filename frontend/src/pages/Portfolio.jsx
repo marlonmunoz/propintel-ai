@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo } from 'react'
+import { Fragment, useState, useEffect, useMemo, useCallback } from 'react'
 import { BarChart3, ChevronDown, FileDown, FileSpreadsheet, Printer, Trash2, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
@@ -105,12 +105,7 @@ export default function Portfolio() {
     }
   }, [exportMenuPropertyId])
 
-  useEffect(() => {
-    fetchProperties()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only load; fetchProperties is stable enough for initial fetch
-  }, [])
-
-  async function fetchProperties() {
+  const fetchProperties = useCallback(async () => {
     setIsLoading(true)
     setError('')
     try {
@@ -122,7 +117,11 @@ export default function Portfolio() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [refreshProfile])
+
+  useEffect(() => {
+    fetchProperties()
+  }, [fetchProperties])
 
   async function handleDelete(id) {
     try {
