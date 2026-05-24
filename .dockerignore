@@ -19,6 +19,9 @@ ml/data/pluto_raw/
 ml/data/external/
 ml/data/processed/
 ml/data/features/
+# NOTE: ml/data/gold/ is intentionally NOT excluded — Gold parquet files
+# (~24 MB total) are the production inference data path for DOF/ACRIS/J-51
+# features (ML-CRIT-1 fix).  Do not add ml/data/gold/ here.
 
 # ML training code + experiment outputs — not needed at runtime
 ml/models/
