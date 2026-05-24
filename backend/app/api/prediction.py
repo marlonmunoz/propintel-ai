@@ -16,9 +16,13 @@ from backend.app.schemas.prediction import (
     ProductionPredictionResponse,
     ProductionAnalyzeRequest,
     ProductionAnalyzeResponse,
+    ExplanationRequest,
+    ExplanationResponse,
+    LLMExplanation,
 )
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
+from backend.app.services.explainer import generate_explanation
 from backend.app.core.auth import UserContext, get_current_user, get_current_user_with_role
 from backend.app.core.limiter import limiter
 from ml.inference.predict import (
@@ -172,13 +176,14 @@ def predict_property_price_v2(
 @router.post(
     "/analyze-property-v2",
     response_model=ProductionAnalyzeResponse,
-    summary="Analyze property investment potential (v2 production route)",
+    summary="Analyze property investment potential (v2 production route — fast path)",
     description=(
-        "Returns a production-style investment analysis for a property using the current standardized request schema. "
-        "This is the recommended analysis endpoint for frontend integration and demos. "
+        "Returns a fast production-style investment analysis without the LLM explanation. "
+        "The response includes valuation, investment score, drivers, and metadata immediately. "
+        "Fetch the AI explanation separately via POST /analyze-property-v2/explanation. "
         "The response is grouped into valuation, investment analysis, drivers, explanation, and metadata sections."
     ),
-    response_description="Production investment analysis response with grouped explainable sections."
+    response_description="Production investment analysis response (explanation_status='pending' until fetched separately)."
 )
 def analyze_property_v2(
     request: Request,
@@ -187,11 +192,52 @@ def analyze_property_v2(
     user: UserContext = Depends(get_current_user_with_role),
     db: Session = Depends(get_db),
 ):
+    # Skip the OpenAI call here — the frontend fires a second request to
+    # /analyze-property-v2/explanation so valuation results appear instantly.
     result = service.analyze(
         payload,
         user_id=user.user_id,
         role=user.role,
         auth_method=user.auth_method,
         db=db,
+        include_explanation=False,
     )
     return result
+
+
+@limiter.limit("10/minute")
+@router.post(
+    "/analyze-property-v2/explanation",
+    response_model=ExplanationResponse,
+    summary="Fetch AI explanation for a completed analysis (v2)",
+    description=(
+        "Calls OpenAI to generate the narrative explanation for a property analysis. "
+        "Accepts the pre-computed prediction values returned by POST /analyze-property-v2 "
+        "so the ML model does not need to run a second time. "
+        "Enforces the same per-user daily quota as the combined endpoint."
+    ),
+    response_description="LLM explanation and status flag.",
+)
+def analyze_property_v2_explanation(
+    request: Request,
+    payload: ExplanationRequest,
+    user: UserContext = Depends(get_current_user_with_role),
+    db: Session = Depends(get_db),
+) -> ExplanationResponse:
+    llm_data, status = generate_explanation(
+        {
+            "predicted_price":  payload.predicted_price,
+            "market_price":     payload.market_price,
+            "roi_estimate":     payload.roi_estimate,
+            "investment_score": payload.investment_score,
+            "top_drivers":      payload.top_drivers,
+        },
+        user_id=user.user_id,
+        role=user.role,
+        auth_method=user.auth_method,
+        db=db,
+    )
+    return ExplanationResponse(
+        explanation=LLMExplanation(**llm_data),
+        explanation_status=status,
+    )

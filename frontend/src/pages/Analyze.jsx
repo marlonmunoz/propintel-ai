@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, Crown, MapPin, Sparkles } from 'lucide-react'
-import { analyzeProperty } from '../services/analysisApi'
+import { analyzeProperty, fetchExplanation } from '../services/analysisApi'
 import { lookupHousing } from '../services/housingApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
 import { recordMapboxGeocodeUsage } from '../services/geocodeUsageApi'
@@ -268,6 +268,8 @@ export default function Analyze() {
   const [formErrors, setFormErrors] = useState({})
   const [analysisResult, setAnalysisResult] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isExplanationLoading, setIsExplanationLoading] = useState(false)
+  const [explanationError, setExplanationError] = useState('')
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [savedToPortfolio, setSavedToPortfolio] = useState(false)
@@ -466,7 +468,9 @@ export default function Analyze() {
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    setExplanationError('')
     setAnalysisResult(null)
+    setIsExplanationLoading(false)
 
     const validationErrors = validateForm(formData)
     if (Object.keys(validationErrors).length > 0) {
@@ -479,15 +483,41 @@ export default function Analyze() {
     setSavedToPortfolio(false)
     setSaveError('')
 
+    // ── Phase 1: fast ML valuation (no LLM) ────────────────────────────────
+    let fastResult = null
     try {
       const payload = buildPayload()
-      const result = await analyzeProperty(payload)
-      setAnalysisResult(result)
+      fastResult = await analyzeProperty(payload)
+      setAnalysisResult(fastResult)
       void refreshQuota()
     } catch (err) {
       setError(err.message || 'Something went wrong while analyzing.')
-    } finally {
       setIsLoading(false)
+      return
+    }
+    setIsLoading(false)
+
+    // ── Phase 2: AI explanation (async, valuation already visible) ──────────
+    // Fires immediately after valuation renders so the user sees results fast.
+    setIsExplanationLoading(true)
+    try {
+      const explResult = await fetchExplanation({
+        predicted_price:  fastResult.valuation.predicted_price,
+        market_price:     fastResult.valuation.market_price,
+        roi_estimate:     fastResult.investment_analysis.roi_estimate,
+        investment_score: fastResult.investment_analysis.investment_score,
+        top_drivers:      fastResult.drivers.top_drivers,
+      })
+      setAnalysisResult(prev => ({
+        ...prev,
+        explanation:        explResult.explanation,
+        explanation_status: explResult.explanation_status,
+      }))
+      void refreshQuota()
+    } catch {
+      setExplanationError('AI explanation could not be loaded. Please try again.')
+    } finally {
+      setIsExplanationLoading(false)
     }
   }
 
@@ -1135,12 +1165,38 @@ export default function Analyze() {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 animate-pulse text-amber-400 drop-shadow-[0_0_10px_rgba(252,211,77,0.35)]" />
+                    <Sparkles className={`h-5 w-5 text-amber-400 drop-shadow-[0_0_10px_rgba(252,211,77,0.35)] ${isExplanationLoading ? 'animate-pulse' : ''}`} />
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
                       AI Explanation
                     </h3>
+                    {isExplanationLoading && (
+                      <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
+                        Generating…
+                      </span>
+                    )}
                   </div>
-                  {isQuotaExhaustedExplanation(analysisResult) ? (
+
+                  {/* Loading skeleton while AI explanation is being fetched */}
+                  {isExplanationLoading ? (
+                    <div className="mt-4 animate-pulse grid gap-4 xl:grid-cols-3">
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70 space-y-3"
+                        >
+                          <div className="h-3 w-16 rounded bg-slate-200 dark:bg-slate-700" />
+                          <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+                          <div className="h-4 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
+                          <div className="h-4 w-4/6 rounded bg-slate-200 dark:bg-slate-700" />
+                          <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : explanationError ? (
+                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600 dark:border-rose-800/50 dark:bg-rose-950/20 dark:text-rose-400">
+                      {explanationError}
+                    </div>
+                  ) : isQuotaExhaustedExplanation(analysisResult) ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800/50 dark:bg-amber-950/20">
                       <div className="flex items-start gap-3">
                         <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />

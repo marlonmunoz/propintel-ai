@@ -530,8 +530,14 @@ class PredictionService:
         return out
 
     def analyze(self, request, *, user_id=None, role="user",
-                auth_method="jwt", db=None):
-        """Combines ML prediction with investment analysis and LLM explanation."""
+                auth_method="jwt", db=None, include_explanation=True):
+        """Combines ML prediction with investment analysis and optional LLM explanation.
+
+        Pass ``include_explanation=False`` to skip the OpenAI call entirely and
+        return immediately with ``explanation_status="pending"``.  The caller is
+        then responsible for fetching the explanation via a separate request to
+        ``POST /analyze-property-v2/explanation``.
+        """
         prediction_result = self.predict(request)
 
         predicted_price = prediction_result["predicted_price"]
@@ -594,19 +600,30 @@ class PredictionService:
             },
         ]
 
-        llm_explanation, explanation_status = generate_explanation(
-            {
-                "predicted_price":  predicted_price,
-                "market_price":     market_price,
-                "roi_estimate":     roi_estimate,
-                "investment_score": investment_score,
-                "top_drivers":      top_drivers,
-            },
-            user_id=user_id,
-            role=role,
-            auth_method=auth_method,
-            db=db,
-        )
+        if include_explanation:
+            llm_explanation, explanation_status = generate_explanation(
+                {
+                    "predicted_price":  predicted_price,
+                    "market_price":     market_price,
+                    "roi_estimate":     roi_estimate,
+                    "investment_score": investment_score,
+                    "top_drivers":      top_drivers,
+                },
+                user_id=user_id,
+                role=role,
+                auth_method=auth_method,
+                db=db,
+            )
+        else:
+            # Caller will fetch explanation separately — return a lightweight placeholder.
+            llm_explanation = {
+                "summary":        "AI explanation loading…",
+                "opportunity":    "N/A",
+                "risks":          "N/A",
+                "recommendation": "Hold",
+                "confidence":     "Low",
+            }
+            explanation_status = "pending"
 
         price_difference_pct = (
             (price_difference / market_price) * 100 if market_price > 0 else 0.0

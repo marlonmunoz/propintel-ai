@@ -451,11 +451,12 @@ class ProductionAnalyzeResponse(BaseModel):
         ...,
         description="LLM-generated narrative explanation of the opportunity and risk."
     )
-    explanation_status: Literal["ok", "quota_exhausted", "unavailable"] = Field(
+    explanation_status: Literal["ok", "quota_exhausted", "unavailable", "pending"] = Field(
         ...,
         description=(
             "How the narrative explanation was produced: successful LLM output (ok), "
-            "daily quota exhausted (quota_exhausted), or safe fallback (unavailable)."
+            "daily quota exhausted (quota_exhausted), safe fallback (unavailable), "
+            "or not yet fetched (pending — caller should request /explanation separately)."
         ),
     )
     metadata: ResponseMetadata = Field(
@@ -543,6 +544,90 @@ class ProductionAnalyzeRequest(ProductionPredictionRequest):
                 "bbl": "3012340056",
                 "as_of_date": "2025-06-15",
                 "market_price": 1250000.0
+            }
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# Explanation split — used by POST /analyze-property-v2/explanation
+# ---------------------------------------------------------------------------
+
+class ExplanationRequest(BaseModel):
+    """Pre-computed prediction values forwarded from the fast analysis response.
+
+    The caller runs ``POST /analyze-property-v2`` first (no LLM), then sends
+    these values here so the backend can call OpenAI without re-running the ML
+    model a second time.
+    """
+
+    predicted_price: float = Field(
+        ...,
+        description="Model-estimated market value returned by the fast analysis call."
+    )
+    market_price: float = Field(
+        ...,
+        gt=0,
+        description="Listing or asking price provided in the original analysis request."
+    )
+    roi_estimate: float = Field(
+        ...,
+        description="ROI estimate returned by the fast analysis call."
+    )
+    investment_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Investment score (0–100) returned by the fast analysis call."
+    )
+    top_drivers: list[str] = Field(
+        ...,
+        description="Top feature drivers returned by the fast analysis call."
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "predicted_price": 1185000.0,
+                "market_price": 1250000.0,
+                "roi_estimate": -5.2,
+                "investment_score": 38,
+                "top_drivers": [
+                    "Brooklyn location meaningfully supports property value",
+                    "Two-family dwelling classification is an important pricing factor",
+                    "Gross square footage strongly influences valuation",
+                ],
+            }
+        }
+    }
+
+
+class ExplanationResponse(BaseModel):
+    """Response from POST /analyze-property-v2/explanation."""
+
+    explanation: LLMExplanation = Field(
+        ...,
+        description="LLM-generated narrative explanation of the opportunity and risk."
+    )
+    explanation_status: Literal["ok", "quota_exhausted", "unavailable"] = Field(
+        ...,
+        description=(
+            "How the narrative explanation was produced: successful LLM output (ok), "
+            "daily quota exhausted (quota_exhausted), or safe fallback (unavailable)."
+        ),
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "explanation": {
+                    "summary": "The property appears slightly overpriced relative to model-estimated value.",
+                    "opportunity": "If acquired below asking price, the valuation gap may create a better entry point.",
+                    "risks": "Current asking price reduces margin for upside.",
+                    "recommendation": "Hold",
+                    "confidence": "Medium",
+                },
+                "explanation_status": "ok",
             }
         }
     }
