@@ -32,7 +32,21 @@ SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
 # Same project URL as frontend VITE_SUPABASE_URL (e.g. https://xxxx.supabase.co).
 # Required when Supabase signs access tokens with asymmetric keys (RS256 / ES256).
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").rstrip("/")
+
+# ---------------------------------------------------------------------------
+# API key configuration
+# ---------------------------------------------------------------------------
+# Legacy key — kept for backward compatibility; treated as ADMIN_API_KEY.
+# Prefer setting ADMIN_API_KEY + SERVICE_API_KEY going forward.
 API_KEY: str = os.getenv("API_KEY", "")
+
+# ADMIN_API_KEY: full admin access.  Falls back to legacy API_KEY if not set
+# so existing Railway deployments continue to work without changes.
+ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "") or API_KEY
+
+# SERVICE_API_KEY: authenticated but NOT admin.  Safe to hand to CI scripts,
+# external integrations, or teammates — rotation doesn't affect admin access.
+SERVICE_API_KEY: str = os.getenv("SERVICE_API_KEY", "")
 
 _API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -186,17 +200,28 @@ async def get_current_user(
 
     # ── API-key path ──────────────────────────────────────────────────────────
     if api_key:
-        if not API_KEY or not secrets.compare_digest(api_key, API_KEY):
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing API key.",
+        # Admin key — full access (ADMIN_API_KEY, or legacy API_KEY).
+        if ADMIN_API_KEY and secrets.compare_digest(api_key, ADMIN_API_KEY):
+            logger.warning("admin_api_key_used | telemetry=true")
+            return UserContext(
+                user_id=None,
+                email=None,
+                auth_method="api_key",
+                role="admin",
+                user_metadata=None,
             )
-        return UserContext(
-            user_id=None,
-            email=None,
-            auth_method="api_key",
-            role="admin",
-            user_metadata=None,
+        # Service key — authenticated but no admin privileges.
+        if SERVICE_API_KEY and secrets.compare_digest(api_key, SERVICE_API_KEY):
+            return UserContext(
+                user_id=None,
+                email=None,
+                auth_method="api_key_service",
+                role="user",
+                user_metadata=None,
+            )
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key.",
         )
 
     # ── Nothing provided ─────────────────────────────────────────────────────
@@ -248,8 +273,10 @@ async def require_admin(
     db: Session = Depends(get_db),
 ) -> UserContext:
     """
-    Allow only app admins — same rules as is_app_admin (API key, ADMIN_USER_IDS,
-    or profiles.role='admin'). Keeps /auth/me and admin-only routes consistent.
+    Allow only app admins — same rules as is_app_admin (ADMIN_API_KEY,
+    ADMIN_USER_IDS, or profiles.role='admin').
+    SERVICE_API_KEY callers (auth_method='api_key_service') are explicitly
+    excluded — they are authenticated but not admin.
     """
     if user.auth_method == "api_key":
         return user
@@ -291,7 +318,8 @@ async def get_current_user_with_role(
 def is_app_admin(db: Session, user: UserContext) -> bool:
     """
     True for:
-    1. API-key callers (service / CI).
+    1. Admin API-key callers (auth_method='api_key').
+       Service key callers (auth_method='api_key_service') are NOT admin.
     2. JWT users whose UUID is in ADMIN_USER_IDS env var — checked first,
        no DB round-trip, no RLS dependency.
     3. JWT users with profiles.role == 'admin' in the DB (fallback).

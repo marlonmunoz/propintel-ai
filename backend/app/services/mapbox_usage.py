@@ -44,7 +44,7 @@ def is_monthly_cap_exceeded(db: Session) -> bool:
 def usage_user_key(auth_method: str, user_id: str | None) -> str | None:
     if auth_method == "jwt" and user_id and user_id.strip():
         return user_id.strip()
-    if auth_method == "api_key":
+    if auth_method in ("api_key", "api_key_service"):
         return "api_key:service"
     return None
 
@@ -60,7 +60,7 @@ def increment_mapbox_geocode_requests(db: Session, user_key: str) -> None:
             .values(call_count=MapboxUsage.call_count + 1)
         )
         result = db.execute(upd)
-        if result.rowcount == 1:
+        if result.rowcount == 1:  # type: ignore[union-attr]
             db.commit()
             return
 
@@ -79,7 +79,7 @@ def increment_mapbox_geocode_requests(db: Session, user_key: str) -> None:
             # Another request inserted first; retry atomic update.
             db.rollback()
             retry = db.execute(upd)
-            if retry.rowcount == 1:
+            if retry.rowcount == 1:  # type: ignore[union-attr]
                 db.commit()
                 return
             db.rollback()

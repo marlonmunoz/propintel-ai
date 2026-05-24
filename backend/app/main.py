@@ -122,7 +122,10 @@ if _SENTRY_DSN:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from backend.app.core.auth import SUPABASE_URL, SUPABASE_JWT_SECRET, API_KEY
+    from backend.app.core.auth import (
+        SUPABASE_URL, SUPABASE_JWT_SECRET,
+        API_KEY, ADMIN_API_KEY, SERVICE_API_KEY,
+    )
 
     if not SUPABASE_URL and not SUPABASE_JWT_SECRET:
         logger.warning(
@@ -137,11 +140,21 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Auth mode: HS256 + RS256/ES256 JWKS both configured")
 
-    if not API_KEY:
+    if not ADMIN_API_KEY:
         logger.warning(
-            "AUTH CONFIG WARNING: API_KEY is not set. "
-            "X-API-Key authentication is disabled."
+            "AUTH CONFIG WARNING: Neither ADMIN_API_KEY nor API_KEY is set. "
+            "X-API-Key admin authentication is disabled."
         )
+    elif API_KEY and not os.getenv("ADMIN_API_KEY"):
+        logger.warning(
+            "API_KEY is set but ADMIN_API_KEY is not — using API_KEY as admin key "
+            "(backward compat). Set ADMIN_API_KEY to silence this warning."
+        )
+    else:
+        logger.info("Admin API key configured")
+
+    if SERVICE_API_KEY:
+        logger.info("Service API key configured (limited access, no admin)")
 
     # Log accepted CORS origins so misconfiguration is immediately visible in logs.
     _cors_default = "http://localhost:5174,http://127.0.0.1:5174"
@@ -186,6 +199,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        # Pure JSON API — no scripts, styles, or frames should load from our
+        # responses.  frame-ancestors duplicates X-Frame-Options for browsers
+        # that honour CSP level 2+ instead of the legacy header.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'"
+        )
         return response
 
 
@@ -220,7 +239,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_origin_regex=_cors_origin_regex or None,
-    allow_credentials=True,
+    # Auth uses Authorization: Bearer header — no cookies are involved.
+    # False narrows the CORS attack surface without any functional impact.
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     # Explicit header allowlist — wildcards are forbidden when allow_credentials=True.
     # sentry-trace / baggage: W3C / Sentry distributed tracing headers sent by the
