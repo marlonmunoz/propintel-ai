@@ -250,6 +250,15 @@ function validateForm(formData) {
     errors.market_price = 'Market price must be greater than 0.'
   }
 
+  if (RENTAL_CLASSES.has(formData.building_class)) {
+    const totalUnits = Number(formData.total_units)
+    if (!formData.total_units) {
+      errors.total_units = 'Total units is required for rental valuation.'
+    } else if (Number.isNaN(totalUnits) || totalUnits < 1 || !Number.isInteger(totalUnits)) {
+      errors.total_units = 'Total units must be a whole number of 1 or more.'
+    }
+  }
+
   return errors
 }
 
@@ -796,8 +805,8 @@ export default function Analyze() {
                     <FieldError message={formErrors.land_sqft} />
                   </div>
 
-                  {/* Total units — shown for all building types but highlighted for
-                      rental classes where it's used to reconstruct the full price */}
+                  {/* Total units — optional for all types; required for rental
+                      classes where it's used by the dedicated rental model */}
                   <div>
                     <label htmlFor="total_units" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
                       Total Units
@@ -814,8 +823,9 @@ export default function Analyze() {
                       value={formData.total_units}
                       onChange={handleChange}
                       placeholder="e.g. 12"
-                      className={getInputClasses(false)}
+                      className={getInputClasses(!!formErrors.total_units)}
                     />
+                    <FieldError message={formErrors.total_units} />
                   </div>
 
                   <div>
