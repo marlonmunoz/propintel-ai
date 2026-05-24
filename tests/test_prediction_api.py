@@ -55,6 +55,10 @@ def test_predict_price_endpoint(monkeypatch):
     assert "model_version" in data
     assert isinstance(data["predicted_price"], float)
     assert data["model_version"] == "xgboost_residential_nyc_v1"
+    # Route is deprecated — verify standard deprecation signal headers are present.
+    assert response.headers.get("deprecation") == "true"
+    assert "sunset" in response.headers
+    assert "successor-version" in response.headers.get("link", "")
 
 
 def test_analyze_property_endpoint(monkeypatch):
@@ -139,6 +143,9 @@ def test_analyze_property_endpoint(monkeypatch):
     assert isinstance(data["explanation_factors"], list)
     assert len(data["explanation_factors"]) > 0
     assert data["model_version"] == "xgboost_residential_nyc_v1"
+    assert response.headers.get("deprecation") == "true"
+    assert "sunset" in response.headers
+    assert "successor-version" in response.headers.get("link", "")
 
 
 def test_public_predict_endpoint(monkeypatch):
@@ -172,6 +179,9 @@ def test_public_predict_endpoint(monkeypatch):
     data = response.json()
     assert data["predicted_price"] == 611081.6875
     assert data["model_version"] == "xgboost_residential_nyc_v1"
+    assert response.headers.get("deprecation") == "true"
+    assert "sunset" in response.headers
+    assert "successor-version" in response.headers.get("link", "")
 
 
 def test_public_analyze_endpoint(monkeypatch):
@@ -255,6 +265,9 @@ def test_public_analyze_endpoint(monkeypatch):
     assert isinstance(data["explanation_factors"], list)
     assert len(data["explanation_factors"]) > 0
     assert data["model_version"] == "xgboost_residential_nyc_v1"
+    assert response.headers.get("deprecation") == "true"
+    assert "sunset" in response.headers
+    assert "successor-version" in response.headers.get("link", "")
     
 def test_feature_importance_endpoint(monkeypatch):
     def mock_load_feature_importance(top_n: int = 10):
