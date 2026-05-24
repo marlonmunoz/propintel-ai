@@ -292,10 +292,38 @@ export default function Portfolio() {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Loading — skeleton cards matching real property card shape */}
         {isLoading && (
-          <div className="flex items-center justify-center py-20 text-slate-400">
-            Loading…
+          <div className="space-y-4" aria-busy="true" aria-label="Loading portfolio">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/60"
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  {/* Address + badge */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-7 w-7 flex-shrink-0 rounded-lg bg-slate-200 dark:bg-slate-700" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-48 rounded bg-slate-200 dark:bg-slate-700" />
+                      <div className="flex gap-2">
+                        <div className="h-3 w-16 rounded-full bg-slate-200 dark:bg-slate-700" />
+                        <div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-700" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Metric columns */}
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
+                    {[0, 1, 2, 3].map((j) => (
+                      <div key={j} className="space-y-1.5">
+                        <div className="h-3 w-16 rounded bg-slate-200 dark:bg-slate-700" />
+                        <div className="h-5 w-20 rounded bg-slate-200 dark:bg-slate-700" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

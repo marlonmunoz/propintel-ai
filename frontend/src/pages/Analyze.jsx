@@ -955,8 +955,39 @@ export default function Analyze() {
             ) : null}
 
             {isLoading ? (
-              <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
-                Loading analysis...
+              <div className="mt-6 animate-pulse space-y-4" aria-busy="true" aria-label="Loading analysis">
+                {/* Stat card row */}
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                      <div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-700" />
+                      <div className="mt-3 h-7 w-32 rounded bg-slate-200 dark:bg-slate-700" />
+                    </div>
+                  ))}
+                </div>
+                {/* Valuation range bar */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="h-3 w-40 rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="mt-3 h-8 w-56 rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="mt-2 h-3 w-72 rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+                {/* Score + explanation */}
+                <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                    <div className="h-3 w-28 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="mt-4 h-14 w-16 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="mt-4 h-6 w-24 rounded-full bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+                    <div className="h-3 w-32 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-4 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-4 w-4/6 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="mt-1 h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-4 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                </div>
               </div>
             ) : null}
 
