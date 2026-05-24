@@ -10,6 +10,7 @@ import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import DealLabelBadge from '../components/DealLabelBadge'
 import PropertyLocationMap from '../components/PropertyLocationMap'
+import buildingClassData from '../constants/buildingClasses.json'
 
 const boroughOptions = [
   'Bronx',
@@ -19,17 +20,9 @@ const boroughOptions = [
   'Staten Island',
 ]
 
-const buildingClassOptions = [
-  { label: 'Single Family Home',          value: '01 ONE FAMILY DWELLINGS' },
-  { label: 'Two Family Home',             value: '02 TWO FAMILY DWELLINGS' },
-  { label: 'Three Family Home',           value: '03 THREE FAMILY DWELLINGS' },
-  { label: 'Rental — Walkup',             value: '07 RENTALS - WALKUP APARTMENTS' },
-  { label: 'Rental — Elevator Building',  value: '08 RENTALS - ELEVATOR APARTMENTS' },
-  { label: 'Co-op — Walkup',              value: '09 COOPS - WALKUP APARTMENTS' },
-  { label: 'Co-op — Elevator Building',   value: '10 COOPS - ELEVATOR APARTMENTS' },
-  { label: 'Condo — Elevator Building',   value: '13 CONDOS - ELEVATOR APARTMENTS' },
-  { label: 'Condo — Walkup',              value: '12 CONDOS - WALKUP APARTMENTS' },
-]
+// Derived from the canonical JSON — single source of truth shared with the
+// backend contract test (tests/test_building_class_contract.py).
+const buildingClassOptions = buildingClassData.map(({ value, label }) => ({ value, label }))
 
 const initialForm = {
   borough: '',
@@ -44,10 +37,9 @@ const initialForm = {
   market_price: '',
 }
 
-const RENTAL_CLASSES = new Set([
-  '07 RENTALS - WALKUP APARTMENTS',
-  '08 RENTALS - ELEVATOR APARTMENTS',
-])
+const RENTAL_CLASSES = new Set(
+  buildingClassData.filter((c) => c.is_rental).map((c) => c.value)
+)
 
 /** v2 API sets explanation_status; older responses only repeated quota text in summary. */
 function isQuotaExhaustedExplanation(result) {
