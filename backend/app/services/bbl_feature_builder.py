@@ -59,6 +59,15 @@ DEED_TYPES = {
 MORTGAGE_TYPES = {"MTGE", "AGMT"}
 
 
+def gold_data_available() -> bool:
+    """Return True when all three Gold feature parquets are present on disk.
+
+    Used by PredictionService to surface an operational warning when a deploy
+    is missing the Gold files (ML-CRIT-1 regression guard).
+    """
+    return GOLD_DOF_FEATURES.exists() and GOLD_ACRIS_FEATURES.exists() and GOLD_J51_FEATURES.exists()
+
+
 def normalize_bbl(bbl: str | int | None) -> str | None:
     """Return canonical string BBL (digits only), or None if invalid."""
     if bbl is None:

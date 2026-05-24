@@ -14,6 +14,7 @@ from backend.app.services.explainer import generate_explanation
 from backend.app.schemas.prediction import ProductionPredictionRequest
 from backend.app.services.bbl_feature_builder import (
     build_spine_gold_features_from_bbl,
+    gold_data_available,
     normalize_bbl,
     parse_as_of_date,
 )
@@ -432,6 +433,13 @@ class PredictionService:
                 columns=all_features,
             )
 
+            if not gold_data_available():
+                warnings.append(
+                    "gold_features_unavailable: DOF/ACRIS/J-51 Gold parquet files are missing "
+                    "from this deployment. DOF, ACRIS, and J-51 features will be NaN-imputed, "
+                    "reducing prediction accuracy. Ensure ml/data/gold/ is included in the "
+                    "Docker image (see .dockerignore)."
+                )
             if join_meta.get("bbl_join_status") == "incomplete":
                 warnings.append(
                     "Both bbl and as_of_date are required together for roll-aligned "
@@ -443,8 +451,9 @@ class PredictionService:
                 )
             elif join_meta.get("bbl_join_status") == "no_data":
                 warnings.append(
-                    f"No Silver/PLUTO rows found for BBL {join_meta.get('bbl_normalized')!r} "
-                    "at the given as_of_date (local data may be missing or BBL not in extract)."
+                    f"No Gold feature rows found for BBL {join_meta.get('bbl_normalized')!r} "
+                    "at the given as_of_date. This BBL may not be in the training extract — "
+                    "DOF/ACRIS/J-51 features will be NaN-imputed for this property."
                 )
         else:
             # ── Legacy model path (global model, v1/v2 subtype models) ────────
