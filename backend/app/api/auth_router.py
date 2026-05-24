@@ -77,11 +77,12 @@ def get_me(
         if profile.display_name is None:
             dn = _display_name_from_user_metadata(user.user_metadata)
             if dn:
-                profile.display_name = dn
+                profile.display_name = dn  # type: ignore[assignment]
                 changed = True
         # Auto-promote role in DB when ADMIN_USER_IDS matches but DB still says 'user'.
-        if is_app_admin(db, user) and (profile.role or "user").strip().lower() != "admin":
-            profile.role = "admin"
+        # Pass the already-loaded profile to avoid a redundant DB round-trip.
+        if is_app_admin(db, user, profile=profile) and (profile.role or "user").strip().lower() != "admin":
+            profile.role = "admin"  # type: ignore[assignment]
             changed = True
         if changed:
             try:
@@ -91,13 +92,14 @@ def get_me(
                 raise
             db.refresh(profile)
 
-    effective_role = "admin" if is_app_admin(db, user) else (profile.role or "user").strip().lower()
+    # Reuse the profile we already have — no extra query needed.
+    effective_role = "admin" if is_app_admin(db, user, profile=profile) else (profile.role or "user").strip().lower()
     return UserProfileResponse(
-        user_id=profile.id,
-        email=profile.email,
-        display_name=profile.display_name,
+        user_id=profile.id,  # type: ignore[arg-type]
+        email=profile.email,  # type: ignore[arg-type]
+        display_name=profile.display_name,  # type: ignore[arg-type]
         role=effective_role,
-        marketing_opt_in=profile.marketing_opt_in,
+        marketing_opt_in=profile.marketing_opt_in,  # type: ignore[arg-type]
     )
 
 
@@ -133,24 +135,24 @@ def patch_me(
 
     if body.display_name is not None:
         stripped = body.display_name.strip()
-        profile.display_name = stripped if stripped else None
+        profile.display_name = stripped if stripped else None  # type: ignore[assignment]
 
     if body.marketing_opt_in is not None:
-        profile.marketing_opt_in = body.marketing_opt_in
+        profile.marketing_opt_in = body.marketing_opt_in  # type: ignore[assignment]
 
-    if profile.email != (user.email or "") and user.email:
-        profile.email = user.email
+    if profile.email != (user.email or "") and user.email:  # type: ignore[operator]
+        profile.email = user.email  # type: ignore[assignment]
 
     db.commit()
     db.refresh(profile)
 
-    effective_role = "admin" if is_app_admin(db, user) else (profile.role or "user").strip().lower()
+    effective_role = "admin" if is_app_admin(db, user, profile=profile) else (profile.role or "user").strip().lower()
     return UserProfileResponse(
-        user_id=profile.id,
-        email=profile.email,
-        display_name=profile.display_name,
+        user_id=profile.id,  # type: ignore[arg-type]
+        email=profile.email,  # type: ignore[arg-type]
+        display_name=profile.display_name,  # type: ignore[arg-type]
         role=effective_role,
-        marketing_opt_in=profile.marketing_opt_in,
+        marketing_opt_in=profile.marketing_opt_in,  # type: ignore[arg-type]
     )
 
 
@@ -185,14 +187,14 @@ def get_quota(
             .first()
         )
         if row:
-            used_today = row.call_count
+            used_today = row.call_count  # type: ignore[assignment]
 
-    remaining = None if limit is None else max(0, limit - used_today)
+    remaining = None if limit is None else max(0, limit - used_today)  # type: ignore[type-var]
 
     return QuotaResponse(
         role=user.role,
         daily_limit=limit,
-        used_today=used_today,
+        used_today=used_today,  # type: ignore[arg-type]
         remaining=remaining,
         resets_at=resets_at,
     )

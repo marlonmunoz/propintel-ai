@@ -18,7 +18,7 @@ logger = logging.getLogger("propintel")
 
 import jwt
 from jwt import PyJWKClient
-from fastapi import Depends, Header, HTTPException, Security, status
+from fastapi import Depends, Header, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -261,6 +261,26 @@ def get_profile_for_jwt_user(db: Session, user: UserContext):
     return None
 
 
+# Sentinel used by _get_or_cache_profile to distinguish "not cached yet"
+# from a legitimate None (user has no profile row).
+_PROFILE_NOT_CACHED = object()
+
+
+def _get_or_cache_profile(request: Request, db: Session, user: "UserContext"):
+    """Return the profile for a JWT user, using request.state as a per-request cache.
+
+    The first call within a request hits the DB; every subsequent call within
+    the same request (e.g. get_current_user_with_role, is_app_admin, route
+    handler) returns the cached object without an extra query.
+    """
+    cached = getattr(request.state, "_cached_profile", _PROFILE_NOT_CACHED)
+    if cached is not _PROFILE_NOT_CACHED:
+        return cached  # type: ignore[return-value]
+    profile = get_profile_for_jwt_user(db, user)
+    request.state._cached_profile = profile
+    return profile
+
+
 def _profile_is_admin(profile) -> bool:
     return profile is not None and (profile.role or "").strip().lower() == "admin"
 
@@ -292,6 +312,7 @@ async def require_admin(
 
 
 async def get_current_user_with_role(
+    request: Request,
     user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UserContext:
@@ -303,19 +324,22 @@ async def get_current_user_with_role(
     env-var first (no DB round-trip), then profiles.role as fallback.  This
     means admins and paid-tier users get the correct quota treatment on
     /analyze-property-v2 without any extra route changes.
+
+    The profile row is loaded at most once per request via request.state cache
+    and passed to is_app_admin to avoid a second round-trip.
     """
     if user.auth_method == "jwt":
-        if is_app_admin(db, user):
+        profile = _get_or_cache_profile(request, db, user)
+        if is_app_admin(db, user, profile=profile):
             user.role = "admin"
         else:
-            profile = get_profile_for_jwt_user(db, user)
-            role_val = str(profile.role).strip().lower() if profile is not None else ""
+            role_val = str(profile.role).strip().lower() if profile is not None else ""  # type: ignore[union-attr]
             if role_val:
                 user.role = role_val
     return user
 
 
-def is_app_admin(db: Session, user: UserContext) -> bool:
+def is_app_admin(db: Session, user: UserContext, profile=None) -> bool:
     """
     True for:
     1. Admin API-key callers (auth_method='api_key').
@@ -323,6 +347,9 @@ def is_app_admin(db: Session, user: UserContext) -> bool:
     2. JWT users whose UUID is in ADMIN_USER_IDS env var — checked first,
        no DB round-trip, no RLS dependency.
     3. JWT users with profiles.role == 'admin' in the DB (fallback).
+
+    Pass ``profile`` when you have already loaded the profile row for this
+    request — avoids a redundant DB query.
     """
     if user.auth_method == "api_key":
         return True
@@ -340,6 +367,6 @@ def is_app_admin(db: Session, user: UserContext) -> bool:
     if admin_ids and user.user_id.lower() in admin_ids:
         return True
 
-    # ── DB fallback ──────────────────────────────────────────────────────────
-    profile = get_profile_for_jwt_user(db, user)
-    return _profile_is_admin(profile)
+    # ── DB fallback — use pre-loaded profile to skip a round-trip ────────────
+    p = profile if profile is not None else get_profile_for_jwt_user(db, user)
+    return _profile_is_admin(p)

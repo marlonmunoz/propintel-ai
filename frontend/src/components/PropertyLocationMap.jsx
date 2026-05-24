@@ -126,6 +126,10 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
 
   const [nearestSubway, setNearestSubway] = useState(null)
   const [subwayLoadError, setSubwayLoadError] = useState(false)
+  // Defer Mapbox boot until the container is near the viewport.
+  // IntersectionObserver fires as soon as the element is within 150px of the
+  // screen edge, giving the map a head-start before the user actually sees it.
+  const [isVisible, setIsVisible] = useState(false)
 
   const token = import.meta.env.VITE_MAPBOX_TOKEN
   const hasCoords = lat != null && lng != null
@@ -160,10 +164,32 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
     [syncSubwayData]
   )
 
-  // Create map once while coords exist.
+  // One-shot observer: mark visible once the container is within 150px of
+  // the viewport. Disconnects immediately so it never fires again.
   useEffect(() => {
-    if (!token || !hasCoords) {
-      if (mapRef.current) {
+    const el = containerRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsVisible(true) // fallback for environments without IntersectionObserver
+      return
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '150px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, []) // run once after mount
+
+  // Create map once while coords exist and container is near the viewport.
+  useEffect(() => {
+    if (!token || !hasCoords || !isVisible) {
+      // Only tear down if the map was already created (e.g. coords cleared after init).
+      if (mapRef.current && (!token || !hasCoords)) {
         mapRef.current.remove()
         mapRef.current = null
         markerRef.current = null
@@ -236,7 +262,7 @@ export default function PropertyLocationMap({ lat, lng, onCoordinatesChange }) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, hasCoords])
+  }, [token, hasCoords, isVisible])
 
   // Recentre when coordinates change (geocode / preset / drag sync).
   useEffect(() => {
