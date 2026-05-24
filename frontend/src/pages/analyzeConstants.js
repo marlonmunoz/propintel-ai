@@ -88,6 +88,13 @@ export const samplePresets = {
   },
 }
 
+export function getScoreCategory(score) {
+  if (score >= 80) return { label: 'Strong',   classes: 'border-lime-500/30 bg-lime-500/15 text-lime-700 dark:text-lime-300' }
+  if (score >= 60) return { label: 'Moderate', classes: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' }
+  if (score >= 40) return { label: 'Cautious', classes: 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300' }
+  return            { label: 'Weak',     classes: 'border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-300' }
+}
+
 export function validateForm(formData) {
   const errors = {}
 

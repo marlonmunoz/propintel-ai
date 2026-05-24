@@ -9,8 +9,7 @@ import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import AnalyzeForm from '../components/AnalyzeForm'
 import AnalyzeResults from '../components/AnalyzeResults'
-import { getScoreCategory } from '../components/AnalyzeResults'
-import { initialForm, samplePresets, validateForm } from './analyzeConstants'
+import { initialForm, samplePresets, getScoreCategory, validateForm } from './analyzeConstants'
 
 export default function Analyze() {
   const { quota, refreshQuota } = useAuth()
