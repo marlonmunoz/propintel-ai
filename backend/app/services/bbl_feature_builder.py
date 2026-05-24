@@ -92,12 +92,26 @@ def parse_as_of_date(value: date | datetime | str | None) -> date | None:
 
 
 def _parquet_read_bbl(path: Path, bbl: str, columns: list[str] | None = None) -> pd.DataFrame:
-    """Read rows for a single BBL with pushdown when supported."""
+    """Read rows for a single BBL using predicate pushdown only.
+
+    Tries both the canonical string form and the integer form of the BBL to
+    handle parquet files that store BBLs as different dtypes.  Returns an empty
+    DataFrame when the path does not exist, the BBL is absent, or pushdown
+    raises an unexpected error.
+
+    The previous full-file-scan fallback (read entire parquet, filter in Python)
+    has been removed.  That path was never reached in production (Gold files
+    always support pushdown) and posed an OOM risk for large Silver files in
+    local dev (~600 MB+ per table).
+    """
     if not path.exists():
         return pd.DataFrame()
+    # Cover three common BBL storage formats: plain string, int64, and float64.
+    # float64 is the most common in older parquet exports (e.g. 5016460069.0).
     keys: list[Any] = [bbl]
     if bbl.isdigit():
         keys.append(int(bbl))
+        keys.append(float(bbl))
     for key in keys:
         try:
             df = pd.read_parquet(path, columns=columns, filters=[("bbl", "==", key)])
@@ -105,13 +119,7 @@ def _parquet_read_bbl(path: Path, bbl: str, columns: list[str] | None = None) ->
                 return df
         except Exception:
             continue
-    try:
-        df = pd.read_parquet(path, columns=columns)
-        mask = df["bbl"].astype(str).str.replace(r"\.0$", "", regex=True) == bbl
-        return df.loc[mask].copy()
-    except Exception as e2:
-        logger.warning("Could not read %s: %s", path, e2)
-        return pd.DataFrame()
+    return pd.DataFrame()
 
 
 def _norm_series_bbl(s: pd.Series) -> pd.Series:

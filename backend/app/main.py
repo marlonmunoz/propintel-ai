@@ -156,6 +156,29 @@ async def lifespan(app: FastAPI):
     if SERVICE_API_KEY:
         logger.info("Service API key configured (limited access, no admin)")
 
+    # ── Model warm-up ─────────────────────────────────────────────────────────
+    # Pre-load all registered .pkl files so the first real user request hits a
+    # warm model instead of waiting for joblib.load() on the hot path.
+    # get_model_registry() is @lru_cache, so this warms the exact singleton that
+    # the /analyze-property-v2 route uses.
+    try:
+        from backend.app.api.prediction import get_model_registry  # noqa: PLC0415
+        registry = get_model_registry()
+        loaded, skipped = 0, 0
+        for key in list(registry._models):
+            try:
+                registry.load_model(key)
+                loaded += 1
+            except RuntimeError:
+                # Artifact file not found — /ready will surface this.  Don't
+                # crash startup; let the app start and serve non-ML routes.
+                skipped += 1
+        logger.info(
+            "Model warm-up complete | loaded=%d skipped=%d", loaded, skipped
+        )
+    except Exception as exc:
+        logger.warning("Model warm-up failed (non-fatal): %s", exc)
+
     # Log accepted CORS origins so misconfiguration is immediately visible in logs.
     _cors_default = "http://localhost:5174,http://127.0.0.1:5174"
     _origins = [
