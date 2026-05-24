@@ -1,301 +1,74 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { BookmarkPlus, CheckCircle2, Crown, MapPin, Sparkles } from 'lucide-react'
 import { analyzeProperty, fetchExplanation } from '../services/analysisApi'
 import { lookupHousing } from '../services/housingApi'
 import { createProperty, getProperties } from '../services/propertiesApi'
-import { recordMapboxGeocodeUsage } from '../services/geocodeUsageApi'
 import { useAuth } from '../context/AuthContext'
+import { useAddressGeocoder } from '../hooks/useAddressGeocoder'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
-import DealLabelBadge from '../components/DealLabelBadge'
-import PropertyLocationMap from '../components/PropertyLocationMap'
-import buildingClassData from '../constants/buildingClasses.json'
-
-const boroughOptions = [
-  'Bronx',
-  'Brooklyn',
-  'Manhattan',
-  'Queens',
-  'Staten Island',
-]
-
-// Derived from the canonical JSON — single source of truth shared with the
-// backend contract test (tests/test_building_class_contract.py).
-const buildingClassOptions = buildingClassData.map(({ value, label }) => ({ value, label }))
-
-const initialForm = {
-  borough: '',
-  neighborhood: '',
-  building_class: '',
-  year_built: '',
-  gross_sqft: '',
-  land_sqft: '',
-  total_units: '',
-  latitude: '',
-  longitude: '',
-  market_price: '',
-}
-
-const RENTAL_CLASSES = new Set(
-  buildingClassData.filter((c) => c.is_rental).map((c) => c.value)
-)
-
-/** v2 API sets explanation_status; older responses only repeated quota text in summary. */
-function isQuotaExhaustedExplanation(result) {
-  if (result?.explanation_status === 'quota_exhausted') return true
-  const s = result?.explanation?.summary
-  return typeof s === 'string' && s.startsWith('Daily AI explanation quota reached')
-}
-
-const samplePresets = {
-  Brooklyn: {
-    borough: 'Brooklyn',
-    neighborhood: 'Park Slope',
-    building_class: '02 TWO FAMILY DWELLINGS',
-    year_built: '1925',
-    gross_sqft: '1800',
-    land_sqft: '2000',
-    latitude: '40.6720',
-    longitude: '-73.9778',
-    market_price: '1250000',
-  },
-  Manhattan: {
-    borough: 'Manhattan',
-    neighborhood: 'Upper West Side',
-    building_class: '13 CONDOS - ELEVATOR APARTMENTS',
-    year_built: '1988',
-    gross_sqft: '1100',
-    land_sqft: '0',
-    latitude: '40.7870',
-    longitude: '-73.9754',
-    market_price: '1850000',
-  },
-  Queens: {
-    borough: 'Queens',
-    neighborhood: 'Astoria',
-    building_class: '01 ONE FAMILY DWELLINGS',
-    year_built: '1940',
-    gross_sqft: '1600',
-    land_sqft: '2200',
-    latitude: '40.7644',
-    longitude: '-73.9235',
-    market_price: '980000',
-  },
-  Bronx: {
-    borough: 'Bronx',
-    neighborhood: 'Riverdale',
-    building_class: '01 ONE FAMILY DWELLINGS',
-    year_built: '1935',
-    gross_sqft: '2100',
-    land_sqft: '3000',
-    latitude: '40.9006',
-    longitude: '-73.9067',
-    market_price: '875000',
-  },
-  'Staten Island': {
-    borough: 'Staten Island',
-    neighborhood: 'Tottenville',
-    building_class: '01 ONE FAMILY DWELLINGS',
-    year_built: '1998',
-    gross_sqft: '2400',
-    land_sqft: '4200',
-    latitude: '40.5084',
-    longitude: '-74.2396',
-    market_price: '825000',
-  },
-}
-
-
-// NYC bounding box — restricts Mapbox results to the 5 boroughs only.
-// Format: [west, south, east, north]. Swap to lat/lng order when reading results.
-// To expand to all of NYC + NJ someday, just widen this box.
-const NYC_BBOX = '-74.259090,40.477399,-73.700009,40.917577'
-// Bias autocomplete toward Manhattan / city core (lng,lat for Mapbox proximity).
-const NYC_PROXIMITY = '-74.0060,40.7128'
-
-// Mapbox returns NYC boroughs as "locality" context items.
-// "The Bronx" is the official Mapbox label — we normalize it to match our dropdown.
-function parseBoroughFromFeature(feature) {
-  const context = feature.context || []
-  const locality = context.find((c) => c.id?.startsWith('locality.'))
-  if (!locality) return ''
-  const name = locality.text
-  if (name === 'The Bronx') return 'Bronx'
-  const valid = ['Manhattan', 'Brooklyn', 'Queens', 'Staten Island', 'Bronx']
-  return valid.includes(name) ? name : ''
-}
-
-// Mapbox returns neighborhood as a "neighborhood" context item.
-// Falls back to "locality" (borough name) if no neighborhood is found —
-// better than leaving the field empty.
-function parseNeighborhoodFromFeature(feature) {
-  const context = feature.context || []
-  const nbhd = context.find((c) => c.id?.startsWith('neighborhood.'))
-  return nbhd?.text || ''
-}
-
-// Mapbox includes NYC zip codes as "postcode" context items.
-// Returns the 5-digit zip string, or empty string if not found.
-function parseZipFromFeature(feature) {
-  const context = feature.context || []
-  const postcode = context.find((c) => c.id?.startsWith('postcode.'))
-  return postcode?.text || ''
-}
-
-function formatCurrency(value) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function formatPercent(value) {
-  return `${value.toFixed(2)}%`
-}
-
-function getScoreCategory(score) {
-  if (score >= 80) return { label: 'Strong', classes: 'border-lime-500/30 bg-lime-500/15 text-lime-700 dark:text-lime-300' }
-  if (score >= 60) return { label: 'Moderate', classes: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' }
-  if (score >= 40) return { label: 'Cautious', classes: 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300' }
-  return { label: 'Weak', classes: 'border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-300' }
-}
-
-function StatCard({ label, value, tone = 'default' }) {
-  const toneClasses =
-    tone === 'positive'
-      ? 'border-emerald-500/20 bg-emerald-500/10'
-      : tone === 'negative'
-        ? 'border-rose-500/20 bg-rose-500/10'
-        : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950'
-
-  return (
-    <div className={`rounded-xl border p-4 ${toneClasses}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-bold text-slate-900 dark:text-white">{value}</p>
-    </div>
-  )
-}
-
-function FieldError({ message }) {
-  if (!message) return null
-  return <p className="mt-2 text-sm text-rose-500 dark:text-rose-300">{message}</p>
-}
-
-function getInputClasses(hasError) {
-  return `w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition dark:bg-slate-950 dark:text-white ${
-    hasError
-      ? 'border-rose-400 focus:border-rose-400'
-      : 'border-slate-300 focus:border-cyan-500 dark:border-slate-700 dark:focus:border-cyan-400'
-  }`
-}
-
-function validateForm(formData) {
-  const errors = {}
-
-  if (!formData.borough.trim()) errors.borough = 'Borough is required.'
-  if (!formData.neighborhood.trim()) errors.neighborhood = 'Neighborhood is required.'
-  if (!formData.building_class.trim()) errors.building_class = 'Building class is required.'
-
-  const yearBuilt = Number(formData.year_built)
-  if (!formData.year_built) {
-    errors.year_built = 'Year built is required.'
-  } else if (Number.isNaN(yearBuilt) || yearBuilt < 1800 || yearBuilt > 2026) {
-    errors.year_built = 'Enter a valid year built between 1800 and 2026.'
-  }
-
-  const grossSqft = Number(formData.gross_sqft)
-  if (!formData.gross_sqft) {
-    errors.gross_sqft = 'Gross square footage is required.'
-  } else if (Number.isNaN(grossSqft) || grossSqft <= 0) {
-    errors.gross_sqft = 'Gross square footage must be greater than 0.'
-  }
-
-  const landSqft = Number(formData.land_sqft)
-  if (!formData.land_sqft) {
-    errors.land_sqft = 'Land square footage is required.'
-  } else if (Number.isNaN(landSqft) || landSqft < 0) {
-    errors.land_sqft = 'Land square footage must be 0 or greater.'
-  }
-
-  const latitude = Number(formData.latitude)
-  if (!formData.latitude) {
-    errors.latitude = 'Latitude is required.'
-  } else if (Number.isNaN(latitude) || latitude < 40.0 || latitude > 41.5) {
-    errors.latitude = 'Latitude must be within NYC bounds (40.0 – 41.5).'
-  }
-
-  const longitude = Number(formData.longitude)
-  if (!formData.longitude) {
-    errors.longitude = 'Longitude is required.'
-  } else if (Number.isNaN(longitude) || longitude < -75.0 || longitude > -73.0) {
-    errors.longitude = 'Longitude must be within NYC bounds (−75.0 – −73.0).'
-  }
-
-  const marketPrice = Number(formData.market_price)
-  if (!formData.market_price) {
-    errors.market_price = 'Market price is required.'
-  } else if (Number.isNaN(marketPrice) || marketPrice <= 0) {
-    errors.market_price = 'Market price must be greater than 0.'
-  }
-
-  if (RENTAL_CLASSES.has(formData.building_class)) {
-    const totalUnits = Number(formData.total_units)
-    if (!formData.total_units) {
-      errors.total_units = 'Total units is required for rental valuation.'
-    } else if (Number.isNaN(totalUnits) || totalUnits < 1 || !Number.isInteger(totalUnits)) {
-      errors.total_units = 'Total units must be a whole number of 1 or more.'
-    }
-  }
-
-  return errors
-}
+import AnalyzeForm from '../components/AnalyzeForm'
+import AnalyzeResults from '../components/AnalyzeResults'
+import { getScoreCategory } from '../components/AnalyzeResults'
+import { initialForm, samplePresets, validateForm } from './analyzeConstants'
 
 export default function Analyze() {
   const { quota, refreshQuota } = useAuth()
-  const [formData, setFormData] = useState(initialForm)
 
-  const handleMapPinDragEnd = useCallback((nextLat, nextLng) => {
-    setFormData((prev) => ({
-      ...prev,
-      latitude: nextLat.toFixed(6),
-      longitude: nextLng.toFixed(6),
-    }))
-  }, [])
+  // ── Form state ──────────────────────────────────────────────────────────────
+  const [formData, setFormData] = useState(initialForm)
   const [formErrors, setFormErrors] = useState({})
-  const [analysisResult, setAnalysisResult] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // ── Results state ───────────────────────────────────────────────────────────
+  const [analysisResult, setAnalysisResult] = useState(null)
   const [isExplanationLoading, setIsExplanationLoading] = useState(false)
   const [explanationError, setExplanationError] = useState('')
-  const [error, setError] = useState('')
+
+  // ── Portfolio save state ────────────────────────────────────────────────────
   const [isSaving, setIsSaving] = useState(false)
   const [savedToPortfolio, setSavedToPortfolio] = useState(false)
   const [saveError, setSaveError] = useState('')
 
-  // Address search state
-  // addressQuery: the full Mapbox place_name (e.g. "123 Main St, Brooklyn, NY 11201")
-  // addressZip: 5-digit zip extracted from the selected Mapbox feature
-  // suggestions: array of Mapbox feature results
-  // isSearching: shows a subtle loading indicator while the API is in flight
-  // showSuggestions: controls dropdown visibility
-  const [addressQuery, setAddressQuery] = useState('')
-  const [addressZip, setAddressZip] = useState('')
-  const [suggestions, setSuggestions] = useState([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(false)
-
-  // true while the backend housing/lookup call is in flight after address selection.
-  // Shown as a subtle banner so the user knows the form is being filled.
+  // ── Property-details fetch banner ───────────────────────────────────────────
   const [isFetchingProperty, setIsFetchingProperty] = useState(false)
 
-  // useRef stores the debounce timer ID across renders without triggering re-renders.
-  // If we used useState for this, every keystroke would cause an extra render.
-  const debounceRef = useRef(null)
+  // ── Address geocoder hook ───────────────────────────────────────────────────
+  // The hook handles Mapbox API state.  When a suggestion is selected, we
+  // update the form fields here and fire the housing/lookup backend call.
+  const geocoder = useAddressGeocoder({
+    onSuggestionSelected: ({ lat, lng, borough, neighborhood }) => {
+      setFormData((prev) => ({
+        ...prev,
+        latitude:  String(lat.toFixed(6)),
+        longitude: String(lng.toFixed(6)),
+        ...(borough      && { borough }),
+        ...(neighborhood && { neighborhood }),
+      }))
+      setFormErrors((prev) => {
+        const next = { ...prev }
+        delete next.latitude
+        delete next.longitude
+        if (borough)      delete next.borough
+        if (neighborhood) delete next.neighborhood
+        return next
+      })
+      fetchPropertyDetails(lat, lng, borough)
+    },
+  })
 
-  function handleChange(event) {
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  const handleMapPinDragEnd = useCallback((nextLat, nextLng) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude:  nextLat.toFixed(6),
+      longitude: nextLng.toFixed(6),
+    }))
+  }, [])
+
+  function handleFieldChange(event) {
     const { name, value } = event.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     setFormErrors((prev) => {
@@ -307,11 +80,11 @@ export default function Analyze() {
   }
 
   function handleUsePreset(presetName) {
+    // Merge into initialForm so every key stays defined — presets omit
+    // total_units; replacing the whole object would make controlled inputs
+    // switch from defined → undefined and trigger React warnings.
     const preset = samplePresets[presetName]
     if (!preset) return
-    // Merge into initialForm so every key stays defined (strings, never undefined).
-    // Presets omit total_units; replacing the whole object would make controlled
-    // inputs switch from defined → undefined and trigger React warnings.
     setFormData({ ...initialForm, ...preset })
     setFormErrors({})
     setError('')
@@ -323,122 +96,32 @@ export default function Analyze() {
     setFormErrors({})
     setAnalysisResult(null)
     setError('')
-    setAddressQuery('')
-    setAddressZip('')
-    setSuggestions([])
+    geocoder.reset()
   }
 
-  // Called on every keystroke in the search box.
-  // Clears the previous debounce timer and starts a new one — so the API
-  // is only called 400ms after the user STOPS typing, not on every character.
-  function handleAddressInputChange(e) {
-    const query = e.target.value
-    setAddressQuery(query)
-    setShowSuggestions(true)
-
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-
-    if (!query || query.length < 3) {
-      setSuggestions([])
-      return
-    }
-
-    debounceRef.current = setTimeout(() => fetchSuggestions(query), 400)
-  }
-
-  // Calls the Mapbox Geocoding v5 REST API directly — no SDK needed.
-  // bbox restricts results to NYC only. types=address means we only get
-  // street addresses back, not parks, businesses, etc.
-  async function fetchSuggestions(query) {
-    const token = import.meta.env.VITE_MAPBOX_TOKEN
-    if (!token) return
-    setIsSearching(true)
-    try {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-        query,
-      )}.json?bbox=${NYC_BBOX}&country=US&types=address&limit=8&proximity=${NYC_PROXIMITY}&access_token=${token}`
-      const res = await fetch(url)
-      const data = await res.json()
-      setSuggestions(data.features || [])
-      if (res.ok) {
-        void recordMapboxGeocodeUsage().catch((err) => {
-          if (import.meta.env.DEV) {
-            // Admin mapbox charts stay empty if this fails (auth, CORS, or missing DB table).
-            console.warn('[PropIntel] Geocode usage not recorded:', err?.message ?? err)
-          }
-        })
-      }
-    } catch {
-      setSuggestions([])
-    } finally {
-      setIsSearching(false)
-    }
-  }
-
-  // Called when the user clicks a suggestion.
-  // Step 1: fill location fields immediately from Mapbox (instant — no extra API call).
-  // Step 2: call our backend housing/lookup to fill property details from PLUTO data.
-  // Mapbox feature.center is [longitude, latitude] — note the order is lng first.
-  function handleSelectSuggestion(feature) {
-    const [lng, lat] = feature.center
-    const borough = parseBoroughFromFeature(feature)
-    const neighborhood = parseNeighborhoodFromFeature(feature)
-    const zip = parseZipFromFeature(feature)
-
-    setAddressQuery(feature.place_name)
-    setAddressZip(zip)
-    setSuggestions([])
-    setShowSuggestions(false)
-
-    setFormData((prev) => ({
-      ...prev,
-      latitude: String(lat.toFixed(6)),
-      longitude: String(lng.toFixed(6)),
-      ...(borough && { borough }),
-      ...(neighborhood && { neighborhood }),
-    }))
-
-    setFormErrors((prev) => {
-      const next = { ...prev }
-      delete next.latitude
-      delete next.longitude
-      if (borough) delete next.borough
-      if (neighborhood) delete next.neighborhood
-      return next
-    })
-
-    // Call our backend with the lat/lng Mapbox just gave us.
-    // Borough is passed as a filter so we only match properties in the same borough.
-    fetchPropertyDetails(lat, lng, borough)
-  }
-
-  // Calls our own FastAPI backend to find the nearest property in housing_data
-  // to the given coordinates. Uses our PLUTO-derived dataset — no third-party
-  // API needed. Borough filter prevents cross-water false matches.
+  // Calls our backend to find the nearest property in housing_data.
   // On success: fills year_built, gross_sqft, land_sqft, building_class, neighborhood.
   // On failure or no match: silently does nothing — fields stay blank for manual entry.
   async function fetchPropertyDetails(lat, lng, borough) {
     setIsFetchingProperty(true)
     try {
       const data = await lookupHousing({ lat, lng, borough })
-
       setFormData((prev) => ({
         ...prev,
-        ...(data.year_built                && { year_built:     String(data.year_built) }),
-        ...(data.gross_sqft                && { gross_sqft:     String(Math.round(data.gross_sqft)) }),
-        ...(data.land_sqft  !== undefined  && { land_sqft:      String(Math.round(data.land_sqft ?? 0)) }),
-        ...(data.total_units               && { total_units:    String(Math.round(data.total_units)) }),
-        ...(data.building_class            && { building_class: data.building_class }),
-        ...(data.neighborhood              && { neighborhood:   data.neighborhood }),
+        ...(data.year_built               && { year_built:     String(data.year_built) }),
+        ...(data.gross_sqft               && { gross_sqft:     String(Math.round(data.gross_sqft)) }),
+        ...(data.land_sqft !== undefined  && { land_sqft:      String(Math.round(data.land_sqft ?? 0)) }),
+        ...(data.total_units              && { total_units:    String(Math.round(data.total_units)) }),
+        ...(data.building_class           && { building_class: data.building_class }),
+        ...(data.neighborhood             && { neighborhood:   data.neighborhood }),
       }))
-
       setFormErrors((prev) => {
         const next = { ...prev }
-        if (data.year_built)                delete next.year_built
-        if (data.gross_sqft)                delete next.gross_sqft
-        if (data.land_sqft !== undefined)   delete next.land_sqft
-        if (data.building_class)            delete next.building_class
-        if (data.neighborhood)              delete next.neighborhood
+        if (data.year_built)               delete next.year_built
+        if (data.gross_sqft)               delete next.gross_sqft
+        if (data.land_sqft !== undefined)  delete next.land_sqft
+        if (data.building_class)           delete next.building_class
+        if (data.neighborhood)             delete next.neighborhood
         return next
       })
     } catch {
@@ -450,18 +133,18 @@ export default function Analyze() {
 
   function buildPayload() {
     return {
-      borough: formData.borough.trim(),
-      neighborhood: formData.neighborhood.trim(),
+      borough:       formData.borough.trim(),
+      neighborhood:  formData.neighborhood.trim(),
       building_class: formData.building_class.trim(),
-      year_built: Number(formData.year_built),
-      gross_sqft: Number(formData.gross_sqft),
-      land_sqft: Number(formData.land_sqft),
-      // total_units is only sent when filled — used by rental models to compute
-      // price_per_unit. Omit rather than send 0 so the backend can detect absence.
+      year_built:    Number(formData.year_built),
+      gross_sqft:    Number(formData.gross_sqft),
+      land_sqft:     Number(formData.land_sqft),
+      // total_units only sent when filled — rental models use it to compute
+      // price_per_unit; omit rather than send 0 so the backend can detect absence.
       ...(formData.total_units ? { total_units: Number(formData.total_units) } : {}),
-      latitude: Number(formData.latitude),
-      longitude: Number(formData.longitude),
-      market_price: Number(formData.market_price),
+      latitude:      Number(formData.latitude),
+      longitude:     Number(formData.longitude),
+      market_price:  Number(formData.market_price),
     }
   }
 
@@ -498,7 +181,6 @@ export default function Analyze() {
     setIsLoading(false)
 
     // ── Phase 2: AI explanation (async, valuation already visible) ──────────
-    // Fires immediately after valuation renders so the user sees results fast.
     setIsExplanationLoading(true)
     try {
       const explResult = await fetchExplanation({
@@ -508,7 +190,7 @@ export default function Analyze() {
         investment_score: fastResult.investment_analysis.investment_score,
         top_drivers:      fastResult.drivers.top_drivers,
       })
-      setAnalysisResult(prev => ({
+      setAnalysisResult((prev) => ({
         ...prev,
         explanation:        explResult.explanation,
         explanation_status: explResult.explanation_status,
@@ -527,14 +209,16 @@ export default function Analyze() {
     setSaveError('')
 
     // Use the full Mapbox place_name when the user selected from suggestions.
-    // Fall back to "Neighborhood, Borough" only when fields were entered manually.
-    const address = addressQuery.trim() || `${formData.neighborhood.trim()}, ${formData.borough.trim()}`
-    const zipcode = addressZip || 'N/A'
+    // Fall back to "Neighborhood, Borough" only for manual entry.
+    const address =
+      geocoder.addressQuery.trim() ||
+      `${formData.neighborhood.trim()}, ${formData.borough.trim()}`
+    const zipcode = geocoder.addressZip || 'N/A'
 
     try {
       const existing = await getProperties({ limit: 50 })
       const isDuplicate = existing.some(
-        (p) => p.address === address && p.listing_price === Number(formData.market_price)
+        (p) => p.address === address && p.listing_price === Number(formData.market_price),
       )
       if (isDuplicate) {
         setSavedToPortfolio(true)
@@ -544,11 +228,11 @@ export default function Analyze() {
       await createProperty({
         address,
         zipcode,
-        bedrooms: 0,
-        bathrooms: 0,
-        sqft: Number(formData.gross_sqft) || 1,
+        bedrooms:      0,
+        bathrooms:     0,
+        sqft:          Number(formData.gross_sqft) || 1,
         listing_price: Number(formData.market_price),
-        analysis: analysisResult,
+        analysis:      analysisResult,
       })
       setSavedToPortfolio(true)
     } catch (err) {
@@ -558,723 +242,89 @@ export default function Analyze() {
     }
   }
 
+  // ── Derived display values ──────────────────────────────────────────────────
   const hasV2Result =
-    analysisResult?.valuation &&
-    analysisResult?.investment_analysis &&
-    analysisResult?.drivers &&
-    analysisResult?.explanation
+    Boolean(analysisResult?.valuation) &&
+    Boolean(analysisResult?.investment_analysis) &&
+    Boolean(analysisResult?.drivers) &&
+    Boolean(analysisResult?.explanation)
 
-  const dealLabel = analysisResult?.investment_analysis?.deal_label
-  const score = analysisResult?.investment_analysis?.investment_score
+  const dealLabel    = analysisResult?.investment_analysis?.deal_label
+  const score        = analysisResult?.investment_analysis?.investment_score
   const scoreCategory = score !== undefined ? getScoreCategory(score) : null
-  const difference = analysisResult?.valuation?.price_difference ?? 0
+  const difference   = analysisResult?.valuation?.price_difference ?? 0
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
       <main className="flex-1">
-      <section className="mx-auto max-w-7xl px-6 pb-12 pt-24">
-        <div className="mb-10 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
-              PropIntel AI
-            </p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Property Analysis Workspace
-            </h1>
-            <p className="mt-3 max-w-2xl text-slate-500 dark:text-slate-300">
-              Enter property details below to prepare an analysis request for the
-              <span className="mx-1 font-semibold text-slate-900 dark:text-white">
-                /analyze-property-v2
-              </span>
-              endpoint.
-            </p>
-          </div>
-
-          <Link
-            to="/"
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
-          >
-            Back Home
-          </Link>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-          {/* Form panel */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+        <section className="mx-auto max-w-7xl px-6 pb-12 pt-24">
+          <div className="mb-10 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold">Analysis Form</h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Fill in the property inputs required by the v2 analysis contract.
+              <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400">
+                PropIntel AI
               </p>
-              <br />
-              <p className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                sample presets
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {Object.keys(samplePresets).map((presetName) => (
-                  <button
-                    key={presetName}
-                    type="button"
-                    onClick={() => handleUsePreset(presetName)}
-                    className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-500/20 dark:text-cyan-300"
-                  >
-                    {presetName}
-                  </button>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={handleResetForm}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
-                >
-                  Reset Form
-                </button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="mt-6 space-y-6" noValidate>
-
-              {/* Address Search — auto-fills borough, neighborhood, lat, lng */}
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                  Find Property
-                </h3>
-                <p className="mt-1 mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  Type an NYC street address to auto-fill borough, neighborhood, coordinates, and — when
-                  available — building attributes from our dataset.
-                </p>
-                {!import.meta.env.VITE_MAPBOX_TOKEN ? (
-                  <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                    Add <code className="rounded bg-amber-500/20 px-1">VITE_MAPBOX_TOKEN</code> to{' '}
-                    <code className="rounded bg-amber-500/20 px-1">frontend/.env</code> to enable address
-                    search (free tier at mapbox.com).
-                  </div>
-                ) : null}
-                <div className="relative">
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={addressQuery}
-                      onChange={handleAddressInputChange}
-                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                      onBlur={() => setShowSuggestions(false)}
-                      placeholder="123 Main St, Brooklyn…"
-                      className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-cyan-400"
-                    />
-                    {isSearching && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                        Searching…
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Suggestions dropdown */}
-                  {/* onMouseDown with e.preventDefault() is key here —
-                      it prevents the input's onBlur from firing before the
-                      click registers, which would close the dropdown too early */}
-                  {showSuggestions && suggestions.length > 0 && (
-                    <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                      {suggestions.map((feature, index) => (
-                        <li key={`${feature.id}-${index}`}>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              handleSelectSuggestion(feature)
-                            }}
-                            className="flex w-full items-start gap-2 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                          >
-                            <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
-                            <span>{feature.place_name}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-
-              {/* Location preview map — only shown once lat/lng are confirmed via geocode */}
-              <PropertyLocationMap
-                lat={Number(formData.latitude) || null}
-                lng={Number(formData.longitude) || null}
-                onCoordinatesChange={handleMapPinDragEnd}
-              />
-
-              {/* Loading banner — shown while backend housing/lookup is in flight.
-                  Appears between the search box and the form fields so the user knows
-                  the form is about to populate. Disappears once the call completes. */}
-              {isFetchingProperty && (
-                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-700 dark:text-cyan-300">
-                  Fetching property details…
-                </div>
-              )}
-
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                  Property Basics
-                </h3>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="borough" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Borough
-                    </label>
-                    <select
-                      id="borough"
-                      name="borough"
-                      value={formData.borough}
-                      onChange={handleChange}
-                      className={getInputClasses(!!formErrors.borough)}
-                    >
-                      <option value="">Select borough</option>
-                      {boroughOptions.map((borough) => (
-                        <option key={borough} value={borough}>{borough}</option>
-                      ))}
-                    </select>
-                    <FieldError message={formErrors.borough} />
-                  </div>
-
-                  <div>
-                    <label htmlFor="neighborhood" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Neighborhood
-                    </label>
-                    <input
-                      id="neighborhood"
-                      name="neighborhood"
-                      type="text"
-                      value={formData.neighborhood}
-                      onChange={handleChange}
-                      placeholder="Park Slope"
-                      className={getInputClasses(!!formErrors.neighborhood)}
-                    />
-                    <FieldError message={formErrors.neighborhood} />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label htmlFor="building_class" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Property Type
-                    </label>
-                    <select
-                      id="building_class"
-                      name="building_class"
-                      value={formData.building_class}
-                      onChange={handleChange}
-                      className={getInputClasses(!!formErrors.building_class)}
-                    >
-                      <option value="">Select Property Type</option>
-                      {buildingClassOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <FieldError message={formErrors.building_class} />
-                  </div>
-
-                  <div>
-                    <label htmlFor="year_built" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Year Built
-                    </label>
-                    <input
-                      id="year_built"
-                      name="year_built"
-                      type="number"
-                      value={formData.year_built}
-                      onChange={handleChange}
-                      placeholder="1925"
-                      className={getInputClasses(!!formErrors.year_built)}
-                    />
-                    <FieldError message={formErrors.year_built} />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                  Size &amp; Location
-                </h3>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="gross_sqft" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Building Size (sq ft)
-                    </label>
-                    <input
-                      id="gross_sqft"
-                      name="gross_sqft"
-                      type="number"
-                      value={formData.gross_sqft}
-                      onChange={handleChange}
-                      placeholder="1800"
-                      className={getInputClasses(!!formErrors.gross_sqft)}
-                    />
-                    <FieldError message={formErrors.gross_sqft} />
-                  </div>
-
-                  <div>
-                    <label htmlFor="land_sqft" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Lot Size (sq ft)
-                    </label>
-                    <input
-                      id="land_sqft"
-                      name="land_sqft"
-                      type="number"
-                      value={formData.land_sqft}
-                      onChange={handleChange}
-                      placeholder="2000"
-                      className={getInputClasses(!!formErrors.land_sqft)}
-                    />
-                    <FieldError message={formErrors.land_sqft} />
-                  </div>
-
-                  {/* Total units — optional for all types; required for rental
-                      classes where it's used by the dedicated rental model */}
-                  <div>
-                    <label htmlFor="total_units" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Total Units
-                      {RENTAL_CLASSES.has(formData.building_class) && (
-                        <span className="ml-2 text-xs font-normal text-cyan-600 dark:text-cyan-400">
-                          required for rental valuation
-                        </span>
-                      )}
-                    </label>
-                    <input
-                      id="total_units"
-                      name="total_units"
-                      type="number"
-                      value={formData.total_units}
-                      onChange={handleChange}
-                      placeholder="e.g. 12"
-                      className={getInputClasses(!!formErrors.total_units)}
-                    />
-                    <FieldError message={formErrors.total_units} />
-                  </div>
-
-                  <div>
-                    <label htmlFor="latitude" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Latitude
-                    </label>
-                    <input
-                      id="latitude"
-                      name="latitude"
-                      type="number"
-                      step="any"
-                      value={formData.latitude}
-                      onChange={handleChange}
-                      placeholder="40.6720"
-                      className={getInputClasses(!!formErrors.latitude)}
-                    />
-                    <FieldError message={formErrors.latitude} />
-                  </div>
-
-                  <div>
-                    <label htmlFor="longitude" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Longitude
-                    </label>
-                    <input
-                      id="longitude"
-                      name="longitude"
-                      type="number"
-                      step="any"
-                      value={formData.longitude}
-                      onChange={handleChange}
-                      placeholder="-73.9778"
-                      className={getInputClasses(!!formErrors.longitude)}
-                    />
-                    <FieldError message={formErrors.longitude} />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                  Pricing
-                </h3>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="market_price" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                      Market Price
-                    </label>
-                    <input
-                      id="market_price"
-                      name="market_price"
-                      type="number"
-                      value={formData.market_price}
-                      onChange={handleChange}
-                      placeholder="1250000"
-                      className={getInputClasses(!!formErrors.market_price)}
-                    />
-                    <FieldError message={formErrors.market_price} />
-                  </div>
-                </div>
-                <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                  Valuations and AI text are informational only — not an appraisal or professional advice.{' '}
-                  <Link to="/disclaimer" className="font-medium text-cyan-600 hover:underline dark:text-cyan-400">
-                    Read the full disclaimer
-                  </Link>
-                  .
-                </p>
-              </div>
-
-              <div className="flex flex-col items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="inline-flex items-center justify-center rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isLoading ? 'Running Analysis...' : 'Run Analysis'}
-                </button>
-                {quota && quota.daily_limit !== null && (
-                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
-                    quota.remaining === 0
-                      ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-400'
-                      : quota.remaining <= 3
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                        : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
-                  }`}>
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      quota.remaining === 0
-                        ? 'bg-rose-500'
-                        : quota.remaining <= 3
-                          ? 'bg-amber-500'
-                          : 'bg-cyan-500'
-                    }`} />
-                    {quota.remaining === 0
-                      ? 'Daily AI quota reached — upgrade for more'
-                      : `${quota.remaining} of ${quota.daily_limit} AI analyses left today`}
-                  </span>
-                )}
-              </div>
-
-              {error ? (
-                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-200">
-                  {error}
-                </div>
-              ) : null}
-            </form>
-          </div>
-
-          {/* Results panel */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Analysis Results</h2>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Real backend results appear here after the analysis request completes.
-                </p>
-              </div>
-
-              {hasV2Result ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <DealLabelBadge label={dealLabel} />
-                  {score !== undefined && score !== null ? (
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                      Investment score <span className="text-slate-900 dark:text-white">{score}</span>
-                      /100
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-
-            {!analysisResult && !isLoading ? (
-              <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                Submit the form to fetch valuation, investment score, drivers,
-                and explanation from the v2 backend.
-              </div>
-            ) : null}
-
-            {isLoading ? (
-              <div className="mt-6 animate-pulse space-y-4" aria-busy="true" aria-label="Loading analysis">
-                {/* Stat card row */}
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                      <div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-700" />
-                      <div className="mt-3 h-7 w-32 rounded bg-slate-200 dark:bg-slate-700" />
-                    </div>
-                  ))}
-                </div>
-                {/* Valuation range bar */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                  <div className="h-3 w-40 rounded bg-slate-200 dark:bg-slate-700" />
-                  <div className="mt-3 h-8 w-56 rounded bg-slate-200 dark:bg-slate-700" />
-                  <div className="mt-2 h-3 w-72 rounded bg-slate-200 dark:bg-slate-700" />
-                </div>
-                {/* Score + explanation */}
-                <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="h-3 w-28 rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="mt-4 h-14 w-16 rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="mt-4 h-6 w-24 rounded-full bg-slate-200 dark:bg-slate-700" />
-                  </div>
-                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="h-3 w-32 rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="h-4 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="h-4 w-4/6 rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="mt-1 h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
-                    <div className="h-4 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {analysisResult && !hasV2Result && !isLoading ? (
-              <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-200">
-                The API returned a response, but it did not match the expected
-                v2 grouped shape. Open the browser console and inspect
+              <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+                Property Analysis Workspace
+              </h1>
+              <p className="mt-3 max-w-2xl text-slate-500 dark:text-slate-300">
+                Enter property details below to prepare an analysis request for the
                 <span className="mx-1 font-semibold text-slate-900 dark:text-white">
-                  API result:
+                  /analyze-property-v2
                 </span>
-                to verify what the backend returned.
-              </div>
-            ) : null}
+                endpoint.
+              </p>
+            </div>
 
-            {hasV2Result ? (
-              <div className="mt-6 space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <StatCard
-                    label="Predicted Value"
-                    value={formatCurrency(analysisResult.valuation.predicted_price)}
-                  />
-                  <StatCard
-                    label="Market Price"
-                    value={formatCurrency(analysisResult.valuation.market_price)}
-                  />
-                  <StatCard
-                    label="Price Difference"
-                    value={formatCurrency(analysisResult.valuation.price_difference)}
-                    tone={difference >= 0 ? 'positive' : 'negative'}
-                  />
-                  <StatCard
-                    label="Difference %"
-                    value={formatPercent(analysisResult.valuation.price_difference_pct)}
-                    tone={analysisResult.valuation.price_difference_pct >= 0 ? 'positive' : 'negative'}
-                  />
-                </div>
-
-                {analysisResult.valuation.price_low != null &&
-                analysisResult.valuation.price_high != null ? (
-                  <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-5 dark:border-cyan-500/30 dark:bg-cyan-950/30">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-400">
-                      Estimated valuation range
-                    </p>
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      {formatCurrency(analysisResult.valuation.price_low)}
-                      <span className="mx-2 font-normal text-slate-400 dark:text-slate-500">–</span>
-                      {formatCurrency(analysisResult.valuation.price_high)}
-                    </p>
-                    {analysisResult.valuation.valuation_interval_note ? (
-                      <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                        {analysisResult.valuation.valuation_interval_note}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Investment Score
-                    </p>
-                    <p className="mt-4 text-5xl font-bold text-slate-900 dark:text-white">
-                      {score}/100
-                    </p>
-                    {scoreCategory ? (
-                      <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${scoreCategory.classes}`}>
-                        {scoreCategory.label}
-                      </div>
-                    ) : null}
-                    <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-                      Confidence:{' '}
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {analysisResult.investment_analysis.confidence}
-                      </span>
-                    </p>
-                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                      Recommendation:{' '}
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {analysisResult.investment_analysis.recommendation}
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                      Investment Summary
-                    </p>
-                    <p className="mt-4 text-base leading-7 text-slate-700 dark:text-slate-200">
-                      {analysisResult.investment_analysis.analysis_summary}
-                    </p>
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          ROI Estimate
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
-                          {formatPercent(analysisResult.investment_analysis.roi_estimate)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Model Version
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
-                          {analysisResult.metadata.model_version}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                      Top Drivers
-                    </h3>
-                    <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                      {analysisResult.drivers.top_drivers.map((driver) => (
-                        <li
-                          key={driver}
-                          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70"
-                        >
-                          {driver}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                      Model Context
-                    </h3>
-                    <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                      {analysisResult.drivers.global_context.map((item) => (
-                        <li
-                          key={item}
-                          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/70"
-                        >
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className={`h-5 w-5 text-amber-400 drop-shadow-[0_0_10px_rgba(252,211,77,0.35)] ${isExplanationLoading ? 'animate-pulse' : ''}`} />
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">
-                      AI Explanation
-                    </h3>
-                    {isExplanationLoading && (
-                      <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
-                        Generating…
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Loading skeleton while AI explanation is being fetched */}
-                  {isExplanationLoading ? (
-                    <div className="mt-4 animate-pulse grid gap-4 xl:grid-cols-3">
-                      {[0, 1, 2].map((i) => (
-                        <div
-                          key={i}
-                          className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70 space-y-3"
-                        >
-                          <div className="h-3 w-16 rounded bg-slate-200 dark:bg-slate-700" />
-                          <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                          <div className="h-4 w-5/6 rounded bg-slate-200 dark:bg-slate-700" />
-                          <div className="h-4 w-4/6 rounded bg-slate-200 dark:bg-slate-700" />
-                          <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : explanationError ? (
-                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600 dark:border-rose-800/50 dark:bg-rose-950/20 dark:text-rose-400">
-                      {explanationError}
-                    </div>
-                  ) : isQuotaExhaustedExplanation(analysisResult) ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800/50 dark:bg-amber-950/20">
-                      <div className="flex items-start gap-3">
-                        <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">
-                            Daily AI quota reached
-                          </p>
-                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                            You&apos;ve used all your AI-powered explanation calls for today. The
-                            valuation, score, and drivers above are still accurate — only the
-                            narrative explanation is unavailable until your quota resets.
-                          </p>
-                          <div className="mt-4 flex flex-wrap items-center gap-3">
-                            <Link
-                              to="/profile"
-                              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
-                            >
-                              <Crown className="h-4 w-4" />
-                              Upgrade on Profile page
-                            </Link>
-                            <p className="text-xs text-slate-400 dark:text-slate-500">
-                              Quota resets daily at midnight UTC
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                      {[
-                        { label: 'Summary', text: analysisResult.explanation.summary },
-                        { label: 'Opportunity', text: analysisResult.explanation.opportunity },
-                        { label: 'Risks', text: analysisResult.explanation.risks },
-                      ].map(({ label, text }) => (
-                        <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            {label}
-                          </p>
-                          <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                            {text}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Save to Portfolio</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Store this analysis so you can review it later without re-running the model.
-                    </p>
-                  </div>
-                  {savedToPortfolio ? (
-                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Saved
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handleSaveToPortfolio}
-                      disabled={isSaving}
-                      className="flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
-                    >
-                      <BookmarkPlus className="h-4 w-4" />
-                      {isSaving ? 'Saving…' : 'Save'}
-                    </button>
-                  )}
-                </div>
-                {saveError ? (
-                  <p className="text-sm text-rose-500 dark:text-rose-400">{saveError}</p>
-                ) : null}
-              </div>
-            ) : null}
+            <Link
+              to="/"
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
+            >
+              Back Home
+            </Link>
           </div>
-        </div>
-      </section>
+
+          <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <AnalyzeForm
+              formData={formData}
+              formErrors={formErrors}
+              onFieldChange={handleFieldChange}
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              error={error}
+              quota={quota}
+              onUsePreset={handleUsePreset}
+              onReset={handleResetForm}
+              addressQuery={geocoder.addressQuery}
+              suggestions={geocoder.suggestions}
+              isSearching={geocoder.isSearching}
+              showSuggestions={geocoder.showSuggestions}
+              onAddressInputChange={geocoder.handleAddressInputChange}
+              onAddressInputFocus={geocoder.handleInputFocus}
+              onAddressInputBlur={geocoder.handleInputBlur}
+              onSelectSuggestion={geocoder.handleSelectSuggestion}
+              onMapPinDragEnd={handleMapPinDragEnd}
+              isFetchingProperty={isFetchingProperty}
+            />
+
+            <AnalyzeResults
+              analysisResult={analysisResult}
+              hasV2Result={hasV2Result}
+              isLoading={isLoading}
+              isExplanationLoading={isExplanationLoading}
+              explanationError={explanationError}
+              score={score}
+              scoreCategory={scoreCategory}
+              dealLabel={dealLabel}
+              difference={difference}
+              isSaving={isSaving}
+              savedToPortfolio={savedToPortfolio}
+              saveError={saveError}
+              onSaveToPortfolio={handleSaveToPortfolio}
+            />
+          </div>
+        </section>
       </main>
       <Footer />
     </div>
