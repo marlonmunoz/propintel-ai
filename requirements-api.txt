@@ -20,6 +20,7 @@ numpy==2.4.2
 openai==2.30.0
 packaging==26.0
 pandas==3.0.1
+pyarrow==24.0.0
 psycopg[binary]==3.3.3
 pydantic==2.12.5
 pydantic_core==2.41.5

@@ -19,6 +19,5 @@ narwhals==2.18.0
 openpyxl==3.1.5
 pillow==12.1.1
 plotly==6.6.0
-pyarrow==24.0.0
 scipy==1.17.1
 tqdm==4.67.3
