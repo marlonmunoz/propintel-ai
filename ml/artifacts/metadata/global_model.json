@@ -17,6 +17,8 @@
     "metrics" : {
         "mae": 350456.25,
         "rmse": 841711.44,
-        "r2": 0.6096
+        "r2": 0.6096,
+        "median_ape": 0.285,
+        "note": "v1 global fallback model — legacy pre-spine training, all residential segments combined"
     }
 }
