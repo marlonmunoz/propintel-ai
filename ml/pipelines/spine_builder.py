@@ -46,22 +46,22 @@ CURRENT_FILES = {
 }
 
 # Historical annualized sales ---------------------------------------------------------------
+# Borough id → slug mapping used to build file paths
+_BOROUGH_SLUGS: dict[int, str] = {
+    1: "manhattan",
+    2: "bronx",
+    3: "brooklyn",
+    4: "queens",
+    5: "staten_island",
+}
+
+# Extend this list to add more history; spine_builder skips missing files gracefully
+_HISTORICAL_YEARS = [2019, 2020, 2021, 2022, 2023, 2024]
+
 HISTORICAL_FILES: dict[tuple[int, int], Path] = {
-    (2022, 1): HIST_DIR / "2022_manhattan.xlsx",
-    (2022, 2): HIST_DIR / "2022_bronx.xlsx",
-    (2022, 3): HIST_DIR / "2022_brooklyn.xlsx",
-    (2022, 4): HIST_DIR / "2022_queens.xlsx",
-    (2022, 5): HIST_DIR / "2022_staten_island.xlsx",
-    (2023, 1): HIST_DIR / "2023_manhattan.xlsx",
-    (2023, 2): HIST_DIR / "2023_bronx.xlsx",
-    (2023, 3): HIST_DIR / "2023_brooklyn.xlsx",
-    (2023, 4): HIST_DIR / "2023_queens.xlsx",
-    (2023, 5): HIST_DIR / "2023_staten_island.xlsx",
-    (2024, 1): HIST_DIR / "2024_manhattan.xlsx",
-    (2024, 2): HIST_DIR / "2024_bronx.xlsx",
-    (2024, 3): HIST_DIR / "2024_brooklyn.xlsx",
-    (2024, 4): HIST_DIR / "2024_queens.xlsx",
-    (2024, 5): HIST_DIR / "2024_staten_island.xlsx",
+    (yr, bid): HIST_DIR / f"{yr}_{slug}.xlsx"
+    for yr in _HISTORICAL_YEARS
+    for bid, slug in _BOROUGH_SLUGS.items()
 }
 
 # Residential building-class categories to keep --------------------------------------------
@@ -143,12 +143,22 @@ def _load_current(borough_id: int, path: Path) -> pd.DataFrame | None:
     return df
 
 
+def _historical_skiprows(year: int) -> int:
+    """Return the correct header-skip count for a given archive year.
+
+    DOF changed the Excel template between the 2019 and 2020 publications:
+      - 2019 and earlier: 4 leading rows  (same format as "current" files)
+      - 2020 and later:   6 leading rows
+    """
+    return 4 if year <= 2019 else 6
+
+
 def _load_historical(year: int, borough_id: int, path: Path) -> pd.DataFrame | None:
-    """Load a historical rolling-sales Excel file (different header row)."""
+    """Load a historical rolling-sales Excel file."""
     if not path.exists():
         print(f"  [SKIP] not found: {path.name}", file=sys.stderr)
         return None
-    df = pd.read_excel(path, skiprows=6)
+    df = pd.read_excel(path, skiprows=_historical_skiprows(year))
     df = _normalise_cols(df)
     df["_source_borough"] = borough_id
     df["_source_year"]    = year

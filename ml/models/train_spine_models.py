@@ -33,6 +33,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import VotingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from lightgbm import LGBMRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from xgboost import XGBRegressor
@@ -104,6 +105,7 @@ _PLUTO_NUMERIC = [
     "subway_k3_mean_dist_km",   # mean of 3-nearest (smoothed density)
     "subway_hub_flag",          # 1 = nearest station serves 2+ routes
     "subway_cbd_dist_km",       # distance to nearest CBD-flagged station
+    "subway_n_lines_05mi",      # distinct route count within 0.5 statute mi
     # Physical / structural
     "pluto_numfloors",
     "pluto_builtfar",
@@ -122,10 +124,22 @@ _RENTAL_PLUTO_NUMERIC = [c for c in _PLUTO_NUMERIC if c not in _RENTAL_EXCL_COLS
 
 # Multi-family override: lat/lon already encode location so density counts
 # (n_500m, n_1km) are redundant and push the train/test gap over the 0.15 gate.
-# We keep hub_flag (route-diversity premium) and cbd_dist_km (commute burden)
-# which add qualitatively different signals not captured by lat/lon.
+# We keep hub_flag (route-diversity premium), cbd_dist_km (commute burden),
+# and n_lines_05mi (route diversity) — qualitatively different from density counts.
 _MF_EXCL_TRANSIT = {"subway_n_500m", "subway_n_1km"}
 _MF_PLUTO_NUMERIC = [c for c in _PLUTO_NUMERIC if c not in _MF_EXCL_TRANSIT]
+
+# Sprint F: multi-family-specific enrichment features.
+# - rent_stab_units: DHCR stabilized unit count — directly impacts income potential
+#   and therefore investor pricing on 2-3 unit properties.
+# - pluto_far_utilization: builtfar / residfar — how much of the allowed residential
+#   FAR is consumed; high utilization signals a fully built-out parcel (no add-value
+#   upside), while low utilization signals development opportunity and commands a
+#   different investor premium. NaN for zero-residfar lots (parks, institutions).
+_MF_EXTRA_NUMERIC = [
+    "rent_stab_units",
+    "pluto_far_utilization",
+]
 
 # ── Sprint A: comp + market-trend feature packs ────────────────────────────────
 # Comp features (k-NN comparable-sales aggregates, joined via comp_segment).
@@ -162,12 +176,36 @@ _TREND_NUMERIC = [
     "borough_yoy_growth",
 ]
 
+# Sprint D: derived ratio features computed in _engineer().
+# Added to all residential segments to capture zoning density and prior
+# financing patterns that XGBoost's axis-aligned splits miss on raw columns.
+#   far                 — floor area ratio (bldgarea / lotarea): density signal
+#   prior_mortgage_ratio — last recorded LTV proxy: financing pattern signal
+_DERIVED_NUMERIC = [
+    "far",
+    "prior_mortgage_ratio",
+]
+
 SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
     "one_family": {
         "target": "sales_price",
+        # Sprint B: filter non-arms-length transactions (estate sales, foreclosures,
+        # intra-family transfers) that add noise the model otherwise memorises.
+        "sales_hygiene": {
+            "min_price":   150_000,
+            "max_price": 5_000_000,
+            "min_ppsqft":     50.0,
+        },
+        # Sprint C: comp features removed. comp_median_price is a "near-target"
+        # signal that perfectly explains 2024 training comps but creates temporal
+        # overfit — comp prices in 2024 don't transfer cleanly to 2025 test
+        # market. Adding comps widened the R² gap from 0.12 → 0.17 with no
+        # meaningful MAE improvement. Trend features retained (96% coverage,
+        # market-direction signal generalises well across years).
         "numeric": [
             "neighborhood_median_price", "property_age",
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            *_TREND_NUMERIC, *_DERIVED_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
@@ -203,7 +241,7 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "numeric": [
             "neighborhood_median_price", "property_age",
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_MF_PLUTO_NUMERIC,
-            *_COMP_NUMERIC, *_TREND_NUMERIC,
+            *_COMP_NUMERIC, *_TREND_NUMERIC, *_DERIVED_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
@@ -214,20 +252,52 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "target": "sales_price",
         "spine_segment": "multi_family",
         "building_class_prefix": "03",
+        # Sprint C: add sales hygiene (same logic as two_family).
+        # Three-family has more non-arms-length noise (estate/inter-family
+        # transfers at nominal prices) that inflate training variance.
+        "sales_hygiene": {
+            "min_price":   100_000,
+            "max_price": 9_500_000,
+            "min_ppsqft":      40.0,
+        },
+        # Sprint C: add comp features.  Investor pricing for 3-fam homes is
+        # comp-anchored (buyers compare against similar recent nearby sales),
+        # making comp_median_price a strong market-pricing signal — same logic
+        # that lifted two_family.
+        "comp_segment_key": "three_family",
         "numeric": [
             "neighborhood_median_price", "property_age",
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_MF_PLUTO_NUMERIC,
+            *_COMP_NUMERIC, *_TREND_NUMERIC, *_DERIVED_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 300,
         "min_test":  60,
     },
-    # ── Legacy combined multi_family (kept for backward compat, not in DEFAULT) ─
+    # ── Merged multi_family (two-family + three-family pooled) ────────────────
+    # Sprint E: three_family was data-starved (5.5k → 11.5k rows after 2019–2021
+    # extension, still insufficient).  Pooling with two_family gives ~60k training
+    # rows, exposing the model to the full 2-/3-unit market cycle.
+    #
+    # Differentiating 2-fam vs 3-fam is left to the model via residential_units
+    # (and total_units) rather than a hard split.  Both are bought by similar
+    # owner-occupier / small-investor profiles in the same neighbourhoods.
+    #
+    # No building_class_prefix filter — takes ALL multi_family spine rows.
     "multi_family": {
         "target": "sales_price",
+        "sales_hygiene": {
+            "min_price":   100_000,
+            "max_price": 9_500_000,
+            "min_ppsqft":      40.0,  # slightly looser than two_family to keep 3-fam rows
+        },
+        "comp_segment_key": "two_family",  # comp pool is two_family (larger, same geography)
         "numeric": [
             "neighborhood_median_price", "property_age",
+            "residential_units", "total_units",  # key differentiator: 2 vs 3 units
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_MF_PLUTO_NUMERIC,
+            *_MF_EXTRA_NUMERIC,  # rent_stab_units, pluto_far_utilization
+            *_COMP_NUMERIC, *_TREND_NUMERIC, *_DERIVED_NUMERIC,
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
@@ -238,6 +308,13 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "numeric": [
             "neighborhood_median_price", "property_age",
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            # Sprint F: development-pressure signal (far_utilization) is meaningful
+            # for condos — a fully built-out site has no add-value upside, which
+            # affects pricing differently than a under-utilized parcel.
+            # rent_stab_units has real coverage here: co-ops and large condo
+            # buildings are exactly the 32k BBLs matched in the DHCR snapshot.
+            "pluto_far_utilization",
+            "rent_stab_units",
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
@@ -256,6 +333,12 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
             "total_units", "residential_units",
             "is_elevator",
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_RENTAL_PLUTO_NUMERIC,
+            # Sprint F: rent_stab_units is the right segment for this feature.
+            # Large rental buildings (7+ units, pre-1974) are heavily represented
+            # in the DHCR stabilization snapshot. Stabilization rate directly caps
+            # income potential and therefore building sale price.
+            # subway_n_lines_05mi already flows through _RENTAL_PLUTO_NUMERIC.
+            "rent_stab_units",
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 300,
@@ -287,11 +370,60 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
     },
 }
 
-SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
+# ─── LightGBM params (Sprint D) ──────────────────────────────────────────────
+# Segments listed here use LGBMRegressor instead of XGBRegressor.
+# LightGBM's leaf-wise tree growth consistently outperforms XGBoost's
+# level-wise growth on tabular data of this size (20k-30k rows), typically
+# by 2-5 pp R².  The VotingRegressor + early stopping infrastructure is
+# unchanged.  n_estimators here is an upper bound — early stopping calibrates
+# the actual tree count per run.
+LGBM_SEGMENTS = {"one_family", "two_family", "three_family", "multi_family"}
+
+SEGMENT_LGBM_PARAMS: dict[str, dict[str, Any]] = {
+    # one_family: 31k rows, SFH owner-occupier.  Leaf-wise allows deeper
+    # focus on the high-value NYC micro-markets without global depth limit.
     "one_family": {
-        "n_estimators": 500, "learning_rate": 0.05, "max_depth": 6,
-        "min_child_weight": 3, "subsample": 0.8, "colsample_bytree": 0.8,
-        "gamma": 0.1, "reg_alpha": 0.1, "reg_lambda": 1.0,
+        "n_estimators": 1500, "learning_rate": 0.04, "num_leaves": 63,
+        "min_child_samples": 20, "subsample": 0.75, "colsample_bytree": 0.70,
+        "reg_alpha": 0.5, "reg_lambda": 2.0,
+        "subsample_freq": 1,
+    },
+    # two_family: 23k rows, comp + trend features — moderate regularisation.
+    "two_family": {
+        "n_estimators": 1500, "learning_rate": 0.035, "num_leaves": 47,
+        "min_child_samples": 30, "subsample": 0.75, "colsample_bytree": 0.65,
+        "reg_alpha": 1.0, "reg_lambda": 3.5,
+        "subsample_freq": 1,
+    },
+    # three_family: 5.7k rows — smaller leaves + stronger L1/L2 to prevent
+    # memorisation of sparse investor markets.
+    "three_family": {
+        "n_estimators": 1500, "learning_rate": 0.025, "num_leaves": 15,
+        "min_child_samples": 25, "subsample": 0.60, "colsample_bytree": 0.55,
+        "reg_alpha": 2.0, "reg_lambda": 5.0,
+        "subsample_freq": 1,
+    },
+    # multi_family (merged): ~60k rows — between two_family and one_family density.
+    # num_leaves=47 matches two_family; residential_units + total_units carry the
+    # 2-vs-3 signal so no depth reduction needed.
+    "multi_family": {
+        "n_estimators": 1500, "learning_rate": 0.035, "num_leaves": 47,
+        "min_child_samples": 30, "subsample": 0.75, "colsample_bytree": 0.65,
+        "reg_alpha": 1.0, "reg_lambda": 3.5,
+        "subsample_freq": 1,
+    },
+}
+
+SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
+    # Sprint B+: comp + trend features added; depth restored to 6 so the model
+    # can learn comp×location interactions.  Regularisation kept tighter than
+    # Sprint A (colsample 0.80→0.70, reg_alpha 0.1→0.5, reg_lambda 1.0→2.0)
+    # to prevent the comp signal from creating overfit on noisy comps.
+    # min_child_weight 3→5: balanced between Sprint A (3) and Sprint B (7).
+    "one_family": {
+        "n_estimators": 600, "learning_rate": 0.04, "max_depth": 6,
+        "min_child_weight": 5, "subsample": 0.75, "colsample_bytree": 0.70,
+        "gamma": 0.15, "reg_alpha": 0.5, "reg_lambda": 2.0,
     },
     # two_family: 24k rows, owner-occupier pricing.  Sprint-A-tuned:
     # adding comp + trend features pushed the gap toward 0.15; we tighten
@@ -344,18 +476,22 @@ SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
 }
 
 # Segments that use a 5-seed VotingRegressor to reduce variance.
-ENSEMBLE_SEGMENTS = {"two_family", "three_family", "multi_family", "rentals_all"}
+# one_family added Sprint B: 32k rows are sufficient to support ensemble
+# voting; eliminates single-seed variance that inflated the R² gap to 0.11.
+ENSEMBLE_SEGMENTS = {"one_family", "multi_family", "rentals_all"}
 
 # Segments where rare (< RARE_N training rows) neighbourhoods are collapsed
 # to "Other_<Borough>" before OHE, preventing thin-slice memorisation.
-# Both new segments benefit: three_family has ~6k rows (high sparsity risk),
-# two_family has ~24k rows spread across hundreds of NYC micro-neighbourhoods.
-RARE_NBHD_SEGMENTS = {"two_family", "three_family", "multi_family"}
+# one_family intentionally excluded: SFH pricing is highly location-specific
+# and collapsing 73 micro-neighbourhoods cost ~7pp of test R² in Sprint B.
+# The building-subclass OHE dominance seen before is addressed instead by
+# comp + trend features that provide a market-level anchor.
+RARE_NBHD_SEGMENTS = {"multi_family"}
 RARE_N = 30  # neighbourhoods with fewer train rows are collapsed
 
 # Default segments trained when no --subtypes flag is given.
-# two_family + three_family replace the old combined multi_family segment.
-DEFAULT_SEGMENTS = {"one_family", "two_family", "three_family", "condo_coop", "rentals_all"}
+# Sprint E: multi_family (merged) replaces the split two_family + three_family.
+DEFAULT_SEGMENTS = {"one_family", "multi_family", "condo_coop", "rentals_all"}
 
 # Number of seeds for VotingRegressor ensemble.
 N_ENSEMBLE_SEEDS = 5
@@ -398,7 +534,7 @@ def load_enriched_spine() -> pd.DataFrame:
     dof_keep = join_keys + [c for c in dof_rename if c in dof.columns] + \
                ["dof_bldg_class", "dof_tax_class"]
     dof_keep = list(dict.fromkeys(c for c in dof_keep if c in dof.columns))
-    dof_sub  = _dedup(dof[dof_keep].rename(columns=dof_rename), "DOF")
+    dof_sub  = _dedup(dof[dof_keep].rename(columns=dof_rename), "DOF")  # type: ignore[arg-type]
     spine = spine.merge(dof_sub, on=join_keys, how="left")
 
     # ── ACRIS ─────────────────────────────────────────────────────────────────
@@ -406,7 +542,7 @@ def load_enriched_spine() -> pd.DataFrame:
     acris = pd.read_parquet(GOLD_ACRIS)
     acris["as_of_date"] = pd.to_datetime(acris["as_of_date"]).dt.date.astype(str)
     acris_cols = join_keys + [c for c in acris.columns if c.startswith("acris_")]
-    acris_sub  = _dedup(acris[[c for c in acris_cols if c in acris.columns]], "ACRIS")
+    acris_sub  = _dedup(acris[[c for c in acris_cols if c in acris.columns]], "ACRIS")  # type: ignore[arg-type]
     spine = spine.merge(acris_sub, on=join_keys, how="left")
 
     # ── J-51 ─────────────────────────────────────────────────────────────────
@@ -414,24 +550,30 @@ def load_enriched_spine() -> pd.DataFrame:
     j51 = pd.read_parquet(GOLD_J51)
     j51["as_of_date"] = pd.to_datetime(j51["as_of_date"]).dt.date.astype(str)
     j51_cols = join_keys + [c for c in j51.columns if c.startswith("j51_")]
-    j51_sub  = _dedup(j51[[c for c in j51_cols if c in j51.columns]], "J51")
+    j51_sub  = _dedup(j51[[c for c in j51_cols if c in j51.columns]], "J51")  # type: ignore[arg-type]
     spine = spine.merge(j51_sub, on=join_keys, how="left")
 
     # ── PLUTO ────────────────────────────────────────────────────────────────
     # Joined on bbl only (no as_of_date) — physical/geo attributes are stable.
     print("  Joining Gold PLUTO …")
     pluto = pd.read_parquet(GOLD_PLUTO)
-    # Pull all pluto_* columns plus the full transit pack (subway_*).
-    pluto_geo = [c for c in pluto.columns if c.startswith("pluto_") or c.startswith("subway_")]
-    pluto_sub = pluto[["bbl"] + pluto_geo].drop_duplicates(subset=["bbl"]).reset_index(drop=True)
+    # Pull all pluto_* and subway_* columns plus any named extras that don't
+    # carry those prefixes (e.g. rent_stab_units from the DHCR rentstab join).
+    _PLUTO_NAMED_EXTRAS = ["rent_stab_units"]
+    pluto_geo = [
+        c for c in pluto.columns
+        if c.startswith("pluto_") or c.startswith("subway_")
+        or c in _PLUTO_NAMED_EXTRAS
+    ]
+    pluto_sub = pluto[["bbl"] + pluto_geo].drop_duplicates(subset=["bbl"]).reset_index(drop=True)  # type: ignore[arg-type]
     spine = spine.merge(pluto_sub, on="bbl", how="left")
     print(f"    PLUTO match rate: {spine['pluto_latitude'].notna().mean():.1%}")
 
     # Ensure integer/mixed columns arrive as float for sklearn compatibility.
     for c in ["acris_prior_sale_cnt", "acris_mortgage_cnt", "j51_active_flag",
-              *_PLUTO_NUMERIC]:
+              *_PLUTO_NUMERIC, *_PLUTO_NAMED_EXTRAS]:
         if c in spine.columns:
-            spine[c] = pd.to_numeric(spine[c], errors="coerce").astype(float)
+            spine[c] = pd.to_numeric(spine[c], errors="coerce").astype(float)  # type: ignore[union-attr]
 
     # ── Comp + Trend joins (Sprint A) ────────────────────────────────────────
     # Derive each spine row's comp_segment key from (segment, building_class).
@@ -447,7 +589,7 @@ def load_enriched_spine() -> pd.DataFrame:
             (seg == "multi_family") & bc_str.str.startswith("02"), "two_family",
             np.where(
                 (seg == "multi_family") & bc_str.str.startswith("03"), "three_family",
-                np.where(seg == "condo_coop", "condo_coop", None),
+                np.where(seg == "condo_coop", "condo_coop", None),  # type: ignore[arg-type]
             ),
         ),
     )
@@ -535,19 +677,19 @@ def _apply_sales_hygiene(
         out = out[out["sales_price"] <= float(max_price)]
 
     min_ppsqft = hygiene.get("min_ppsqft")
-    if min_ppsqft is not None and "gross_sqft" in out.columns:
+    if min_ppsqft is not None and "gross_sqft" in out.columns:  # type: ignore[union-attr]
         sqft = pd.to_numeric(out["gross_sqft"], errors="coerce")
-        ppsqft = out["sales_price"] / sqft.where(sqft > 100, np.nan)
+        ppsqft = out["sales_price"] / sqft.where(sqft > 100, np.nan)  # type: ignore[union-attr]
         # Only drop when gross_sqft is known and ppsqft is implausibly low.
         # Rows with unknown sqft are kept (no signal to filter on).
-        keep_mask = ppsqft.isna() | (ppsqft >= float(min_ppsqft))
+        keep_mask = ppsqft.isna() | (ppsqft >= float(min_ppsqft))  # type: ignore[union-attr]
         out = out[keep_mask]
 
     n1 = len(out)
     if n1 < n0:
         pct = (n0 - n1) / n0 * 100
         print(f"    [{segment}] sales hygiene: dropped {n0 - n1:,} rows ({pct:.1f}%)")
-    return out
+    return out  # type: ignore[return-value]
 
 
 # ─── Feature engineering ──────────────────────────────────────────────────────
@@ -557,23 +699,41 @@ def _engineer(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     # Borough name for the categorical encoder.
     if "borough" in df.columns:
-        df["borough_name"] = df["borough"].map(BOROUGH_NAMES).fillna("Unknown")
+        df["borough_name"] = df["borough"].map(BOROUGH_NAMES.get).fillna("Unknown")
 
     # Property age from DOF year-built (fall back to spine year_built).
     yr = df.get("dof_yrbuilt", df.get("year_built"))
     if yr is not None:
-        df["property_age"] = REFERENCE_YEAR - pd.to_numeric(yr, errors="coerce")
+        df["property_age"] = REFERENCE_YEAR - pd.to_numeric(yr, errors="coerce")  # type: ignore[operator]
         df["property_age"] = df["property_age"].clip(0, 200)
 
     # Assessed value per unit (the PLUTO assess_per_unit equivalent).
     if "dof_curacttot" in df.columns and "dof_units" in df.columns:
-        units = pd.to_numeric(df["dof_units"], errors="coerce").clip(lower=1)
+        units = pd.to_numeric(df["dof_units"], errors="coerce").clip(lower=1)  # type: ignore[union-attr]
         df["dof_assess_per_unit"] = (
             pd.to_numeric(df["dof_curacttot"], errors="coerce") / units
         )
 
+    # Floor Area Ratio (FAR): built square footage divided by lot area.
+    # A key NYC zoning signal — higher FAR → denser area → typically higher value.
+    # NaN when either component is missing (imputed by median in the pipeline).
+    if "pluto_bldgarea" in df.columns and "pluto_lotarea" in df.columns:
+        bldg = pd.to_numeric(df["pluto_bldgarea"], errors="coerce")
+        lot  = pd.to_numeric(df["pluto_lotarea"],  errors="coerce")
+        df["far"] = bldg / lot.where(lot > 0, np.nan)  # type: ignore[union-attr]
+
+    # Prior mortgage LTV proxy: last recorded mortgage divided by last deed price.
+    # Properties bought with high leverage tend to be priced closer to market;
+    # cash or low-LTV buyers sometimes acquire at discount.
+    if "acris_last_mtge_amt" in df.columns and "acris_last_deed_amt" in df.columns:
+        mtge = pd.to_numeric(df["acris_last_mtge_amt"], errors="coerce")
+        deed = pd.to_numeric(df["acris_last_deed_amt"],  errors="coerce")
+        df["prior_mortgage_ratio"] = mtge / deed.where(deed > 10_000, np.nan)  # type: ignore[union-attr]
+        # Cap at 1.5 (over-mortgaged is noise above that level).
+        df["prior_mortgage_ratio"] = df["prior_mortgage_ratio"].clip(upper=1.5)
+
     # sales_price must be positive.
-    df = df[pd.to_numeric(df["sales_price"], errors="coerce").gt(0)]
+    df = df[pd.to_numeric(df["sales_price"], errors="coerce").gt(0)]  # type: ignore[assignment, union-attr]
     df["sales_price"] = pd.to_numeric(df["sales_price"], errors="coerce")
 
     return df
@@ -586,7 +746,7 @@ def _fit_neighborhood_stats(train: pd.DataFrame, target: str) -> dict:
     price_col = "sales_price" if target == "sales_price" else "price_per_unit"
     medians = train.groupby("neighborhood")[price_col].median()
     global_med_raw = train[price_col].median()
-    global_med = float(global_med_raw) if pd.notna(global_med_raw) else float("nan")
+    global_med = float(global_med_raw) if pd.notna(global_med_raw) else float("nan")  # type: ignore[arg-type]
     stats: dict[str, Any] = {
         "neighborhoods": medians.to_dict(),
         "global_median": global_med,
@@ -594,9 +754,9 @@ def _fit_neighborhood_stats(train: pd.DataFrame, target: str) -> dict:
     # DOF assess_per_unit neighbourhood medians (for imputation).
     if "dof_assess_per_unit" in train.columns:
         # Robust to nullable dtypes (pd.NA) in some folds.
-        apu = pd.to_numeric(train["dof_assess_per_unit"], errors="coerce").groupby(train["neighborhood"]).median()
+        apu = pd.to_numeric(train["dof_assess_per_unit"], errors="coerce").groupby(train["neighborhood"]).median()  # type: ignore[union-attr]
         stats["dof_assess_per_unit_neighborhoods"] = apu.to_dict()
-        apu_global_raw = pd.to_numeric(train["dof_assess_per_unit"], errors="coerce").median()
+        apu_global_raw = pd.to_numeric(train["dof_assess_per_unit"], errors="coerce").median()  # type: ignore[union-attr]
         stats["dof_assess_per_unit_global"] = (
             float(apu_global_raw) if pd.notna(apu_global_raw) else float("nan")
         )
@@ -611,11 +771,11 @@ def _apply_neighborhood_stats(df: pd.DataFrame, stats: dict, target: str) -> pd.
     )
     if "dof_assess_per_unit" in df.columns and "dof_assess_per_unit_neighborhoods" in stats:
         global_fill = stats.get("dof_assess_per_unit_global", float("nan"))
-        df["dof_assess_per_unit"] = pd.to_numeric(df["dof_assess_per_unit"], errors="coerce").fillna(
+        df["dof_assess_per_unit"] = pd.to_numeric(df["dof_assess_per_unit"], errors="coerce").fillna(  # type: ignore[union-attr]
             df["neighborhood"].map(stats["dof_assess_per_unit_neighborhoods"]).fillna(global_fill)
         )
     if target == "price_per_unit":
-        df = df[df["total_units"].notna() & (df["total_units"] > 0)].copy()
+        df = df[df["total_units"].notna() & (df["total_units"] > 0)].copy()  # type: ignore[assignment]
         df["price_per_unit"] = df["sales_price"] / df["total_units"]
     return df
 
@@ -630,17 +790,17 @@ def _collapse_rare_neighborhoods(train: pd.DataFrame, test: pd.DataFrame,
     """
     boro_name_map = BOROUGH_NAMES
     counts = train["neighborhood"].value_counts()
-    rare = set(counts[counts < rare_n].index)
+    rare = set(counts[counts < rare_n].index)  # type: ignore[index]
     if not rare:
         return train, test
 
     def _boro_label(df: pd.DataFrame) -> pd.Series:
-        return df["borough"].map(boro_name_map).fillna("Unknown")
+        return df["borough"].map(boro_name_map.get).fillna("Unknown")  # type: ignore[return-value]
 
     def _replace(df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        mask = df["neighborhood"].isin(rare)
-        df.loc[mask, "neighborhood"] = ("Other_" + _boro_label(df).loc[df.index[mask]]).values
+        mask = df["neighborhood"].isin(list(rare))
+        df.loc[mask, "neighborhood"] = ("Other_" + _boro_label(df).loc[df.index[mask]]).values  # type: ignore[index]
         return df
 
     n_collapsed = len(rare)
@@ -648,10 +808,112 @@ def _collapse_rare_neighborhoods(train: pd.DataFrame, test: pd.DataFrame,
     return _replace(train), _replace(test)
 
 
+# ─── Early stopping (Sprint C/D) ─────────────────────────────────────────────
+# Segments where we use a chronological validation holdout to determine the
+# optimal n_estimators, then re-fit on all training data with that fixed value.
+EARLY_STOPPING_SEGMENTS = {"one_family", "two_family", "three_family", "multi_family"}
+_ES_VAL_FRAC          = 0.15   # fraction of training rows held out for ES search
+_ES_ROUNDS            = 50     # stop after this many rounds without improvement
+
+
+def _make_estimator(params: dict, seed: int, segment: str) -> Any:
+    """Return an LGBMRegressor or XGBRegressor depending on the segment."""
+    if segment in LGBM_SEGMENTS:
+        p = {k: v for k, v in params.items()}
+        p["random_state"] = seed
+        return LGBMRegressor(
+            **p,
+            n_jobs=-1,
+            objective="regression",
+            verbose=-1,
+        )
+    p = {k: v for k, v in params.items()}
+    p["random_state"] = seed
+    return XGBRegressor(**p, n_jobs=-1, objective="reg:squarederror", verbosity=0)
+
+
+def _find_optimal_n_estimators(
+    num_feats: list[str],
+    cat_feats: list[str],
+    params: dict,
+    X_tr_sorted: "pd.DataFrame",
+    y_tr_sorted: "np.ndarray",
+    segment: str,
+) -> int:
+    """Chronological early-stopping search for the optimal number of trees.
+
+    Two-pass strategy:
+      1. Fit a temporary preprocessor on ALL training data.
+      2. Hold out the most recent ``_ES_VAL_FRAC`` rows as a validation set.
+      3. Run a single-seed estimator (LGBM or XGB) with early stopping.
+      4. Return ``best_iteration + 1``.  The caller re-fits the full pipeline
+         on ALL training data using this as ``n_estimators``.
+
+    The data must already be sorted chronologically (sale_date ascending).
+    """
+    num_pipe = Pipeline([("imp", SimpleImputer(strategy="median"))])
+    cat_pipe = Pipeline([
+        ("imp", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+    ])
+    parts: list = [("num", num_pipe, num_feats)]
+    if cat_feats:
+        parts.append(("cat", cat_pipe, cat_feats))
+    prep = ColumnTransformer(parts, remainder="drop")
+    prep.fit(X_tr_sorted)
+    X_t = prep.transform(X_tr_sorted)
+
+    n_val  = max(int(len(X_t) * _ES_VAL_FRAC), 50)
+    X_fit, X_val = X_t[:-n_val], X_t[-n_val:]
+    y_fit, y_val = y_tr_sorted[:-n_val], y_tr_sorted[-n_val:]
+
+    es_params = {k: v for k, v in params.items() if k != "n_estimators"}
+
+    if segment in LGBM_SEGMENTS:
+        import lightgbm as lgb  # local import to keep XGB-only paths fast
+        est = LGBMRegressor(
+            **es_params,
+            n_estimators=params.get("n_estimators", 1500),
+            n_jobs=-1,
+            objective="regression",
+            verbose=-1,
+        )
+        callbacks = [
+            lgb.early_stopping(stopping_rounds=_ES_ROUNDS, verbose=False),
+            lgb.log_evaluation(period=-1),
+        ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            est.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], callbacks=callbacks)
+        best = int(est.best_iteration_) if est.best_iteration_ > 0 else -1
+        if best <= 0:
+            # Fallback: use 1/3 of max estimators when early stopping misfires.
+            best = max(100, params.get("n_estimators", 1500) // 3)
+        return best
+
+    # XGBoost path (non-LGBM segments)
+    est_xgb = XGBRegressor(
+        **es_params,
+        n_estimators=params.get("n_estimators", 1500),
+        random_state=42,
+        n_jobs=-1,
+        objective="reg:squarederror",
+        verbosity=0,
+        early_stopping_rounds=_ES_ROUNDS,
+        eval_metric="mae",
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        est_xgb.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], verbose=False)
+    if hasattr(est_xgb, "best_iteration"):
+        return int(est_xgb.best_iteration) + 1
+    return int(est_xgb.best_ntree_limit)  # type: ignore[attr-defined]
+
+
 # ─── sklearn pipeline ─────────────────────────────────────────────────────────
 
 def _build_pipeline(num_feats: list[str], cat_feats: list[str],
-                    xgb_params: dict) -> Pipeline:
+                    params: dict, segment: str = "") -> Pipeline:
     num_pipe = Pipeline([("imp", SimpleImputer(strategy="median"))])
     cat_pipe = Pipeline([
         ("imp", SimpleImputer(strategy="most_frequent")),
@@ -662,25 +924,23 @@ def _build_pipeline(num_feats: list[str], cat_feats: list[str],
         parts.append(("cat", cat_pipe, cat_feats))
     return Pipeline([
         ("prep", ColumnTransformer(parts, remainder="drop")),
-        ("xgb", XGBRegressor(**xgb_params, random_state=42, n_jobs=-1,
-                             objective="reg:squarederror", verbosity=0)),
+        ("xgb", _make_estimator(params, seed=42, segment=segment)),
     ])
 
 
 def _build_voting_pipeline(num_feats: list[str], cat_feats: list[str],
-                           xgb_params: dict, n_seeds: int = N_ENSEMBLE_SEEDS) -> Pipeline:
-    """Wrap N XGBRegressor estimators in a VotingRegressor inside one Pipeline.
+                           params: dict, segment: str = "",
+                           n_seeds: int = N_ENSEMBLE_SEEDS) -> Pipeline:
+    """Wrap N estimators (LGBM or XGB) in a VotingRegressor inside one Pipeline.
 
     Averaging predictions across seeds reduces variance without changing the
     sklearn .predict() interface, so the model registry and API need no changes.
     """
     estimators = []
     for seed in range(n_seeds):
-        p = dict(xgb_params)
-        p["random_state"] = seed
         estimators.append((
             f"xgb_{seed}",
-            XGBRegressor(**p, n_jobs=-1, objective="reg:squarederror", verbosity=0),
+            _make_estimator(params, seed=seed, segment=segment),
         ))
     voter = VotingRegressor(estimators=estimators)
 
@@ -731,17 +991,17 @@ def train_rentals_all(df: pd.DataFrame) -> dict | None:
     parts_tr, parts_te = [], []
     for sub_seg in ("rental_walkup", "rental_elevator"):
         sub = df[df["segment"] == sub_seg].copy()
-        sub = _engineer(sub)
+        sub = _engineer(sub)  # type: ignore[arg-type]
         sub["is_elevator"] = 1.0 if sub_seg == "rental_elevator" else 0.0
         tr = sub[pd.to_datetime(sub["sale_date"]).dt.date <= TRAIN_END].copy()
         te = sub[pd.to_datetime(sub["sale_date"]).dt.date >= TEST_START].copy()
         for split in (tr, te):
-            mask = split["total_units"].notna() & (split["total_units"] > 0)
+            mask = split["total_units"].notna() & (split["total_units"] > 0)  # type: ignore[union-attr]
             split.loc[mask, "price_per_unit"] = (
                 split.loc[mask, "sales_price"] / split.loc[mask, "total_units"]
             )
-        parts_tr.append(tr[tr["price_per_unit"].notna()])
-        parts_te.append(te[te["price_per_unit"].notna()])
+        parts_tr.append(tr[tr["price_per_unit"].notna()])  # type: ignore[union-attr]
+        parts_te.append(te[te["price_per_unit"].notna()])  # type: ignore[union-attr]
 
     train = pd.concat(parts_tr, ignore_index=True)
     test  = pd.concat(parts_te, ignore_index=True)
@@ -859,15 +1119,15 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     sub = df[df["segment"] == spine_seg].copy()
     bc_prefix = cfg.get("building_class_prefix")
     if bc_prefix:
-        sub = sub[sub["building_class"].astype(str).str.startswith(bc_prefix)].copy()
+        sub = sub[sub["building_class"].astype(str).str.startswith(bc_prefix)].copy()  # type: ignore[union-attr]
 
     # Sprint A.1 — opt-in sales hygiene to drop non-arms-length transactions
     # before time split.  Cleaner training set → tighter test variance.
     hygiene = cfg.get("sales_hygiene")
     if hygiene:
-        sub = _apply_sales_hygiene(sub, segment, hygiene)
+        sub = _apply_sales_hygiene(sub, segment, hygiene)  # type: ignore[arg-type]
 
-    sub = _engineer(sub)
+    sub = _engineer(sub)  # type: ignore[arg-type]
 
     # Time-based split.
     train = sub[pd.to_datetime(sub["sale_date"]).dt.date <= TRAIN_END].copy()
@@ -885,21 +1145,21 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     # For price_per_unit targets, derive the column before fitting stats.
     if target == "price_per_unit":
         for split in (train, test):
-            mask = split["total_units"].notna() & (split["total_units"] > 0)
+            mask = split["total_units"].notna() & (split["total_units"] > 0)  # type: ignore[union-attr]
             split.loc[mask, "price_per_unit"] = (
                 split.loc[mask, "sales_price"] / split.loc[mask, "total_units"]
             )
-        train = train[train["price_per_unit"].notna()].copy()
-        test  = test[test["price_per_unit"].notna()].copy()
+        train = train[train["price_per_unit"].notna()].copy()  # type: ignore[union-attr]
+        test  = test[test["price_per_unit"].notna()].copy()  # type: ignore[union-attr]
 
     # Rare-neighbourhood collapse (for multi_family and any other RARE_NBHD_SEGMENTS).
     if segment in RARE_NBHD_SEGMENTS:
-        train, test = _collapse_rare_neighborhoods(train, test, RARE_N)
+        train, test = _collapse_rare_neighborhoods(train, test, RARE_N)  # type: ignore[arg-type]
 
     # Neighbourhood stats fitted on train only.
-    stats = _fit_neighborhood_stats(train, target)
-    train = _apply_neighborhood_stats(train, stats, target)
-    test  = _apply_neighborhood_stats(test,  stats, target)
+    stats = _fit_neighborhood_stats(train, target)  # type: ignore[arg-type]
+    train = _apply_neighborhood_stats(train, stats, target)  # type: ignore[arg-type]
+    test  = _apply_neighborhood_stats(test,  stats, target)  # type: ignore[arg-type]
 
     # Only keep features actually present in the data.
     avail_num = [c for c in num_feats if c in train.columns]
@@ -912,18 +1172,41 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
         print(f"  SKIPPED — target column '{target_col}' missing")
         return None
 
+    # Sort chronologically so the early-stopping val holdout is the most
+    # recent transactions (closest in time to the 2025 test set).
+    train = train.sort_values("sale_date").reset_index(drop=True)
+
     X_tr = train[avail_num + avail_cat]
     y_tr = np.log1p(train[target_col].values)
     X_te = test[avail_num + avail_cat]
     y_te = np.log1p(test[target_col].values)
 
+    # Sprint C/D: pick model params — LGBM for targeted segments, XGB otherwise.
+    # Apply early stopping to find the optimal n_estimators, then re-fit on
+    # all training data with that fixed value.
+    model_params = dict(
+        SEGMENT_LGBM_PARAMS[segment]
+        if segment in LGBM_SEGMENTS
+        else SEGMENT_XGB_PARAMS[segment]
+    )
+    algo = "LGBM" if segment in LGBM_SEGMENTS else "XGB"
+    if segment in EARLY_STOPPING_SEGMENTS:
+        optimal_n = _find_optimal_n_estimators(
+            avail_num, avail_cat, model_params, X_tr, y_tr, segment=segment,  # type: ignore[arg-type]
+        )
+        print(f"  Early stopping [{algo}]: optimal n_estimators = {optimal_n} "
+              f"(was {model_params.get('n_estimators', '?')})")
+        model_params["n_estimators"] = optimal_n
+
     # Use VotingRegressor ensemble for high-variance segments.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         if segment in ENSEMBLE_SEGMENTS:
-            pipe = _build_voting_pipeline(avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment])
+            pipe = _build_voting_pipeline(avail_num, avail_cat, model_params,
+                                          segment=segment)
         else:
-            pipe = _build_pipeline(avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment])
+            pipe = _build_pipeline(avail_num, avail_cat, model_params,
+                                   segment=segment)
         pipe.fit(X_tr, y_tr)
 
     tr_m = _eval(y_tr, pipe.predict(X_tr))

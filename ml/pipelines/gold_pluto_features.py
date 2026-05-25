@@ -44,14 +44,18 @@ import pandas as pd
 from pathlib import Path
 from sklearn.neighbors import BallTree
 
-BASE     = Path(__file__).resolve().parents[2]
-PLUTO    = BASE / "ml/data/pluto_raw/pluto.csv"
-SUBWAY   = BASE / "ml/data/external/nyc_subway_stations.csv"
-OUT_DIR  = BASE / "ml/data/gold"
-OUT_FILE = OUT_DIR / "gold_pluto_features.parquet"
+BASE      = Path(__file__).resolve().parents[2]
+PLUTO     = BASE / "ml/data/pluto_raw/pluto.csv"
+SUBWAY    = BASE / "ml/data/external/nyc_subway_stations.csv"
+RENTSTAB  = BASE / "ml/data/external/rentstab_counts_2023.csv"
+OUT_DIR   = BASE / "ml/data/gold"
+OUT_FILE  = OUT_DIR / "gold_pluto_features.parquet"
 
 # Earth radius (km) — used for BallTree radian → km conversions
 _R_EARTH = 6371.0
+
+# 0.5 statute miles in km (used for subway line diversity radius)
+_R_05MI_KM = 0.8047
 
 # Physical / geographic columns to keep from PLUTO (excludes assessed values)
 KEEP_COLS = [
@@ -61,6 +65,7 @@ KEEP_COLS = [
     "numfloors",
     "lotdepth",
     "builtfar",
+    "residfar",   # allowed residential FAR → used for far_utilization
     "bldgfront",
     "bldgdepth",
     "lotarea",
@@ -156,14 +161,36 @@ def _build_transit_features(
     else:
         subway_cbd_dist_km = np.full(len(pluto), np.nan)
 
+    # ── 6. Distinct subway lines within 0.5 statute miles ────────────────────
+    # Route *diversity* (how many different lines) is qualitatively different
+    # from station *count* (subway_n_500m).  A corner with A/C/E + 1/2/3
+    # commands a larger premium than a corner with 6 stops of the same line.
+    # Returns 0 (not NaN) for properties with no stations in range — the
+    # absence of transit is a meaningful zero, not missing data.
+    r_05mi = _R_05MI_KM / _R_EARTH  # radians
+    all_routes_arr = sub["Daytime Routes"].fillna("").str.strip().values
+    station_idx_05mi = tree_all.query_radius(prop_coords_rad, r=r_05mi)
+    n_lines_05mi = np.zeros(len(pluto), dtype=float)
+    for i, idx_arr in enumerate(station_idx_05mi):
+        if len(idx_arr) == 0:
+            n_lines_05mi[i] = 0.0  # no stations → 0, not NaN (absence = signal)
+        else:
+            unique_routes: set[str] = set()
+            for j in idx_arr:
+                unique_routes.update(str(all_routes_arr[j]).split())
+            # Filter out empty strings from "no route" entries
+            unique_routes.discard("")
+            n_lines_05mi[i] = float(len(unique_routes))
+
     return pd.DataFrame(
         {
-            "subway_dist_km":       subway_dist_km,
-            "subway_n_500m":        counts_500m.astype(float),
-            "subway_n_1km":         counts_1km.astype(float),
+            "subway_dist_km":         subway_dist_km,
+            "subway_n_500m":          counts_500m.astype(float),
+            "subway_n_1km":           counts_1km.astype(float),
             "subway_k3_mean_dist_km": subway_k3_mean_dist_km,
-            "subway_hub_flag":      subway_hub_flag,
-            "subway_cbd_dist_km":   subway_cbd_dist_km,
+            "subway_hub_flag":        subway_hub_flag,
+            "subway_cbd_dist_km":     subway_cbd_dist_km,
+            "subway_n_lines_05mi":    n_lines_05mi,
         },
         index=pluto.index,
     )
@@ -204,6 +231,18 @@ def main() -> None:
         depth = pd.to_numeric(pluto["bldgdepth"], errors="coerce")
         pluto["bldg_footprint"] = front * depth
 
+    # Derived: FAR utilization — what fraction of allowed residential FAR is built.
+    # Guards against residfar = 0 (parks, institutional parcels, irregular zoning)
+    # which would produce inf or division-by-zero values.
+    if "builtfar" in pluto.columns and "residfar" in pluto.columns:
+        builtfar  = pd.to_numeric(pluto["builtfar"],  errors="coerce")
+        residfar  = pd.to_numeric(pluto["residfar"],  errors="coerce").fillna(0)
+        pluto["far_utilization"] = np.where(
+            residfar > 0,
+            builtfar / residfar,
+            np.nan,  # undefined for zero-residfar lots (parks, institutions)
+        )
+
     # Transit feature pack
     print("Loading subway stations …")
     subway = pd.read_csv(SUBWAY)
@@ -215,21 +254,41 @@ def main() -> None:
         pluto[col] = transit[col].values
     print(f"  transit features: {transit.columns.tolist()}")
 
+    # Rent stabilization join ─────────────────────────────────────────────────
+    # DHCR rent stabilization counts by BBL (2023 snapshot).
+    # ucbbl is a 10-digit integer matching the spine's BBL string format.
+    if RENTSTAB.exists():
+        print("Joining rent stabilization counts …")
+        rs = pd.read_csv(RENTSTAB, usecols=["ucbbl", "uc2023"], dtype={"ucbbl": str})
+        rs = rs.rename(columns={"ucbbl": "bbl", "uc2023": "rent_stab_units"})
+        rs["bbl"] = rs["bbl"].str.strip().str.zfill(10)
+        rs["rent_stab_units"] = pd.to_numeric(rs["rent_stab_units"], errors="coerce")
+        pluto["bbl"] = pluto["bbl"].astype(str).str.zfill(10)
+        pluto = pluto.merge(rs[["bbl", "rent_stab_units"]], on="bbl", how="left")
+        n_matched = pluto["rent_stab_units"].notna().sum()
+        print(f"  Matched {n_matched:,} / {len(pluto):,} BBLs with rent-stab data")
+    else:
+        print(f"  [skip] rentstab CSV not found at {RENTSTAB}")
+        pluto["rent_stab_units"] = np.nan
+
     # Rename + prefix for clarity in downstream models
     rename = {
-        "numfloors":      "pluto_numfloors",
-        "lotdepth":       "pluto_lotdepth",
-        "builtfar":       "pluto_builtfar",
-        "bldg_footprint": "pluto_bldg_footprint",
-        "lotarea":        "pluto_lotarea",
-        "bldgarea":       "pluto_bldgarea",
-        "unitsres":       "pluto_unitsres",
-        "yearbuilt":      "pluto_yearbuilt",
-        "bldgclass":      "pluto_bldgclass",
-        "latitude":       "pluto_latitude",
-        "longitude":      "pluto_longitude",
+        "numfloors":       "pluto_numfloors",
+        "lotdepth":        "pluto_lotdepth",
+        "builtfar":        "pluto_builtfar",
+        "far_utilization": "pluto_far_utilization",
+        "bldg_footprint":  "pluto_bldg_footprint",
+        "lotarea":         "pluto_lotarea",
+        "bldgarea":        "pluto_bldgarea",
+        "unitsres":        "pluto_unitsres",
+        "yearbuilt":       "pluto_yearbuilt",
+        "bldgclass":       "pluto_bldgclass",
+        "latitude":        "pluto_latitude",
+        "longitude":       "pluto_longitude",
     }
     pluto = pluto.rename(columns={k: v for k, v in rename.items() if k in pluto.columns})
+    # Drop residfar from output — it was only needed to derive pluto_far_utilization
+    pluto = pluto.drop(columns=["residfar"], errors="ignore")
 
     # One row per BBL (dedup keeping first — physical features don't change within year)
     before = len(pluto)

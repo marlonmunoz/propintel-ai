@@ -39,6 +39,72 @@ jobs:
         run: |
           PYTHONPATH=. pytest
 
+  ml_metadata:
+    name: ML metadata integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate metadata JSON files
+        # Light-weight check: every committed metadata JSON must be valid JSON,
+        # contain required keys, and have all numeric metric fields set.
+        # Does NOT require .pkl artifacts — runs on every PR in ~5 seconds.
+        run: |
+          python - << 'EOF'
+          import json, pathlib, sys
+
+          REQUIRED_TOP = {"name", "version", "segment", "artifact_path", "metrics"}
+          REQUIRED_METRICS = {"mae", "rmse", "r2", "median_ape"}
+          METADATA_DIR = pathlib.Path("ml/artifacts/metadata")
+          errors = []
+
+          for p in sorted(METADATA_DIR.glob("*.json")):
+              try:
+                  data = json.loads(p.read_text(encoding="utf-8"))
+              except json.JSONDecodeError as exc:
+                  errors.append(f"{p.name}: invalid JSON — {exc}")
+                  continue
+
+              missing_top = REQUIRED_TOP - data.keys()
+              if missing_top:
+                  errors.append(f"{p.name}: missing top-level keys {missing_top}")
+                  continue
+
+              metrics = data.get("metrics", {})
+              missing_metrics = REQUIRED_METRICS - metrics.keys()
+              if missing_metrics:
+                  errors.append(f"{p.name}: missing metric keys {missing_metrics}")
+                  continue
+
+              for k in REQUIRED_METRICS:
+                  val = metrics[k]
+                  if not isinstance(val, (int, float)):
+                      errors.append(f"{p.name}: metrics.{k} must be numeric, got {type(val).__name__}")
+
+              # Sanity bounds
+              if not (0.0 <= metrics.get("r2", 0) <= 1.0):
+                  errors.append(f"{p.name}: metrics.r2={metrics['r2']!r} outside [0,1]")
+              if not (0.0 <= metrics.get("median_ape", 0) <= 5.0):
+                  errors.append(f"{p.name}: metrics.median_ape={metrics['median_ape']!r} looks wrong (>500%?)")
+              if metrics.get("mae", 0) <= 0:
+                  errors.append(f"{p.name}: metrics.mae must be > 0")
+
+          if errors:
+              print("ML metadata validation FAILED:")
+              for e in errors:
+                  print(f"  ✗ {e}")
+              sys.exit(1)
+
+          print(f"✓ All {len(list(METADATA_DIR.glob('*.json')))} metadata JSON files are valid.")
+          EOF
+
   frontend:
     name: Frontend (vitest + build)
     runs-on: ubuntu-latest

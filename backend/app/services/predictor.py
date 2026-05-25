@@ -25,13 +25,18 @@ from backend.app.services.model_registry import ModelRegistry, RegisteredModel
 REFERENCE_YEAR = 2024
 BASE_DIR = Path(__file__).resolve().parents[3]
 
-# Models whose training feature set includes comp + trend signals
-# (comp_count, comp_median_price, nbhd_median_l365, etc.).
-# one_family was not trained with comp/trend features — those keys must
-# not be added to its inference row so XGBoost's booster.feature_names
-# stays consistent with what it was trained on.
+# Models whose training feature set includes market-trend signals
+# (nbhd_median_l365, nbhd_yoy_growth, borough_yoy_growth).
+# Sprint E: two_family + three_family merged into multi_family.
+_TREND_AWARE_MODELS = frozenset({
+    "one_family", "multi_family", "condo_coop", "rentals_all",
+})
+
+# Models that ALSO include comparable-sales signals
+# (comp_count, comp_median_price, comp_median_ppsqft, etc.) on top of trends.
+# one_family excluded: comp features cause temporal overfit for SFH (Sprint C).
 _COMP_AWARE_MODELS = frozenset({
-    "two_family", "three_family", "condo_coop", "rentals_all",
+    "multi_family", "condo_coop", "rentals_all",
 })
 
 SUBWAY_CSV = BASE_DIR / "ml/data/external/nyc_subway_stations.csv"
@@ -332,12 +337,21 @@ def _build_spine_row(payload: ProductionPredictionRequest,
 
     }
 
-    # ── Sprint A: comp + trend features ───────────────────────────────────────
-    # Only added for models that were trained with these signals.
-    # one_family's training set does not include comp/trend keys, so adding
-    # them here would introduce columns XGBoost never saw — safe but noisy.
-    # Populated below when (bbl, as_of_date) are provided and a precomputed
-    # snapshot exists in gold_comps_features / gold_market_trends.
+    # ── Sprint A/B: market-trend + comp features ──────────────────────────────
+    # Only added for models trained with these signals; populating columns that
+    # were never in the training set is safe (XGBoost ignores unknown columns
+    # via ColumnTransformer) but noisy and misleading — keep it tight.
+    #
+    # Trend features (nbhd_median_l365, nbhd_yoy_growth, borough_yoy_growth):
+    #   All _TREND_AWARE_MODELS — includes one_family (added Sprint B).
+    # Comp features (comp_count, comp_median_price, etc.):
+    #   Only _COMP_AWARE_MODELS — one_family uses trend-only for now.
+    if model_key in _TREND_AWARE_MODELS:
+        row.update({
+            "nbhd_median_l365":    np.nan,
+            "nbhd_yoy_growth":     np.nan,
+            "borough_yoy_growth":  np.nan,
+        })
     if model_key in _COMP_AWARE_MODELS:
         row.update({
             "comp_count":          np.nan,
@@ -345,9 +359,6 @@ def _build_spine_row(payload: ProductionPredictionRequest,
             "comp_median_ppsqft":  np.nan,
             "comp_search_dist_km": np.nan,
             "comp_recency_days":   np.nan,
-            "nbhd_median_l365":    np.nan,
-            "nbhd_yoy_growth":     np.nan,
-            "borough_yoy_growth":  np.nan,
         })
 
     # ── Pooled rental flag ────────────────────────────────────────────────────
@@ -376,14 +387,7 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         else:
             join_meta["bbl_normalized"] = bbl_n
             join_meta["as_of_date"] = str(as_of)
-            # Map model_key → spine segment expected by derive_comp_segment.
-            #   two_family / three_family / one_family / condo_coop are passed
-            #   verbatim; multi_family routes to "multi_family" (legacy combined
-            #   model not in Sprint A scope, so comp/trend join no-ops).
-            spine_segment = (
-                "multi_family" if model_key in {"two_family", "three_family"}
-                else model_key
-            )
+            spine_segment = model_key
             gold_feats, status = build_spine_gold_features_from_bbl(
                 bbl_n,
                 as_of,
