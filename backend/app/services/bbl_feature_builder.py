@@ -48,6 +48,8 @@ GOLD_PLUTO          = BASE_DIR / "ml/data/gold/gold_pluto_features.parquet"
 #   one_family / two_family (multi-fam class 02) / three_family (class 03) / condo_coop
 GOLD_COMPS   = BASE_DIR / "ml/data/gold/gold_comps_features.parquet"
 GOLD_TRENDS  = BASE_DIR / "ml/data/gold/gold_market_trends.parquet"
+# Sprint G — condo unit-level structural features (PROPMAST roll, BBL-keyed).
+GOLD_CONDO_UNITS = BASE_DIR / "ml/data/gold/gold_dof_condo_units.parquet"
 
 # Must match gold_acris_features_asof.py
 DEED_TYPES = {
@@ -499,6 +501,27 @@ def _trend_features(
     return out
 
 
+def _condo_unit_features(bbl: str) -> dict[str, Any]:
+    """Condo unit structural features from the PROPMAST Gold snapshot.
+
+    Returns a dict with ``condo_gross_sqft``, ``condo_comint_bldg``,
+    ``condo_comint_land`` when the BBL is a condo unit lot (lot 1001-6999)
+    present in the roll.  Returns an empty dict for co-op BBLs or any BBL
+    not in the roll — the caller's SimpleImputer handles NaN gracefully.
+    """
+    out: dict[str, Any] = {}
+    if not GOLD_CONDO_UNITS.exists():
+        return out
+    df = _parquet_read_bbl(GOLD_CONDO_UNITS, bbl)
+    if df.empty:
+        return out
+    row = df.iloc[0]
+    for c in ("condo_gross_sqft", "condo_comint_bldg", "condo_comint_land"):
+        if c in row.index and pd.notna(row[c]):  # type: ignore[truthy-function]
+            out[c] = float(row[c])  # type: ignore[arg-type]
+    return out
+
+
 def derive_comp_segment(segment: str | None, building_class: str | None) -> str | None:
     """Map (segment, building_class) → comp_segment key used in Gold tables.
 
@@ -509,7 +532,8 @@ def derive_comp_segment(segment: str | None, building_class: str | None) -> str 
         return None
     if segment == "one_family":
         return "one_family"
-    if segment == "condo_coop":
+    # Sprint G: condo and coop each use the pooled condo_coop comp/trend tables.
+    if segment in ("condo_coop", "condo", "coop"):
         return "condo_coop"
     if segment == "multi_family":
         bc = (building_class or "").strip()
@@ -547,6 +571,12 @@ def build_spine_gold_features_from_bbl(
     merged.update(_acris_features(bbl, as_of_date))
     merged.update(_j51_features(bbl, as_of_date))
     merged.update(_pluto_features(bbl))
+
+    # Sprint G: condo unit-level structural features (PROPMAST roll, BBL-keyed).
+    # Only meaningful for condo segment (unit lots 1001-6999); returns {} for
+    # co-ops and any non-condo BBL.  No impact on status.
+    if segment in ("condo", "coop"):
+        merged.update(_condo_unit_features(bbl))
 
     # Comp + trend features (no impact on status; opt-in via segment kwarg).
     comp_segment = derive_comp_segment(segment, building_class)

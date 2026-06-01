@@ -1,0 +1,34 @@
+{
+    "name": "coop_spine",
+    "version": "v1",
+    "segment": "coop",
+    "artifact_path": "ml/artifacts/spine_models/coop_spine_price_model.pkl",
+    "stats_path": "ml/artifacts/spine_models/coop_spine_neighborhood_stats.json",
+    "feature_importance_path": "ml/artifacts/spine_models/coop_spine_feature_importance.csv",
+    "target": "sales_price",
+    "numeric_features": [
+        "neighborhood_median_price", "property_age",
+        "dof_curmkttot", "dof_curacttot", "dof_curactland", "dof_assess_per_unit",
+        "dof_gross_sqft", "dof_bld_story", "dof_units", "dof_yrbuilt",
+        "acris_prior_sale_cnt", "acris_last_deed_amt", "acris_days_since_last_deed",
+        "acris_mortgage_cnt", "acris_last_mtge_amt",
+        "j51_active_flag", "j51_last_abate_amt", "j51_total_abatement",
+        "pluto_latitude", "pluto_longitude",
+        "subway_dist_km", "subway_n_500m", "subway_n_1km",
+        "subway_k3_mean_dist_km", "subway_hub_flag", "subway_cbd_dist_km",
+        "subway_n_lines_05mi",
+        "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
+        "pluto_bldgarea", "pluto_lotarea",
+        "pluto_far_utilization", "rent_stab_units",
+        "condo_gross_sqft", "condo_comint_bldg", "condo_comint_land"
+    ],
+    "categorical_features": [
+        "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"
+    ],
+    "metrics": {
+        "mae": 345618.0,
+        "r2": 0.501,
+        "median_ape": 0.244,
+        "note": "v1 coop split (Sprint G): structural public-data ceiling — co-op units are corporation shares with no public unit-level data. condo_gross_sqft / comint features are all-null for co-ops and do not contribute. Model accuracy reflects inherent data limits."
+    }
+}

@@ -59,6 +59,15 @@ class ModelRegistry:
             _meta = self.metadata_dir / f"{seg}_model.json"
             if _meta.exists():
                 self._models[seg] = self._load_metadata(f"{seg}_model.json")
+
+        # Promote condo and coop split models if their metadata exists.
+        # When present they override the pooled condo_coop routing:
+        #   condo → building classes 12/13/15 (real-property unit lots)
+        #   coop  → building classes 09/10/17 (corporation shares)
+        for seg in ("condo", "coop"):
+            _meta = self.metadata_dir / f"{seg}_model.json"
+            if _meta.exists():
+                self._models[seg] = self._load_metadata(f"{seg}_model.json")
         self._loaded_models = {}
 
     def _get_artifact_root(self) -> Path:
@@ -131,14 +140,17 @@ class ModelRegistry:
 
         ONE_FAMILY = {"01 ONE FAMILY DWELLINGS"}
         MULTI_FAMILY = {"02 TWO FAMILY DWELLINGS", "03 THREE FAMILY DWELLINGS"}
-        CONDO_COOP = {
-            "09 COOPS - WALKUP APARTMENTS",
-            "10 COOPS - ELEVATOR APARTMENTS",
+        CONDO_CLASSES = {
             "12 CONDOS - WALKUP APARTMENTS",
             "13 CONDOS - ELEVATOR APARTMENTS",
             "15 CONDOS - 2-10 UNIT RESIDENTIAL",
+        }
+        COOP_CLASSES = {
+            "09 COOPS - WALKUP APARTMENTS",
+            "10 COOPS - ELEVATOR APARTMENTS",
             "17 CONDO COOPS",
         }
+        CONDO_COOP = CONDO_CLASSES | COOP_CLASSES
         if bc in ONE_FAMILY:
             return "one_family"
         if bc in MULTI_FAMILY:
@@ -151,6 +163,14 @@ class ModelRegistry:
                 return "three_family"
             return "multi_family"
         if bc in CONDO_COOP:
+            # Route to split condo/coop models when promoted metadata exists.
+            # Condos (classes 12/13/15) get the full PROPMAST unit-feature model.
+            # Co-ops (classes 09/10/17) get the co-op-specific model.
+            # Falls back to pooled condo_coop when neither is promoted.
+            if bc in CONDO_CLASSES and "condo" in self._models:
+                return "condo"
+            if bc in COOP_CLASSES and "coop" in self._models:
+                return "coop"
             return "condo_coop"
         # Route both rental classes to rentals_all when available (pooled model).
         if bc in ("07 RENTALS - WALKUP APARTMENTS", "08 RENTALS - ELEVATOR APARTMENTS"):

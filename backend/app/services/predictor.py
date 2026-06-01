@@ -28,16 +28,23 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 # Models whose training feature set includes market-trend signals
 # (nbhd_median_l365, nbhd_yoy_growth, borough_yoy_growth).
 # Sprint E: two_family + three_family merged into multi_family.
+# Sprint G: condo_coop split → condo + coop (both trend-aware).
 _TREND_AWARE_MODELS = frozenset({
-    "one_family", "multi_family", "condo_coop", "rentals_all",
+    "one_family", "multi_family", "condo_coop", "condo", "coop", "rentals_all",
 })
 
 # Models that ALSO include comparable-sales signals
 # (comp_count, comp_median_price, comp_median_ppsqft, etc.) on top of trends.
 # one_family excluded: comp features cause temporal overfit for SFH (Sprint C).
+# Sprint G: condo and coop use the pooled condo_coop comp/trend tables.
 _COMP_AWARE_MODELS = frozenset({
-    "multi_family", "condo_coop", "rentals_all",
+    "multi_family", "condo_coop", "condo", "coop", "rentals_all",
 })
+
+# Models that accept condo unit-level structural features from PROPMAST.
+# For coop rows these will always be NaN (co-op units have no public unit-level
+# data) — the model handles this gracefully via SimpleImputer.
+_CONDO_UNIT_MODELS = frozenset({"condo", "coop"})
 
 SUBWAY_CSV = BASE_DIR / "ml/data/external/nyc_subway_stations.csv"
 EARTH_RADIUS_KM = 6_371.0
@@ -175,6 +182,10 @@ def load_model_feature_importance(model_key: str, top_n: int = 3,
 def format_feature_name(feature: str) -> str:
     """Convert raw model feature names into human-readable explanations."""
     fl = feature.lower()
+    if "condo_gross_sqft" in fl:
+        return "Unit interior size (sqft) is the primary driver of condo valuation"
+    if "condo_comint" in fl:
+        return "Unit ownership share (common interest) directly determines condo value"
     if "bldgarea" in fl or "gross_sqft" in fl:
         return "Building size significantly impacts property value"
     if "sqft_per_unit" in fl:
@@ -359,6 +370,17 @@ def _build_spine_row(payload: ProductionPredictionRequest,
             "comp_median_ppsqft":  np.nan,
             "comp_search_dist_km": np.nan,
             "comp_recency_days":   np.nan,
+        })
+
+    # ── Condo unit features (Sprint G) ───────────────────────────────────────
+    # condo_gross_sqft, condo_comint_bldg/land are populated via the BBL Gold
+    # join below when a BBL is provided; otherwise stay NaN (pipeline imputes).
+    # For co-op rows these features are always NaN — the coop model handles it.
+    if model_key in _CONDO_UNIT_MODELS:
+        row.update({
+            "condo_gross_sqft":   np.nan,
+            "condo_comint_bldg":  np.nan,
+            "condo_comint_land":  np.nan,
         })
 
     # ── Pooled rental flag ────────────────────────────────────────────────────
