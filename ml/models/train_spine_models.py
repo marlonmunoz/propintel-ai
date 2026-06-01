@@ -48,8 +48,10 @@ GOLD_PLUTO  = BASE_DIR / "ml/data/gold/gold_pluto_features.parquet"
 # Sprint A — k-NN comparable sales and per-neighbourhood market trends.
 # Both tables carry a `comp_segment` column and are joined per spine row by
 # deriving each row's comp_segment from its (segment, building_class).
-GOLD_COMPS  = BASE_DIR / "ml/data/gold/gold_comps_features.parquet"
-GOLD_TRENDS = BASE_DIR / "ml/data/gold/gold_market_trends.parquet"
+GOLD_COMPS        = BASE_DIR / "ml/data/gold/gold_comps_features.parquet"
+GOLD_TRENDS       = BASE_DIR / "ml/data/gold/gold_market_trends.parquet"
+# Sprint G: condo unit-level structural features (PROPMAST roll).
+GOLD_CONDO_UNITS  = BASE_DIR / "ml/data/gold/gold_dof_condo_units.parquet"
 ARTIFACTS   = BASE_DIR / "ml/artifacts/spine_models"
 METRICS_FILE = ARTIFACTS / "spine_model_metrics.json"
 
@@ -139,6 +141,19 @@ _MF_PLUTO_NUMERIC = [c for c in _PLUTO_NUMERIC if c not in _MF_EXCL_TRANSIT]
 _MF_EXTRA_NUMERIC = [
     "rent_stab_units",
     "pluto_far_utilization",
+]
+
+# Sprint G: condo unit-level structural features from the DOF PROPMAST roll.
+# These exist ONLY for condo unit lots (lot 1001-6999) and cover 99.8% of the
+# condo sales segment (vs ~39% from the pooled DOF CSV).
+#   condo_gross_sqft   — true net interior sqft of the unit (from condo declaration)
+#   condo_comint_bldg  — unit's ownership % of the building; near-direct price driver
+#   condo_comint_land  — unit's land-interest % (correlated with comint_bldg but adds
+#                        signal in mixed-use condos where land/bldg ratios diverge)
+_CONDO_UNIT_NUMERIC = [
+    "condo_gross_sqft",
+    "condo_comint_bldg",
+    "condo_comint_land",
 ]
 
 # ── Sprint A: comp + market-trend feature packs ────────────────────────────────
@@ -321,10 +336,12 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "min_test":  100,
     },
     # ── Condo / co-op split (Sprint G) ─────────────────────────────────────────
-    # Same feature pack as the pooled condo_coop for a clean apples-to-apples
-    # baseline; the two are trained separately because their pricing mechanics
-    # and data availability differ (condos = real-property unit lots with DOF
-    # data; co-ops = corporation shares with a structural public-data ceiling).
+    # Condos get the full DOF unit-level feature pack (condo_gross_sqft,
+    # condo_comint_bldg, condo_comint_land) sourced from the PROPMAST roll,
+    # which covers 99.8% of the condo segment (vs ~39% from the pooled CSV).
+    # Co-ops intentionally do NOT get these — they share one building-level BBL
+    # and have no public unit-level data; adding condo_* features there would
+    # produce near-100% NaN columns.
     "condo": {
         "target": "sales_price",
         "numeric": [
@@ -332,6 +349,7 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
             *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
             "pluto_far_utilization",
             "rent_stab_units",
+            *_CONDO_UNIT_NUMERIC,  # Sprint G: true unit sqft + common-interest %
         ],
         "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
         "min_train": 500,
@@ -647,9 +665,29 @@ def load_enriched_spine() -> pd.DataFrame:
     spine = spine.merge(pluto_sub, on="bbl", how="left")
     print(f"    PLUTO match rate: {spine['pluto_latitude'].notna().mean():.1%}")
 
+    # ── Condo unit structural features (Sprint G) ─────────────────────────────
+    # BBL-only join: one row per condo unit lot in the roll snapshot.
+    # Non-condo rows (co-ops, multifamily, etc.) get NaN for all condo_* cols,
+    # which sklearn handles cleanly via the SimpleImputer in the pipeline.
+    if GOLD_CONDO_UNITS.exists():
+        print("  Joining Gold condo unit features …")
+        cuf = pd.read_parquet(GOLD_CONDO_UNITS)
+        cuf["bbl"] = cuf["bbl"].astype(str).str.strip()
+        cuf_cols = ["bbl"] + [c for c in cuf.columns if c.startswith("condo_")]
+        cuf_sub  = cuf[cuf_cols].drop_duplicates(subset=["bbl"]).reset_index(drop=True)  # type: ignore[arg-type]
+        before = len(spine)
+        spine = spine.merge(cuf_sub, on="bbl", how="left")
+        assert len(spine) == before, "condo units join changed row count"
+        cov = spine["condo_gross_sqft"].notna().mean()
+        print(f"    condo_gross_sqft coverage: {cov:.1%}")
+    else:
+        print("  [warn] gold_dof_condo_units.parquet missing — condo unit features unavailable")
+        for col in _CONDO_UNIT_NUMERIC:
+            spine[col] = float("nan")
+
     # Ensure integer/mixed columns arrive as float for sklearn compatibility.
     for c in ["acris_prior_sale_cnt", "acris_mortgage_cnt", "j51_active_flag",
-              *_PLUTO_NUMERIC, *_PLUTO_NAMED_EXTRAS]:
+              *_PLUTO_NUMERIC, *_PLUTO_NAMED_EXTRAS, *_CONDO_UNIT_NUMERIC]:
         if c in spine.columns:
             spine[c] = pd.to_numeric(spine[c], errors="coerce").astype(float)  # type: ignore[union-attr]
 
