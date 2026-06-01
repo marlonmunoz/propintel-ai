@@ -57,7 +57,7 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 - **Billing:** **Stripe Live** — hosted Checkout ($29/mo Pro), Customer Portal (cancel / payment method / invoices), webhooks sync **`profiles.role`** and **`billing_customers`**; Profile UI for upgrade and manage subscription.
 - **Ops:** slowapi rate limits, CORS allowlist + optional **`CORS_ORIGIN_REGEX`** (Vercel previews), unified JSON errors with **`request_id`**, optional Sentry with PII scrubbing, **`/health`** + **`/ready`**, JSON logs, security headers, proxy-aware IP when **`TRUST_PROXY_HEADERS=1`**.
 - **Production (May 2026):** Frontend on **Vercel** (`www.propintel-ai.com`), API on **Railway** (`api.propintel-ai.com`), Supabase Auth + Postgres, secrets rotated and verified end-to-end (auth, LLM, email, Live billing).
-- **Quality:** **93** backend pytest tests + **145** frontend Vitest tests (**238** total); GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
+- **Quality:** **123** backend pytest tests + **148** frontend Vitest tests (**271** total); GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
 
 ---
 
@@ -243,6 +243,7 @@ Raw datasets (Bronze)
             │
             ▼
   Gold as-of feature builders  (ml/pipelines/gold_*_asof.py)
+  Condo unit features          (ml/pipelines/silver_dof_condo_units.py → gold_dof_condo_units.py)
             │
             ▼
   Training / tuning  (ml/models/train_spine_models.py, tune_spine_models.py)
@@ -263,28 +264,38 @@ Raw datasets (Bronze)
 | ACRIS | Deed / mortgage history |
 | J-51 | Exemption / abatement flags |
 | NYC Subway Stations | Transit distance features |
+| DOF PROPMAST (Tax Class 2/3/4) | Condo **unit-lot** sqft, common-interest %, apt no (manual download → Silver) |
 
-Join key: **BBL**. As-of filters prevent future data from leaking into training rows.
+Join key: **BBL**. As-of filters prevent future data from leaking into training rows. Condo unit structural features (sqft, ownership share) are time-invariant and joined by BBL only.
 
 ---
 
 ## Model registry & subtype routing
 
-`ModelRegistry` maps **building class** → segment model (see `ml/artifacts/metadata/`). Rental classes **`07`** and **`08`** share **`rentals_all`** with an **`is_elevator`** feature. Feature importances ship as CSV artifacts for explainability and LLM context.
+`ModelRegistry` maps **building class** → segment model (see `ml/artifacts/metadata/`). When promoted metadata exists, **`condo`** and **`coop`** replace the legacy pooled **`condo_coop`** route. Rental classes **`07`** and **`08`** share **`rentals_all`** with an **`is_elevator`** feature. Feature importances ship as CSV artifacts for explainability and LLM context.
+
+| Building class (examples) | Model key |
+|---------------------------|-----------|
+| `01 ONE FAMILY DWELLINGS` | `one_family` |
+| `02` / `03 TWO / THREE FAMILY` | `multi_family` (merged 2+3 unit) |
+| `12` / `13` / `15` CONDOS | `condo` |
+| `09` / `10` / `17` COOPS | `coop` |
+| `07` / `08` RENTALS | `rentals_all` |
+| Other / unknown | `global` (fallback) |
 
 ### Performance snapshot (time-based holdout)
 
-Train ≤ **2024-12-31**, test ≥ **2025-01-31** (gap enforced). Example segments:
+Train ≤ **2024-12-31**, test ≥ **2025-01-31** (30-day reporting gap). Metrics from `ml/artifacts/metadata/*.json`:
 
-| Segment | Test R² | Notes |
-|---------|---------|-------|
-| `one_family` | **0.768** | Strong baseline |
-| `condo_coop` | **0.637** | Stable |
-| `two_family` | **0.677** | Split from legacy multi_family + comp/trend packs |
-| `three_family` | **0.395** | Noisier investor segment |
-| `rentals_all` | **0.458** | Pooled rentals; **price per unit** target |
+| Segment | Test R² | Median APE | Notes |
+|---------|---------|------------|-------|
+| `condo` | **0.825** | **13.9%** | Split from `condo_coop`; PROPMAST unit sqft + common-interest |
+| `one_family` | **0.765** | **17.2%** | Strong owner-occupier baseline |
+| `multi_family` | **0.673** | **16.9%** | Merged 2+3 family; LightGBM + comp/trend packs |
+| `coop` | **0.501** | **24.4%** | Co-op shares — no public unit-level data (wide intervals) |
+| `rentals_all` | **0.458** | **25.9%** | Pooled rentals; **price per unit** target |
 
-See the tables in version-controlled docs / prior releases for full MAE, APE, and gate metrics.
+Legacy pooled **`condo_coop`** metadata remains for deploys without split artifacts; production routes to **`condo`** / **`coop`** when `condo_model.json` and `coop_model.json` are present.
 
 ---
 
@@ -579,7 +590,7 @@ Contact submissions are **not** persisted in Postgres by default.
 PYTHONPATH=. pytest
 ```
 
-From the repo root this discovers **`tests/`** and **`backend/tests/`** (**93** tests), including **`backend/tests/test_contact.py`**.
+From the repo root this discovers **`tests/`** and **`backend/tests/`** (**123** tests), including **`backend/tests/test_contact.py`**.
 
 ### Frontend
 
@@ -587,15 +598,15 @@ From the repo root this discovers **`tests/`** and **`backend/tests/`** (**93** 
 cd frontend && npm test
 ```
 
-**145** tests (Vitest + Testing Library). **`npm run lint`** runs ESLint (also executed in CI).
+**148** tests (Vitest + Testing Library). **`npm run lint`** runs ESLint (also executed in CI).
 
 ### Totals
 
 | Suite | Count |
 |-------|------:|
-| Backend (`pytest`) | 93 |
-| Frontend (`npm test`) | 145 |
-| **Total** | **238** |
+| Backend (`pytest`) | 123 |
+| Frontend (`npm test`) | 148 |
+| **Total** | **271** |
 
 ### CI
 
@@ -670,7 +681,7 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 
 - Trained on **NYC residential** sales — not for generic commercial use.
 - Metrics come from **forward-time** evaluation — not random splits.
-- Segments with thinner data (e.g. three-family) show wider intervals.
+- Segments with thinner or structurally limited data (e.g. **co-op** shares, **rentals_all**) show wider intervals — the API still routes to the best available model but confidence framing should reflect median APE.
 - Macro / cycle features are out of scope for the current spine.
 
 ---

@@ -68,9 +68,8 @@ describe('Home page', () => {
 
   it('renders all three metric labels', () => {
     renderHome()
-    expect(screen.getByText(/Strongest segment/i)).toBeInTheDocument()
-    // Exact match to avoid collisions with feature description text.
-    expect(screen.getByText(/^2-family homes$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^Condo valuations$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^Single-family homes$/i)).toBeInTheDocument()
     expect(screen.getByText(/^Segment models$/i)).toBeInTheDocument()
   })
 

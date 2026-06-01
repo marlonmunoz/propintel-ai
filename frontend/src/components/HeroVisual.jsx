@@ -4,10 +4,10 @@ import { dealLabelBadgeClasses } from '../utils/dealLabelBadge'
 
 /** Snapshot labels — align with `modelMetrics` on Home.jsx when you retrain. */
 const HERO_METRICS = [
-  { label: 'R² 0.77' },
-  { label: '5 segments' },
+  { label: 'R² 0.83 · condo' },
+  { label: '6 segments' },
   { label: 'XGBoost' },
-  { label: 'R² 0.68 · 2-family' },
+  { label: 'R² 0.77 · 1-family' },
   { label: 'Buy', dealLabel: 'Buy' },
   { label: 'Hold', dealLabel: 'Hold' },
   { label: 'Avoid', dealLabel: 'Avoid' },

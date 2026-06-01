@@ -11,7 +11,7 @@ const features = [
     icon: BarChart3,
     title: 'ML-Powered Valuation',
     description:
-      'XGBoost ensemble models trained on real NYC sales data route to the best segment model — one family, two-family, three-family, condo/co-op, or rental (walkup and elevator pooled).',
+      'Segment-routed XGBoost and LightGBM models trained on 323k NYC sales (2019–2026). Building class selects the best-fit model — single-family, multi-family (2–3 unit), condo, co-op, or pooled rentals.',
   },
   {
     icon: Brain,
@@ -30,28 +30,28 @@ const features = [
 /** Snapshot from `ml/artifacts/metadata/*.json` — update targets when you retrain. */
 const modelMetrics = [
   {
-    label: 'Strongest segment',
-    segment: 'Single family homes',
+    label: 'Condo valuations',
+    segment: 'Real-property unit lots',
+    target: 0.83,
+    decimals: 2,
+    suffix: 'R²',
+    detail: 'Split condo model with DOF unit sqft + ownership share — 13.9% median error on holdout',
+  },
+  {
+    label: 'Single-family homes',
+    segment: 'Owner-occupier baseline',
     target: 0.77,
     decimals: 2,
     suffix: 'R²',
-    detail: 'Highest accuracy on NYC residential sales — time-based holdout',
-  },
-  {
-    label: '2-family homes',
-    segment: 'Most common multi-family',
-    target: 0.68,
-    decimals: 2,
-    suffix: 'R²',
-    detail: 'Sprint A: + sales hygiene, comparable-sales pack, market trend pack — median APE 16.4%',
+    detail: 'Strongest traditional segment — 17.2% median error, time-based holdout',
   },
   {
     label: 'Segment models',
     segment: 'Production routing',
-    target: 5,
+    target: 6,
     decimals: 0,
     suffix: 'models',
-    detail: 'One global fallback + five dedicated segments (2-family now its own model)',
+    detail: 'Global fallback + condo, co-op, multi-family, rentals, and single-family',
   },
 ]
 
