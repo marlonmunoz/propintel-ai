@@ -320,6 +320,35 @@ SEGMENT_FEATURES: dict[str, dict[str, Any]] = {
         "min_train": 500,
         "min_test":  100,
     },
+    # ── Condo / co-op split (Sprint G) ─────────────────────────────────────────
+    # Same feature pack as the pooled condo_coop for a clean apples-to-apples
+    # baseline; the two are trained separately because their pricing mechanics
+    # and data availability differ (condos = real-property unit lots with DOF
+    # data; co-ops = corporation shares with a structural public-data ceiling).
+    "condo": {
+        "target": "sales_price",
+        "numeric": [
+            "neighborhood_median_price", "property_age",
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            "pluto_far_utilization",
+            "rent_stab_units",
+        ],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
+        "min_train": 500,
+        "min_test":  100,
+    },
+    "coop": {
+        "target": "sales_price",
+        "numeric": [
+            "neighborhood_median_price", "property_age",
+            *_DOF_NUMERIC, *_ACRIS_NUMERIC, *_J51_NUMERIC, *_PLUTO_NUMERIC,
+            "pluto_far_utilization",
+            "rent_stab_units",
+        ],
+        "categorical": ["borough_name", "neighborhood", *_DOF_CAT, *_PLUTO_CAT],
+        "min_train": 500,
+        "min_test":  100,
+    },
     # ── Pooled rental model ────────────────────────────────────────────────────
     # rental_walkup + rental_elevator are pooled into one model to eliminate
     # the ~350-row starvation problem for elevator rentals.
@@ -454,6 +483,17 @@ SEGMENT_XGB_PARAMS: dict[str, dict[str, Any]] = {
         "min_child_weight": 4, "subsample": 0.8, "colsample_bytree": 0.8,
         "gamma": 0.1, "reg_alpha": 0.3, "reg_lambda": 1.0,
     },
+    # Sprint G split — start from condo_coop params; tune per-segment later.
+    "condo": {
+        "n_estimators": 800, "learning_rate": 0.05, "max_depth": 5,
+        "min_child_weight": 4, "subsample": 0.8, "colsample_bytree": 0.8,
+        "gamma": 0.1, "reg_alpha": 0.3, "reg_lambda": 1.0,
+    },
+    "coop": {
+        "n_estimators": 800, "learning_rate": 0.05, "max_depth": 5,
+        "min_child_weight": 4, "subsample": 0.8, "colsample_bytree": 0.8,
+        "gamma": 0.1, "reg_alpha": 0.3, "reg_lambda": 1.0,
+    },
     # Pooled rental model (walkup + elevator).
     # Very aggressive regularisation closes the train/test gap from ~0.19 → 0.13.
     # No lat/lon to prevent geographic memorisation in a small dataset.
@@ -498,6 +538,43 @@ N_ENSEMBLE_SEEDS = 5
 
 BOROUGH_NAMES = {1: "Manhattan", 2: "Bronx", 3: "Brooklyn", 4: "Queens", 5: "Staten Island"}
 
+# ─── Condo / co-op split (building-class category) ───────────────────────────
+# The legacy `condo_coop` segment pools two fundamentally different asset types:
+#   * Condos (categories 12/13/15): each unit is its own real-property tax lot
+#     (lot 1001-6999), so DOF unit-level assessment data EXISTS and can be
+#     enriched further.
+#   * Co-ops (categories 09/10/17): the corporation owns the whole building as a
+#     single tax lot; a "sale" is shares, not real property. NO public unit-level
+#     data exists anywhere for co-op units — their pricing ceiling is structural.
+# Pooling them caps both. We split at load time so each can be trained, tuned,
+# and (eventually) data-enriched independently without a full spine rebuild.
+_COOP_CATEGORIES  = ("09", "10", "17")
+_CONDO_CATEGORIES = ("12", "13", "15")
+
+
+def _split_condo_coop(spine: pd.DataFrame) -> pd.DataFrame:
+    """Re-derive `segment` so condo_coop rows become `condo` or `coop`.
+
+    Driven by the 2-digit DOF building-class category prefix. Rows already
+    labelled something other than condo_coop are untouched.
+    """
+    if "building_class" not in spine.columns:
+        return spine
+    is_cc = spine["segment"] == "condo_coop"
+    if not is_cc.any():
+        return spine
+    cat = spine["building_class"].astype(str).str.strip().str[:2]
+    new_seg = spine["segment"].copy()
+    new_seg = new_seg.mask(is_cc & cat.isin(_COOP_CATEGORIES),  "coop")
+    new_seg = new_seg.mask(is_cc & cat.isin(_CONDO_CATEGORIES), "condo")
+    spine["segment"] = new_seg
+    n_condo = int((spine["segment"] == "condo").sum())
+    n_coop  = int((spine["segment"] == "coop").sum())
+    n_left  = int((spine["segment"] == "condo_coop").sum())
+    print(f"  Split condo_coop → condo={n_condo:,}, coop={n_coop:,}, "
+          f"unclassified(left as condo_coop)={n_left:,}")
+    return spine
+
 
 # ─── Data loading ─────────────────────────────────────────────────────────────
 
@@ -507,6 +584,7 @@ def load_enriched_spine() -> pd.DataFrame:
     spine = pd.read_parquet(SPINE_FILE)
     spine["sale_date"]  = pd.to_datetime(spine["sale_date"]).dt.date
     spine["as_of_date"] = pd.to_datetime(spine["as_of_date"]).dt.date.astype(str)
+    spine = _split_condo_coop(spine)
     print(f"  Spine rows: {len(spine):,}")
 
     join_keys = ["bbl", "as_of_date"]
@@ -581,6 +659,9 @@ def load_enriched_spine() -> pd.DataFrame:
     # multi_fam class 03 → three_family, condo_coop → condo_coop.  Any other
     # combination gets NaN, meaning no comp/trend join (those segments either
     # don't have comp tables built or aren't part of Sprint A).
+    # condo / coop / condo_coop all map to the pooled "condo_coop" comp + trend
+    # tables — the gold comp/trend builders key on the pooled segment, and the
+    # neighbourhood-level market anchor is shared across condo and co-op.
     bc_str = spine["building_class"].astype(str)
     seg    = spine["segment"]
     spine["comp_segment"] = np.where(
@@ -589,7 +670,9 @@ def load_enriched_spine() -> pd.DataFrame:
             (seg == "multi_family") & bc_str.str.startswith("02"), "two_family",
             np.where(
                 (seg == "multi_family") & bc_str.str.startswith("03"), "three_family",
-                np.where(seg == "condo_coop", "condo_coop", None),  # type: ignore[arg-type]
+                np.where(
+                    seg.isin(["condo", "coop", "condo_coop"]), "condo_coop", None,  # type: ignore[arg-type]
+                ),
             ),
         ),
     )
