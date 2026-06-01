@@ -27,6 +27,7 @@
     ],
     "metrics": {
         "mae": 380881.0,
+        "rmse": 790248.3,
         "r2": 0.825,
         "median_ape": 0.139,
         "note": "v1 condo split (Sprint G): PROPMAST unit sqft + common-interest features; time-based split (train<=2024, test>=2025-01-31). condo_gross_sqft is #1 feature (13.2% importance)."

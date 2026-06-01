@@ -27,6 +27,7 @@
     ],
     "metrics": {
         "mae": 345618.0,
+        "rmse": 840660.1,
         "r2": 0.501,
         "median_ape": 0.244,
         "note": "v1 coop split (Sprint G): structural public-data ceiling — co-op units are corporation shares with no public unit-level data. condo_gross_sqft / comint features are all-null for co-ops and do not contribute. Model accuracy reflects inherent data limits."
