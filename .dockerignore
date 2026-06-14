@@ -6,11 +6,7 @@ __pycache__
 *.sqlite3
 .env
 .venv
-# .git is intentionally NOT excluded — the Dockerfile runs `git lfs pull`
-# during the build to resolve *.pkl and *.parquet pointer files into real
-# content.  Removing this entry is required for LFS resolution to work.
-# The .git directory is deleted inside the build after `git lfs pull` so it
-# does not appear in the final image.
+.git
 .gitignore
 tests
 notebooks
