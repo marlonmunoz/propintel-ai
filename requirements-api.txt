@@ -1,6 +1,7 @@
 # Runtime dependencies for the API container only.
 # ML training/pipeline packages (catboost, scipy, matplotlib, plotly, pyarrow, etc.)
 # belong in requirements.txt and are NOT installed here.
+# build: 2026-06-14 (cache-bust — artifacts migrated from LFS to regular git objects)
 
 annotated-doc==0.0.4
 annotated-types==0.7.0
