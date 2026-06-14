@@ -348,10 +348,8 @@ def ready():
                 joblib.load(probe_path)
                 checks["ml_artifacts"] = f"ok ({len(registry._models)} models found, probe '{probe_key}' loaded)"
             except Exception as load_exc:
-                import traceback as _tb
-                _detail = f"{type(load_exc).__name__}: {load_exc} | {_tb.format_exc()[-300:]}"
-                logger.error("Readiness ML probe-load failed for '%s': %s", probe_key, _detail)
-                checks["ml_artifacts"] = f"corrupt artifact: '{probe_key}' — {_detail}"
+                logger.error("Readiness ML probe-load failed for '%s': %s", probe_key, load_exc)
+                checks["ml_artifacts"] = f"corrupt artifact: '{probe_key}' failed to deserialize"
                 failed.append("ml_artifacts")
     except Exception as exc:
         logger.error("Readiness ML check failed: %s", exc)

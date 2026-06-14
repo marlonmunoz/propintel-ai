@@ -2,6 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# XGBoost and LightGBM require GNU OpenMP (libgomp1) at runtime.
+# python:*-slim strips it — add it back explicitly.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements-api.txt .
 
 RUN pip install --no-cache-dir --upgrade pip \
