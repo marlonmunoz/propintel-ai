@@ -19,8 +19,7 @@
         "subway_n_lines_05mi",
         "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
         "pluto_bldgarea", "pluto_lotarea",
-        "pluto_far_utilization", "rent_stab_units",
-        "condo_gross_sqft", "condo_comint_bldg", "condo_comint_land"
+        "pluto_far_utilization", "rent_stab_units"
     ],
     "categorical_features": [
         "borough_name", "neighborhood", "dof_bldg_class", "dof_tax_class", "pluto_bldgclass"

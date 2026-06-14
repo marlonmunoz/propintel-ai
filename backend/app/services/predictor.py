@@ -261,6 +261,20 @@ def _valuation_interval_dollars(predicted_price: float,
     return (max(0.0, predicted_price - half), predicted_price + half)
 
 
+# ─── Spine input columns ──────────────────────────────────────────────────────
+
+def _spine_input_columns(model, metadata: RegisteredModel) -> list[str]:
+    """Return the exact feature column order the spine Pipeline expects.
+
+    Metadata JSON can drift after retraining; the serialized ``prep`` step is
+    the source of truth for inference column order and membership.
+    """
+    prep = getattr(model, "named_steps", {}).get("prep")
+    if prep is not None and hasattr(prep, "feature_names_in_"):
+        return list(prep.feature_names_in_)
+    return metadata.numeric_features + metadata.categorical_features
+
+
 # ─── Spine feature row builder ────────────────────────────────────────────────
 
 def _build_spine_row(payload: ProductionPredictionRequest,
@@ -467,7 +481,7 @@ class PredictionService:
 
         if metadata.is_spine_model:
             row, join_meta = _build_spine_row(payload, metadata, self.registry)
-            all_features = metadata.numeric_features + metadata.categorical_features
+            all_features = _spine_input_columns(model, metadata)
             X = pd.DataFrame(
                 [{col: row.get(col, np.nan) for col in all_features}],
                 columns=all_features,
