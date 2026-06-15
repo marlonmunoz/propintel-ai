@@ -18,6 +18,7 @@ from backend.app.services.bbl_feature_builder import (
     normalize_bbl,
     parse_as_of_date,
 )
+from backend.app.services.model_confidence import build_model_confidence_metadata
 from backend.app.services.model_registry import ModelRegistry, RegisteredModel
 
 # Must match REFERENCE_YEAR in train_spine_models.py so property_age at
@@ -723,5 +724,9 @@ class PredictionService:
             "explanation_status": explanation_status,
             "metadata": {
                 "model_version": prediction_result.get("model_version", "v3"),
+                **build_model_confidence_metadata(
+                    prediction_result.get("segment"),
+                    prediction_result.get("model_metrics"),
+                ),
             },
         }

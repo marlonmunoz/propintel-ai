@@ -424,11 +424,42 @@ class ResponseMetadata(BaseModel):
         default=None,
         description="Version identifier of the model used during analysis."
     )
+    segment: Optional[str] = Field(
+        default=None,
+        description="Model segment key used for inference (e.g. one_family, coop)."
+    )
+    segment_label: Optional[str] = Field(
+        default=None,
+        description="Human-readable label for the segment model."
+    )
+    model_confidence_tier: Optional[Literal["high", "directional", "fallback"]] = Field(
+        default=None,
+        description=(
+            "Valuation confidence tier: high (strong segment data), "
+            "directional (weaker segment — co-op/rental), or fallback (global model)."
+        ),
+    )
+    model_confidence_label: Optional[str] = Field(
+        default=None,
+        description="Short UI label for model_confidence_tier."
+    )
+    model_confidence_note: Optional[str] = Field(
+        default=None,
+        description="Plain-language note on how to interpret this segment's valuation."
+    )
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "model_version": "v1"
+                "model_version": "v1",
+                "segment": "one_family",
+                "segment_label": "One-family",
+                "model_confidence_tier": "high",
+                "model_confidence_label": "High confidence",
+                "model_confidence_note": (
+                    "This segment model is trained on sufficient NYC sales data "
+                    "for this building type."
+                ),
             }
         }
     }

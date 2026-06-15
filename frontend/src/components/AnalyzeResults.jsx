@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { BookmarkPlus, CheckCircle2, Crown, Sparkles } from 'lucide-react'
 import DealLabelBadge from './DealLabelBadge'
+import ModelConfidenceBadge from './ModelConfidenceBadge'
+import ModelConfidenceCallout from './ModelConfidenceCallout'
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
@@ -73,6 +75,7 @@ export default function AnalyzeResults({
         {hasV2Result ? (
           <div className="flex flex-wrap items-center gap-3">
             <DealLabelBadge label={dealLabel} />
+            <ModelConfidenceBadge metadata={analysisResult.metadata} />
             {score !== undefined && score !== null ? (
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 Investment score <span className="text-slate-900 dark:text-white">{score}</span>
@@ -160,6 +163,8 @@ export default function AnalyzeResults({
             />
           </div>
 
+          <ModelConfidenceCallout metadata={analysisResult.metadata} />
+
           {/* Valuation range */}
           {analysisResult.valuation.price_low != null &&
           analysisResult.valuation.price_high != null ? (
@@ -226,10 +231,13 @@ export default function AnalyzeResults({
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Model Version
+                    Segment Model
                   </p>
                   <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
-                    {analysisResult.metadata.model_version}
+                    {analysisResult.metadata.segment_label || analysisResult.metadata.segment || '—'}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    v{analysisResult.metadata.model_version || '—'}
                   </p>
                 </div>
               </div>

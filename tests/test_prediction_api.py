@@ -385,6 +385,11 @@ class MockPredictionServiceGlobal:
             "explanation_status": "ok",
             "metadata": {
                 "model_version": "v1",
+                "segment": "global",
+                "segment_label": "General residential",
+                "model_confidence_tier": "fallback",
+                "model_confidence_label": "Broad estimate",
+                "model_confidence_note": "Global fallback model used.",
             },
         }
         
@@ -522,6 +527,8 @@ def test_analyze_property_v2():
     assert data["explanation_status"] == "ok"
 
     assert data["metadata"]["model_version"] == "v1"
+    assert data["metadata"]["model_confidence_tier"] == "fallback"
+    assert data["metadata"]["segment"] == "global"
     
     app.dependency_overrides.pop(get_prediction_service, None)
     

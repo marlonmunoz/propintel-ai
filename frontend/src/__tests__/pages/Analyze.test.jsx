@@ -157,7 +157,14 @@ const FAST_RESULT = {
     confidence: 'Low',
   },
   explanation_status: 'pending',
-  metadata: { model_version: 'v2' },
+  metadata: {
+    model_version: 'v2',
+    segment: 'one_family',
+    segment_label: 'One-family',
+    model_confidence_tier: 'high',
+    model_confidence_label: 'High confidence',
+    model_confidence_note: 'Strong segment model.',
+  },
 }
 
 describe('Analyze page — quota-exceeded explanation card', () => {
