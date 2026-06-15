@@ -320,15 +320,17 @@ def ready():
         failed.append("database")
 
     # ── ML artifacts ─────────────────────────────────────────────────────────
-    # Two-tier check:
-    #   1. Existence — verify every registered .pkl file is present on disk.
-    #   2. Deserialize — actually joblib.load() one small model to catch corrupt
-    #      artifacts that pass the existence check but would crash on first use.
-    #      We pick "one_family" as the probe because it is the smallest model;
-    #      if it loads cleanly the serialisation format is almost certainly valid
-    #      for the others too.
+    # Three-tier check:
+    #   1. Existence  — every registered .pkl is on disk.
+    #   2. Deserialize — joblib.load() the smallest model (rental_elevator,
+    #      ~713 KB) to catch corrupt/LFS-stub artifacts before inference.
+    #   3. Inference  — run one real predict() call through PredictionService
+    #      so that column-shape mismatches and import errors are caught here
+    #      rather than silently letting /ready pass while /analyze 500s.
     try:
         from backend.app.services.model_registry import ModelRegistry
+        from backend.app.services.predictor import PredictionService
+        from backend.app.schemas.prediction import ProductionPredictionRequest
         import joblib
         registry = ModelRegistry()
         missing = []
@@ -341,20 +343,57 @@ def ready():
             checks["ml_artifacts"] = f"missing models: {missing}"
             failed.append("ml_artifacts")
         else:
-            # Probe-load the smallest model to catch corrupt .pkl files.
-            probe_key = "one_family" if "one_family" in registry._models else next(iter(registry._models))
+            # Tier 2: deserialize the smallest model to catch corrupt files.
+            probe_key = (
+                "rental_elevator" if "rental_elevator" in registry._models
+                else next(iter(registry._models))
+            )
             probe_path = registry._resolve_artifact_path(registry._models[probe_key].artifact_path)
             try:
                 joblib.load(probe_path)
-                checks["ml_artifacts"] = f"ok ({len(registry._models)} models found, probe '{probe_key}' loaded)"
             except Exception as load_exc:
                 logger.error("Readiness ML probe-load failed for '%s': %s", probe_key, load_exc)
                 checks["ml_artifacts"] = f"corrupt artifact: '{probe_key}' failed to deserialize"
                 failed.append("ml_artifacts")
+                raise  # skip tier 3
+
+            # Tier 3: run a real inference call so column mismatches surface here.
+            # Uses rental_elevator (fastest, smallest payload) with a minimal but
+            # valid Bronx address so the pipeline exercises the full predict path.
+            try:
+                svc = PredictionService(registry)
+                probe_payload = ProductionPredictionRequest(
+                    borough="Bronx",
+                    neighborhood="BATHGATE",
+                    building_class="08 RENTALS - ELEVATOR APARTMENTS",
+                    gross_sqft=8000,
+                    land_sqft=3000,
+                    total_units=12,
+                    residential_units=12,
+                    year_built=1965,
+                    latitude=40.850163,
+                    longitude=-73.895065,
+                )
+                svc.predict(probe_payload)
+                checks["ml_artifacts"] = (
+                    f"ok ({len(registry._models)} models loaded, "
+                    f"inference probe '{probe_key}' passed)"
+                )
+            except Exception as infer_exc:
+                logger.error(
+                    "Readiness ML inference probe failed for '%s': %s",
+                    probe_key, infer_exc,
+                )
+                checks["ml_artifacts"] = (
+                    f"inference error: '{probe_key}' predict() raised "
+                    f"{type(infer_exc).__name__}: {infer_exc}"
+                )
+                failed.append("ml_artifacts")
     except Exception as exc:
-        logger.error("Readiness ML check failed: %s", exc)
-        checks["ml_artifacts"] = "error loading model registry"
-        failed.append("ml_artifacts")
+        if "ml_artifacts" not in checks:
+            logger.error("Readiness ML check failed: %s", exc)
+            checks["ml_artifacts"] = "error loading model registry"
+            failed.append("ml_artifacts")
 
     if failed:
         logger.warning("Readiness check failed: %s | checks=%s", failed, checks)
