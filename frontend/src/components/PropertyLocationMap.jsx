@@ -23,7 +23,7 @@ const MAP_PITCH = 30
 const MAP_BEARING = -17
 
 const MAP_STYLE =
-  import.meta.env.VITE_MAPBOX_STYLE || 'mapbox://styles/mapbox/standard'
+  import.meta.env.VITE_MAPBOX_STYLE || 'mapbox://styles/mapbox/streets-v12'
 
 
 function addSubwayLayers(map) {
