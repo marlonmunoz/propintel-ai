@@ -40,10 +40,10 @@ const modelMetrics = [
   {
     label: 'Single-family homes',
     segment: 'Owner-occupier baseline',
-    target: 0.77,
+    target: 0.72,
     decimals: 2,
     suffix: 'R²',
-    detail: 'Strongest traditional segment — 17.2% median error, time-based holdout',
+    detail: 'Strongest traditional segment — 14.5% median error, time-based holdout',
   },
   {
     label: 'Segment models',

@@ -7,7 +7,7 @@ const HERO_METRICS = [
   { label: 'R² 0.83 · condo' },
   { label: '6 segments' },
   { label: 'XGBoost' },
-  { label: 'R² 0.77 · 1-family' },
+  { label: 'R² 0.72 · 1-family' },
   { label: 'Buy', dealLabel: 'Buy' },
   { label: 'Hold', dealLabel: 'Hold' },
   { label: 'Avoid', dealLabel: 'Avoid' },
