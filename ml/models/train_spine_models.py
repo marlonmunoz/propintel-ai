@@ -1079,6 +1079,127 @@ def _build_voting_pipeline(num_feats: list[str], cat_feats: list[str],
     ])
 
 
+# ─── Quantile pipelines (P10 / P90) ──────────────────────────────────────────
+
+def _build_quantile_pipeline(
+    num_feats: list[str],
+    cat_feats: list[str],
+    params: dict,
+    segment: str,
+    alpha: float,
+) -> Pipeline:
+    """Single-estimator quantile pipeline for the given coverage level (alpha).
+
+    Uses the same preprocessor (SimpleImputer → OHE) and hyperparameters as
+    the median model, but switches the loss to quantile so the model learns the
+    alpha-th quantile of log1p(price) directly.
+
+    Notes
+    -----
+    * LGBM:  objective="quantile", alpha=<0.1 or 0.9>
+    * XGB:   objective="reg:quantileerror", quantile_alpha=<0.1 or 0.9>  (XGBoost >= 2.0)
+    * No VotingRegressor — quantile loss is trained on a fixed seed; ensemble
+      averaging of quantile models does not produce a calibrated quantile.
+    """
+    if segment in LGBM_SEGMENTS:
+        p = {k: v for k, v in params.items()}
+        p["random_state"] = 42
+        est: Any = LGBMRegressor(
+            **p,
+            n_jobs=-1,
+            objective="quantile",
+            alpha=alpha,
+            verbose=-1,
+        )
+    else:
+        p = {k: v for k, v in params.items()}
+        p["random_state"] = 42
+        est = XGBRegressor(
+            **p,
+            n_jobs=-1,
+            objective="reg:quantileerror",
+            quantile_alpha=alpha,
+            verbosity=0,
+        )
+    num_pipe = Pipeline([("imp", SimpleImputer(strategy="median"))])
+    cat_pipe = Pipeline([
+        ("imp", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+    ])
+    parts: list = [("num", num_pipe, num_feats)]
+    if cat_feats:
+        parts.append(("cat", cat_pipe, cat_feats))
+    return Pipeline([
+        ("prep", ColumnTransformer(parts, remainder="drop")),
+        ("xgb", est),
+    ])
+
+
+def _train_and_save_quantile_bounds(
+    avail_num: list[str],
+    avail_cat: list[str],
+    model_params: dict,
+    X_tr: Any,
+    y_tr: Any,
+    X_te: Any,
+    y_te: Any,
+    segment: str,
+    artifact_prefix: Path,
+) -> dict:
+    """Train P10 + P90 quantile models for one segment and return coverage stats.
+
+    Both models are trained in log1p(price) space (same as the median model).
+    Since expm1 is monotone, quantile ordering is preserved after inverse
+    transformation, so P10/P90 in dollar space = expm1(model predictions).
+
+    Parameters
+    ----------
+    artifact_prefix :
+        Full path stem, e.g. ``ARTIFACTS / "one_family_spine_price"``.
+        Files are saved as ``<stem>_p10_model.pkl`` and ``<stem>_p90_model.pkl``.
+
+    Returns
+    -------
+    dict with keys: p10_model_path, p90_model_path, quantile_coverage_80,
+    quantile_median_width_pct.
+    """
+    p10_pipe = _build_quantile_pipeline(avail_num, avail_cat, model_params, segment, 0.10)
+    p90_pipe = _build_quantile_pipeline(avail_num, avail_cat, model_params, segment, 0.90)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        p10_pipe.fit(X_tr, y_tr)
+        p90_pipe.fit(X_tr, y_tr)
+
+    p10_pred = np.clip(p10_pipe.predict(X_te), 0.0, 20.7)
+    p90_pred = np.clip(p90_pipe.predict(X_te), 0.0, 20.7)
+    y_clipped = np.clip(y_te, 0.0, 20.7)
+
+    # Coverage in log space (monotone transform ⇒ same as dollar-space coverage).
+    coverage = float(np.mean((y_clipped >= p10_pred) & (y_clipped <= p90_pred)))
+    # Median width relative to median predicted value (log-space Δ ≈ Δ$/price).
+    median_width = float(np.median(np.maximum(p90_pred - p10_pred, 0.0)))
+    med_pred = float(np.median((p10_pred + p90_pred) / 2.0))
+    width_pct = median_width / max(med_pred, 1e-6)
+
+    p10_path = Path(str(artifact_prefix) + "_p10_model.pkl")
+    p90_path = Path(str(artifact_prefix) + "_p90_model.pkl")
+    joblib.dump(p10_pipe, p10_path)
+    joblib.dump(p90_pipe, p90_path)
+
+    print(
+        f"\n  Quantile bounds:  coverage={coverage:.1%}  "
+        f"median_width≈{width_pct:.1%}  "
+        f"saved → {p10_path.name}, {p90_path.name}"
+    )
+    return {
+        "quantile_coverage_80":      coverage,
+        "quantile_median_width_pct": width_pct,
+        "p10_model_path":            str(p10_path),
+        "p90_model_path":            str(p90_path),
+    }
+
+
 # ─── Metrics ─────────────────────────────────────────────────────────────────
 
 def _eval(y_true_log: np.ndarray, y_pred_log: np.ndarray) -> dict:
@@ -1169,6 +1290,18 @@ def train_rentals_all(df: pd.DataFrame) -> dict | None:
     model_path = ARTIFACTS / "rentals_all_spine_price_model.pkl"
     joblib.dump(pipe, model_path)
 
+    # ── Quantile bounds (P10 / P90) ──────────────────────────────────────────
+    rentals_quantile_stats: dict = {}
+    try:
+        rentals_quantile_stats = _train_and_save_quantile_bounds(
+            avail_num, avail_cat, SEGMENT_XGB_PARAMS[segment],
+            X_tr, y_tr, X_te, y_te,
+            segment=segment,
+            artifact_prefix=ARTIFACTS / "rentals_all_spine_price",
+        )
+    except Exception as qe:
+        print(f"  [warn] rentals_all quantile bound training failed: {qe}")
+
     stats_path = ARTIFACTS / "rentals_all_spine_neighborhood_stats.json"
 
     def _safe_val(v: Any) -> Any:
@@ -1223,6 +1356,7 @@ def train_rentals_all(df: pd.DataFrame) -> dict | None:
         "model_path":      str(model_path),
         "numeric_features": avail_num,
         "categorical_features": avail_cat,
+        **rentals_quantile_stats,
     }
 
 
@@ -1347,6 +1481,18 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
     model_path = ARTIFACTS / f"{segment}_spine_price_model.pkl"
     joblib.dump(pipe, model_path)
 
+    # ── Quantile bounds (P10 / P90) ──────────────────────────────────────────
+    quantile_stats: dict = {}
+    try:
+        quantile_stats = _train_and_save_quantile_bounds(
+            avail_num, avail_cat, model_params,
+            X_tr, y_tr, X_te, y_te,
+            segment=segment,
+            artifact_prefix=ARTIFACTS / f"{segment}_spine_price",
+        )
+    except Exception as qe:
+        print(f"  [warn] quantile bound training failed: {qe}")
+
     stats_path = ARTIFACTS / f"{segment}_spine_neighborhood_stats.json"
 
     def _safe_val(v: Any) -> Any:
@@ -1398,6 +1544,7 @@ def train_segment(df: pd.DataFrame, segment: str) -> dict | None:
         "test_median_ape": te_m["median_ape"],
         "test_hit_10pct":  te_m["hit_10pct"],
         "model_path":      str(model_path),
+        **quantile_stats,
     }
 
 

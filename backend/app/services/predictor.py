@@ -57,6 +57,12 @@ VALUATION_INTERVAL_NOTE = (
     "Approximate range ±1× the model's training MAE for this segment "
     "(not a formal confidence interval)."
 )
+# Used when quantile models are available.  Shown verbatim in the API response
+# and surfaced to the user in the AnalyzeResults UI.
+VALUATION_INTERVAL_QUANTILE_NOTE = (
+    "P10–P90 quantile range: calibrated to this property's segment and location. "
+    "Tighter bands indicate more data support; wider bands reflect higher price uncertainty."
+)
 
 load_dotenv()
 
@@ -553,7 +559,37 @@ class PredictionService:
                 "Using global residential fallback model for this property type."
             )
 
-        interval = _valuation_interval_dollars(predicted_price, metadata, n_units)
+        # ── Valuation interval: try quantile bounds first, fall back to ±MAE ──
+        # When quantile models (P10/P90) exist for this segment the interval is
+        # property-specific and calibrated (~80% empirical coverage).  When they
+        # don't exist yet (e.g. the global fallback model) we use the flat MAE
+        # band.  The note string tells the UI which method was used.
+        interval: tuple[float, float] | None = None
+        interval_note: str | None = None
+
+        q_bounds = self.registry.load_quantile_bounds(model_key)
+        if q_bounds is not None:
+            p10_model, p90_model = q_bounds
+            try:
+                p10_log = float(p10_model.predict(X)[0])
+                p90_log = float(p90_model.predict(X)[0])
+                if metadata.target == "price_per_unit":
+                    p10_dollars = math.expm1(p10_log) * n_units
+                    p90_dollars = math.expm1(p90_log) * n_units
+                else:
+                    p10_dollars = math.expm1(p10_log)
+                    p90_dollars = math.expm1(p90_log)
+                low  = max(0.0, min(p10_dollars, p90_dollars))
+                high = max(p10_dollars, p90_dollars)
+                interval      = (low, high)
+                interval_note = VALUATION_INTERVAL_QUANTILE_NOTE
+            except Exception as qe:
+                logger.warning("Quantile bound prediction failed for '%s': %s", model_key, qe)
+
+        if interval is None:
+            interval      = _valuation_interval_dollars(predicted_price, metadata, n_units)
+            interval_note = VALUATION_INTERVAL_NOTE if interval else None
+
         input_summary: dict[str, Any] = {
             "borough":        payload.borough,
             "neighborhood":   neighborhood,
@@ -581,7 +617,7 @@ class PredictionService:
             low, high = interval
             out["price_low"]               = low
             out["price_high"]              = high
-            out["valuation_interval_note"] = VALUATION_INTERVAL_NOTE
+            out["valuation_interval_note"] = interval_note
         return out
 
     def analyze(self, request, *, user_id=None, role="user",

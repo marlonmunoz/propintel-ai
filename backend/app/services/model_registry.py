@@ -68,7 +68,10 @@ class ModelRegistry:
             _meta = self.metadata_dir / f"{seg}_model.json"
             if _meta.exists():
                 self._models[seg] = self._load_metadata(f"{seg}_model.json")
-        self._loaded_models = {}
+        self._loaded_models: dict = {}
+        # Lazily-loaded quantile bound models (P10, P90) keyed by segment name.
+        # Populated on first request; None sentinel means "tried and not found".
+        self._quantile_cache: dict[str, tuple | None] = {}
 
     def _get_artifact_root(self) -> Path:
         """
@@ -107,6 +110,39 @@ class ModelRegistry:
                 )
             self._loaded_models[key] = joblib.load(artifact_path)
         return self._loaded_models[key]
+
+    def load_quantile_bounds(self, key: str) -> tuple | None:
+        """Return (p10_model, p90_model) for *key*, or None if not available.
+
+        Paths are derived by convention from the segment's median artifact path:
+          ``{stem}_model.pkl``  →  ``{stem}_p10_model.pkl`` + ``{stem}_p90_model.pkl``
+
+        The result is cached after the first call. None is cached when either
+        file is missing so we don't re-scan the filesystem on every prediction.
+        """
+        if key in self._quantile_cache:
+            return self._quantile_cache[key]
+
+        meta = self._models.get(key)
+        if meta is None or not meta.artifact_path.endswith("_model.pkl"):
+            self._quantile_cache[key] = None
+            return None
+
+        stem = meta.artifact_path[: -len("_model.pkl")]
+        p10_path = self._resolve_artifact_path(stem + "_p10_model.pkl")
+        p90_path = self._resolve_artifact_path(stem + "_p90_model.pkl")
+
+        if not p10_path.exists() or not p90_path.exists():
+            self._quantile_cache[key] = None
+            return None
+
+        try:
+            pair = (joblib.load(p10_path), joblib.load(p90_path))
+            self._quantile_cache[key] = pair
+            return pair
+        except Exception:
+            self._quantile_cache[key] = None
+            return None
 
     def _load_metadata(self, filename: str) -> RegisteredModel:
         metadata_path = self.metadata_dir / filename
