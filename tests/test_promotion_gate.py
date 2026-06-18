@@ -76,18 +76,24 @@ def test_bump_version(before, after):
 
 def test_candidate_better_than_baseline_passes(tmp_path):
     """A lower MAE than baseline must pass."""
+    import ml.scripts.promote_models as pm
+    original_metadata = pm.METADATA_DIR
     metadata_dir = tmp_path / "metadata"
     metadata_dir.mkdir()
-    metrics_file = _make_metrics_file(tmp_path, [_candidate_row("one_family", test_mae=200_000)])
-    _make_metadata_file(metadata_dir, "one_family", baseline_mae=250_000)
+    pm.METADATA_DIR = metadata_dir
+    try:
+        metrics_file = _make_metrics_file(tmp_path, [_candidate_row("one_family", test_mae=200_000)])
+        _make_metadata_file(metadata_dir, "one_family", baseline_mae=250_000)
 
-    code = run(
-        tolerance=0.05,
-        dry_run=True,
-        segments=None,
-        metrics_path=metrics_file,
-    )
-    assert code == 0
+        code = run(
+            tolerance=0.05,
+            dry_run=True,
+            segments=None,
+            metrics_path=metrics_file,
+        )
+        assert code == 0
+    finally:
+        pm.METADATA_DIR = original_metadata
 
 
 def test_candidate_within_tolerance_passes(tmp_path):
@@ -114,38 +120,50 @@ def test_candidate_within_tolerance_passes(tmp_path):
 
 def test_candidate_exceeds_tolerance_fails(tmp_path):
     """MAE 10% above baseline must fail with 5% tolerance."""
+    import ml.scripts.promote_models as pm
+    original_metadata = pm.METADATA_DIR
     metadata_dir = tmp_path / "metadata"
     metadata_dir.mkdir()
-    metrics_file = _make_metrics_file(tmp_path, [_candidate_row("one_family", test_mae=275_001)])
-    _make_metadata_file(metadata_dir, "one_family", baseline_mae=250_000)
+    pm.METADATA_DIR = metadata_dir
+    try:
+        metrics_file = _make_metrics_file(tmp_path, [_candidate_row("one_family", test_mae=275_001)])
+        _make_metadata_file(metadata_dir, "one_family", baseline_mae=250_000)
 
-    code = run(
-        tolerance=0.05,
-        dry_run=True,
-        segments=None,
-        metrics_path=metrics_file,
-    )
-    assert code == 1
+        code = run(
+            tolerance=0.05,
+            dry_run=True,
+            segments=None,
+            metrics_path=metrics_file,
+        )
+        assert code == 1
+    finally:
+        pm.METADATA_DIR = original_metadata
 
 
 def test_all_segments_must_pass(tmp_path):
     """If even one segment regresses, the whole gate fails (exit 1)."""
+    import ml.scripts.promote_models as pm
+    original_metadata = pm.METADATA_DIR
     metadata_dir = tmp_path / "metadata"
     metadata_dir.mkdir()
-    metrics_file = _make_metrics_file(tmp_path, [
-        _candidate_row("one_family",  test_mae=240_000),   # passes
-        _candidate_row("condo_coop",  test_mae=600_000),   # fails (baseline 400k)
-    ])
-    _make_metadata_file(metadata_dir, "one_family", baseline_mae=250_000)
-    _make_metadata_file(metadata_dir, "condo_coop", baseline_mae=400_000)
+    pm.METADATA_DIR = metadata_dir
+    try:
+        metrics_file = _make_metrics_file(tmp_path, [
+            _candidate_row("one_family",  test_mae=240_000),   # passes
+            _candidate_row("condo_coop",  test_mae=600_000),   # fails (baseline 400k)
+        ])
+        _make_metadata_file(metadata_dir, "one_family", baseline_mae=250_000)
+        _make_metadata_file(metadata_dir, "condo_coop", baseline_mae=400_000)
 
-    code = run(
-        tolerance=0.05,
-        dry_run=True,
-        segments=None,
-        metrics_path=metrics_file,
-    )
-    assert code == 1
+        code = run(
+            tolerance=0.05,
+            dry_run=True,
+            segments=None,
+            metrics_path=metrics_file,
+        )
+        assert code == 1
+    finally:
+        pm.METADATA_DIR = original_metadata
 
 
 def test_promotion_writes_metadata_and_bumps_version(tmp_path):
