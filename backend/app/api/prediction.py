@@ -6,38 +6,8 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger("propintel")
 
-# ---------------------------------------------------------------------------
-# Legacy route deprecation metadata.
-# Sunset = 2026-06-07 (14 days from 2026-05-24 shipping date).
-# After that date, confirm zero log hits, then hard-delete in a follow-up.
-# ---------------------------------------------------------------------------
-_DEPRECATION_HEADERS = {
-    "Deprecation": "true",
-    "Sunset": "Sun, 07 Jun 2026 00:00:00 GMT",
-}
-_LEGACY_ROUTES = {
-    "/predict-price":    "/predict-price-v2",
-    "/analyze-property": "/analyze-property-v2",
-    "/predict":          "/predict-price-v2",
-    "/analyze":          "/analyze-property-v2",
-}
-
-
-def _deprecation_headers(path: str) -> dict[str, str]:
-    successor = _LEGACY_ROUTES.get(path, "/predict-price-v2")
-    return {
-        **_DEPRECATION_HEADERS,
-        "Link": f'<{successor}>; rel="successor-version"',
-    }
-
 from backend.app.db.database import get_db
 from backend.app.schemas.prediction import (
-    PredictionRequest,
-    PredictionResponse,
-    AnalyzerPropertyRequest,
-    AnalyzePropertyResponse,
-    PublicPredictionRequest,
-    PublicAnalyzeRequest,
     FeatureImportanceResponse,
     ProductionPredictionRequest,
     ProductionPredictionResponse,
@@ -52,111 +22,9 @@ from backend.app.services.predictor import PredictionService
 from backend.app.services.explainer import generate_explanation
 from backend.app.core.auth import UserContext, get_current_user, get_current_user_with_role
 from backend.app.core.limiter import limiter
-from ml.inference.predict import (
-    predict_price,
-    analyze_property,
-    predict_price_public,
-    analyze_property_public,
-    load_feature_importance,
-)
+from ml.inference.predict import load_feature_importance
 
 router = APIRouter(tags=["Prediction"])
-
-
-@limiter.limit("20/minute")
-@router.post(
-    "/predict-price",
-    response_model=PredictionResponse,
-    deprecated=True,
-    summary="[DEPRECATED] Predict property value — use /predict-price-v2",
-    description=(
-        "**Deprecated** — will be removed after 2026-06-07. "
-        "Use `POST /predict-price-v2` instead. "
-        "Returns a predicted property price using the legacy internal feature payload."
-    ),
-    response_description="Predicted property value and model version.",
-)
-def predict_property_price(
-    request: Request,
-    response: Response,
-    payload: PredictionRequest,
-    _: UserContext = Depends(get_current_user),
-):
-    logger.warning("legacy_route_called | path=/predict-price | sunset=2026-06-07")
-    response.headers.update(_deprecation_headers("/predict-price"))
-    return predict_price(payload.model_dump())
-
-
-@limiter.limit("20/minute")
-@router.post(
-    "/analyze-property",
-    response_model=AnalyzePropertyResponse,
-    deprecated=True,
-    summary="[DEPRECATED] Analyze property investment — use /analyze-property-v2",
-    description=(
-        "**Deprecated** — will be removed after 2026-06-07. "
-        "Use `POST /analyze-property-v2` instead. "
-        "Runs legacy investment analysis using the older internal feature payload."
-    ),
-    response_description="Legacy investment analysis response.",
-)
-def analyze_property_investment(
-    request: Request,
-    response: Response,
-    payload: AnalyzerPropertyRequest,
-    _: UserContext = Depends(get_current_user),
-):
-    logger.warning("legacy_route_called | path=/analyze-property | sunset=2026-06-07")
-    response.headers.update(_deprecation_headers("/analyze-property"))
-    return analyze_property(payload.model_dump())
-
-
-@limiter.limit("10/minute")
-@router.post(
-    "/predict",
-    response_model=PredictionResponse,
-    deprecated=True,
-    summary="[DEPRECATED] Predict property value (public) — use /predict-price-v2",
-    description=(
-        "**Deprecated** — will be removed after 2026-06-07. "
-        "Use `POST /predict-price-v2` instead. "
-        "Returns a predicted property price using the simplified legacy public request body."
-    ),
-    response_description="Predicted property value and model version.",
-)
-def predict_property_price_public(
-    request: Request,
-    response: Response,
-    payload: PublicPredictionRequest,
-    _: UserContext = Depends(get_current_user),
-):
-    logger.warning("legacy_route_called | path=/predict | sunset=2026-06-07")
-    response.headers.update(_deprecation_headers("/predict"))
-    return predict_price_public(payload.model_dump())
-
-
-@limiter.limit("10/minute")
-@router.post(
-    "/analyze",
-    response_model=AnalyzePropertyResponse,
-    deprecated=True,
-    summary="[DEPRECATED] Analyze property (public) — use /analyze-property-v2",
-    description=(
-        "**Deprecated** — will be removed after 2026-06-07. "
-        "Use `POST /analyze-property-v2` instead. "
-        "Runs legacy investment analysis using the simplified public request body."
-    ),
-    response_description="Legacy public investment analysis response.",
-)
-def analyze_property_public_endpoint(
-    request: Request,
-    response: Response,
-    payload: PublicAnalyzeRequest,
-    _: UserContext = Depends(get_current_user),
-):
-    logger.warning("legacy_route_called | path=/analyze | sunset=2026-06-07")
-    response.headers.update(_deprecation_headers("/analyze"))
-    return analyze_property_public(payload.model_dump())
 
 
 @limiter.limit("60/minute")

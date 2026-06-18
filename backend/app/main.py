@@ -29,12 +29,25 @@ import re
 import time
 import uuid
 
+import warnings
+
 import sentry_sdk
 from dotenv import load_dotenv
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 load_dotenv()
+
+# sklearn's VotingRegressor strips DataFrame column names before calling
+# individual estimators, which makes LGBMRegressor log a noisy but harmless
+# UserWarning on every predict() call.  Suppress only this specific message
+# so genuine sklearn warnings still surface.
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names",
+    category=UserWarning,
+    module="sklearn",
+)
 
 # ---------------------------------------------------------------------------
 # OpenAPI docs — disabled by default in production.
