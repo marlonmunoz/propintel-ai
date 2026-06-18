@@ -1437,8 +1437,28 @@ def main(only_segments: set[str] | None = None) -> None:
         ))
 
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
+
+    # Merge with any existing metrics so that training a single segment
+    # (e.g. --subtypes condo) does not clobber metrics for other segments.
+    merged: dict[str, dict] = {}
+    if METRICS_FILE.exists():
+        try:
+            existing = json.loads(METRICS_FILE.read_text())
+            if isinstance(existing, list):
+                for entry in existing:
+                    seg = entry.get("segment")
+                    if seg:
+                        merged[seg] = entry
+        except (json.JSONDecodeError, OSError):
+            pass  # corrupt or missing — start fresh
+
+    for entry in results:
+        seg = entry.get("segment")
+        if seg:
+            merged[seg] = entry
+
     with open(METRICS_FILE, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump(sorted(merged.values(), key=lambda x: x["segment"]), f, indent=2)
     print(f"\n  Metrics saved → {METRICS_FILE}")
     print(f"  Models saved  → {ARTIFACTS}/")
 

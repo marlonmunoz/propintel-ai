@@ -20,8 +20,11 @@ ml/data/external/
 ml/data/processed/
 ml/data/features/
 # NOTE: ml/data/gold/ is intentionally NOT excluded — Gold parquet files
-# (~24 MB total) are the production inference data path for DOF/ACRIS/J-51
-# features (ML-CRIT-1 fix).  Do not add ml/data/gold/ here.
+# are the production inference data path for DOF/ACRIS/J-51 features.
+# Do not add ml/data/gold/ here.
+# Exception: training_spine_v1.parquet is a training-only artifact (~11 MB)
+# with no role at inference time.
+ml/data/gold/training_spine_v1.parquet
 
 # ML training code + experiment outputs — not needed at runtime
 ml/models/
