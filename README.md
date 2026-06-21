@@ -28,7 +28,6 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 ## Contents
 
 - [Highlights](#highlights)
-- [Product overview & demo guide](#product-overview--demo-guide)
 - [Product surface](#product-surface)
 - [Contact form & email](#contact-form--email)
 - [Billing & subscriptions (Stripe)](#billing--subscriptions-stripe)
@@ -63,12 +62,6 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 - **Ops:** slowapi rate limits, CORS allowlist + optional **`CORS_ORIGIN_REGEX`** (Vercel previews), unified JSON errors with **`request_id`**, optional Sentry with PII scrubbing, **`/health`** + **`/ready`** (three-tier ML probe including a live inference call), JSON logs, security headers, proxy-aware IP when **`TRUST_PROXY_HEADERS=1`**.
 - **Production (June 2026):** Frontend on **Vercel** (`www.propintel-ai.com`), API on **Railway** (`api.propintel-ai.com`), Supabase Auth + Postgres, secrets rotated and verified end-to-end (auth, LLM, email, Live billing).
 - **Quality:** **126** backend pytest tests + **148** frontend Vitest tests (**274** total); CI includes **`test_model_column_parity.py`** (model/metadata feature parity) and GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
-
----
-
-## Product overview & demo guide
-
-For elevator pitches, demo scripts, interview talking points, and plain-English explanations of the product, see **[`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md)**.
 
 ---
 
@@ -496,7 +489,7 @@ propintel-ai/
 │
 ├── tests/                       # Main pytest suite (API, auth, quota, model parity, …)
 │
-├── docs/                        # PRODUCT_OVERVIEW.md, IMPROVEMENTS.md, …
+├── docs/                        # Preview screenshots; internal notes gitignored locally
 ├── ml/                          # Pipelines, training, artifacts (see repo)
 ├── Dockerfile
 ├── docker-compose.yml
