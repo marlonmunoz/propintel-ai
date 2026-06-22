@@ -8,6 +8,7 @@ until /billing/webhook is wired with Stripe CLI or Dashboard.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -15,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -30,6 +31,7 @@ from backend.app.core.auth import (
 from backend.app.core.limiter import limiter
 from backend.app.db.database import get_db
 from backend.app.db.models import BillingCustomer, BillingEvent, Profile
+from backend.app.services.notifications import send_admin_email
 
 logger = logging.getLogger("propintel")
 
@@ -273,6 +275,80 @@ def _record_event(
         return False
 
 
+# Stripe events that trigger a founder notification email.
+_NOTIFY_EVENTS = frozenset({
+    "checkout.session.completed",   # new subscriber
+    "customer.subscription.deleted",  # cancellation took effect
+    "invoice.payment_failed",       # renewal charge failed
+})
+
+
+def _notification_identity(
+    db: Session, user_id: str | None, data_obj: dict[str, Any]
+) -> str:
+    """Best-effort human identifier (email > user_id > Stripe customer)."""
+    if user_id:
+        profile = _profile_by_user_id(db, user_id)
+        if profile is not None:
+            email = (str(profile.email or "")).strip()
+            if email:
+                return email
+    # Stripe payloads sometimes carry an email directly (checkout / invoice).
+    direct = (
+        data_obj.get("customer_email")
+        or (data_obj.get("customer_details") or {}).get("email")
+    )
+    if direct:
+        return str(direct).strip()
+    return user_id or str(data_obj.get("customer") or "unknown user")
+
+
+def _build_billing_notification(
+    db: Session,
+    *,
+    event_type: str,
+    user_id: str | None,
+    data_obj: dict[str, Any],
+) -> tuple[str, str] | None:
+    """Return (subject, html_body) for a notable billing event, else None.
+
+    Never raises — a notification must never interfere with webhook processing.
+    """
+    try:
+        if event_type not in _NOTIFY_EVENTS:
+            return None
+        # Only subscription-mode checkouts represent a new Pro subscriber.
+        if event_type == "checkout.session.completed" and data_obj.get("mode") != "subscription":
+            return None
+
+        who = html.escape(_notification_identity(db, user_id, data_obj))
+
+        if event_type == "checkout.session.completed":
+            headline = "New PropIntel Pro subscriber"
+            subject = f"New PropIntel Pro subscriber: {who}"
+            detail = f"<strong>{who}</strong> just subscribed to PropIntel AI Pro ($29/mo)."
+        elif event_type == "customer.subscription.deleted":
+            headline = "Subscription canceled"
+            subject = f"PropIntel subscription canceled: {who}"
+            detail = f"<strong>{who}</strong>'s subscription has ended — role reverted to free."
+        else:  # invoice.payment_failed
+            headline = "Renewal payment failed"
+            subject = f"PropIntel payment failed: {who}"
+            detail = f"A renewal payment failed for <strong>{who}</strong>. Stripe will retry per dunning settings."
+
+        html_body = (
+            f'<p style="font-size:16px;font-weight:600;margin:0 0 8px">{headline}</p>'
+            f"<p>{detail}</p>"
+            f'<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">'
+            f'<p style="font-size:12px;color:#6b7280">Stripe event: {html.escape(event_type)} · '
+            f"Automated PropIntel AI billing notification</p>"
+        )
+        return subject, html_body
+    except Exception:  # noqa: BLE001 — never break the webhook over a notification
+        logger.exception("Failed to build billing notification for %s", event_type)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # API responses
 # ---------------------------------------------------------------------------
@@ -405,7 +481,11 @@ def billing_status(
 
 
 @router.post("/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> Response:
+async def stripe_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> Response:
     if not _STRIPE_SECRET_KEY:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Stripe is not configured.")
 
@@ -507,5 +587,18 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> Res
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Webhook processing failed.",
         ) from None
+
+    # Founder notification — best-effort, scheduled AFTER the DB commit so we
+    # never email about a change that didn't persist, and AFTER the 200 is
+    # returned to Stripe (BackgroundTasks) so a slow/failed email can't delay
+    # or fail the webhook.  The identity lookup runs now while the DB session
+    # is still open; only the network send is deferred.
+    if isinstance(data_obj, dict):
+        notification = _build_billing_notification(
+            db, event_type=str(etype), user_id=user_hint, data_obj=data_obj
+        )
+        if notification is not None:
+            subject, html_body = notification
+            background_tasks.add_task(send_admin_email, subject, html_body)
 
     return Response(status_code=200, content=json.dumps({"received": True}))
