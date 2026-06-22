@@ -61,7 +61,7 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 - **Billing:** **Stripe Live** — hosted Checkout ($29/mo Pro), Customer Portal (cancel / payment method / invoices), webhooks sync **`profiles.role`** and **`billing_customers`**; Profile UI for upgrade and manage subscription.
 - **Ops:** slowapi rate limits, CORS allowlist + optional **`CORS_ORIGIN_REGEX`** (Vercel previews), unified JSON errors with **`request_id`**, optional Sentry with PII scrubbing, **`/health`** + **`/ready`** (three-tier ML probe including a live inference call), JSON logs, security headers, proxy-aware IP when **`TRUST_PROXY_HEADERS=1`**.
 - **Production (June 2026):** Frontend on **Vercel** (`www.propintel-ai.com`), API on **Railway** (`api.propintel-ai.com`), Supabase Auth + Postgres, secrets rotated and verified end-to-end (auth, LLM, email, Live billing).
-- **Quality:** **126** backend pytest tests + **148** frontend Vitest tests (**274** total); CI includes **`test_model_column_parity.py`** (model/metadata feature parity) and GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
+- **Quality:** **136** backend pytest tests + **148** frontend Vitest tests (**284** total); CI includes **`test_model_column_parity.py`** (model/metadata feature parity) and **`test_billing_notifications.py`**, and GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
 
 ---
 
@@ -142,6 +142,10 @@ PropIntel AI Pro is **$29 USD/month** (Free tier: 10 LLM analyses/day; Pro: 200/
 4. Cancellation webhooks revert role to **`user`** when the subscription ends (or per Stripe event handling in **`billing.py`**).
 
 Card data never touches the API — Checkout and Portal are Stripe-hosted.
+
+### Founder notifications
+
+Notable billing events trigger a best-effort email to **`BILLING_NOTIFY_EMAIL`** (default `marlon@propintel-ai.com`) via Resend: **new subscriber** (`checkout.session.completed`), **cancellation** (`customer.subscription.deleted`), and **failed renewal** (`invoice.payment_failed`). Sends run as a FastAPI background task **after** the webhook returns `200`, and `send_admin_email` never raises — a notification failure can never break webhook processing or trigger a Stripe retry. No new database table is required.
 
 ### Production URLs (Live)
 
@@ -614,7 +618,7 @@ Contact submissions are **not** persisted in Postgres by default.
 PYTHONPATH=. pytest
 ```
 
-From the repo root this discovers **`tests/`** and **`backend/tests/`** (**126** tests), including **`tests/test_model_column_parity.py`** (model vs metadata feature parity), **`tests/test_model_confidence.py`**, and **`backend/tests/test_contact.py`**.
+From the repo root this discovers **`tests/`** and **`backend/tests/`** (**136** tests), including **`tests/test_model_column_parity.py`** (model vs metadata feature parity), **`tests/test_model_confidence.py`**, **`tests/test_billing_notifications.py`**, and **`backend/tests/test_contact.py`**.
 
 ### Frontend
 
@@ -628,9 +632,9 @@ cd frontend && npm test
 
 | Suite | Count |
 |-------|------:|
-| Backend (`pytest`) | 126 |
+| Backend (`pytest`) | 136 |
 | Frontend (`npm test`) | 148 |
-| **Total** | **274** |
+| **Total** | **284** |
 
 ### CI
 
