@@ -82,7 +82,9 @@ body {
 }
 
 .dark .hero-building-svg {
-  filter: drop-shadow(0 24px 48px rgba(6, 182, 212, 0.12));
+  filter:
+    drop-shadow(0 28px 56px rgba(6, 182, 212, 0.28))
+    drop-shadow(0 0 48px rgba(34, 211, 238, 0.12));
 }
 
 .hero-building-face-top {
@@ -119,11 +121,22 @@ body {
 }
 
 .hero-building-windows {
-  stroke-opacity: 0.55;
+  stroke: rgb(var(--hero-accent-bright));
+  stroke-opacity: 0.6;
 }
 
 .dark .hero-building-windows {
-  stroke-opacity: 0.35;
+  stroke-opacity: 0.42;
+}
+
+/* Glowing corner / roofline edges — brighter than face strokes */
+.hero-building-edge {
+  stroke: rgb(var(--hero-accent-bright));
+  stroke-opacity: 0.82;
+}
+
+.dark .hero-building-edge {
+  stroke-opacity: 0.7;
 }
 
 .hero-comp-graph {
@@ -514,7 +527,72 @@ body {
   .hero-comp-link,
   .hero-comp-node,
   .hero-cta-ripple-ring,
-  .hero-cta-ripple-beam {
+  .hero-cta-ripple-beam,
+  .hero-readout-in,
+  .hero-verdict-in {
     animation: none !important;
   }
+}
+
+/* ─── Valuation readout ─────────────────────────────────────────────────────── */
+
+@keyframes hero-readout-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-verdict-in {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hero-readout-in {
+  animation: hero-readout-in 0.55s ease-out both;
+}
+
+.hero-verdict-in {
+  animation: hero-verdict-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.hero-range-fill {
+  transition: width 0.75s ease-out;
+}
+
+.hero-range-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.75s ease-out;
+}
+
+/* ─── Cursor parallax depth layers ──────────────────────────────────────────── */
+
+/* Building wrapper shifts with the cursor — creates a "following" depth effect */
+.hero-parallax-deep {
+  transform: translate(
+    calc(var(--hero-mx, 0) * 6px),
+    calc(var(--hero-my, 0) * 3px)
+  );
+  transition: transform 0.14s linear;
+}
+
+/* Comp-graph layer counter-moves slightly — reinforces the depth separation */
+.hero-parallax-shallow {
+  transform: translate(
+    calc(var(--hero-mx, 0) * -3px),
+    calc(var(--hero-my, 0) * -1.5px)
+  );
+  transition: transform 0.14s linear;
 }
