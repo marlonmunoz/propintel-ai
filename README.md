@@ -2,7 +2,7 @@
 
 PropIntel AI is an end-to-end AI engineering platform for NYC residential real estate investment analysis: a medallion-style data pipeline, segment-routed ML models, a production FastAPI backend, and a React frontend for valuation, scoring, explainability, and portfolio workflows.
 
-![App Preview](docs/PropIntel_Preview_02.png)
+![App Preview](docs/PropIntel_Preview_03.png)
 
 ### Core stack
 
