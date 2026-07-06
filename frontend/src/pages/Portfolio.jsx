@@ -235,7 +235,14 @@ export default function Portfolio() {
     <div className="flex min-h-screen flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar />
 
-      <section className="mx-auto flex-1 max-w-6xl px-6 pb-16 pt-24">
+      {/* Extra bottom padding while the sticky compare bar is visible so the
+          last card's content/actions are never hidden behind it on mobile,
+          where the bar wraps to 2-3 lines. */}
+      <section
+        className={`mx-auto flex-1 max-w-6xl px-6 pt-24 ${
+          selectedCount > 0 ? 'pb-44 sm:pb-32' : 'pb-16'
+        }`}
+      >
 
         {/* Header */}
         <div className="mb-6">
@@ -656,8 +663,8 @@ export default function Portfolio() {
 
       {/* Sticky compare bar */}
       {selectedCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900 dark:text-white">
                 {canCompare ? (
@@ -682,7 +689,7 @@ export default function Portfolio() {
               <button
                 type="button"
                 onClick={clearSelection}
-                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                className="min-h-[44px] flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:flex-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
               >
                 Clear
               </button>
@@ -690,7 +697,7 @@ export default function Portfolio() {
                 type="button"
                 onClick={openCompare}
                 disabled={!canCompare}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                className={`min-h-[44px] flex-[2] rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${
                   canCompare
                     ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
                     : 'cursor-not-allowed bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'

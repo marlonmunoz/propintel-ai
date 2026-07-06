@@ -318,55 +318,66 @@ export default function Pricing() {
               Full comparison
             </h2>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-              {/* Table header */}
-              <div className="grid grid-cols-[1fr_96px_96px] border-b border-slate-200 bg-slate-50 px-6 py-3.5 dark:border-slate-800 dark:bg-slate-900/80">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Feature
-                </span>
-                <span className="text-center text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Free
-                </span>
-                <span className="text-center text-xs font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-                  Pro
-                </span>
-              </div>
-
-              {FEATURES.map((section, si) => (
-                <div key={si}>
-                  {/* Category row */}
-                  <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-2.5 dark:border-slate-800/50 dark:bg-slate-900/40">
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                      {section.category}
-                    </span>
-                  </div>
-
-                  {section.rows.map((row, ri) => (
-                    <div
-                      key={ri}
-                      className={`grid grid-cols-[1fr_96px_96px] items-center px-6 py-4 ${
-                        ri < section.rows.length - 1
-                          ? 'border-b border-slate-100 dark:border-slate-800/60'
-                          : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-slate-700 dark:text-slate-300">
-                          {row.label}
-                        </span>
-                        {row.hint && (
-                          <span title={row.hint} className="cursor-help">
-                            <HelpCircle className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600" />
-                          </span>
-                        )}
-                      </div>
-                      <FeatureValue value={row.free} />
-                      <FeatureValue value={row.pro} />
-                    </div>
-                  ))}
+            {/*
+              Scrolls horizontally below ~520px instead of clipping columns —
+              html/body use `overflow-x: clip` globally, so silently-cut
+              content is not recoverable; an explicit scroll affordance here
+              guarantees every value stays readable on narrow phones.
+            */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div className="min-w-[480px]">
+                {/* Table header */}
+                <div className="grid grid-cols-[1fr_84px_84px] border-b border-slate-200 bg-slate-50 px-4 py-3.5 sm:grid-cols-[1fr_96px_96px] sm:px-6 dark:border-slate-800 dark:bg-slate-900/80">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Feature
+                  </span>
+                  <span className="text-center text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Free
+                  </span>
+                  <span className="text-center text-xs font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                    Pro
+                  </span>
                 </div>
-              ))}
+
+                {FEATURES.map((section, si) => (
+                  <div key={si}>
+                    {/* Category row */}
+                    <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-6 dark:border-slate-800/50 dark:bg-slate-900/40">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                        {section.category}
+                      </span>
+                    </div>
+
+                    {section.rows.map((row, ri) => (
+                      <div
+                        key={ri}
+                        className={`grid grid-cols-[1fr_84px_84px] items-center px-4 py-4 sm:grid-cols-[1fr_96px_96px] sm:px-6 ${
+                          ri < section.rows.length - 1
+                            ? 'border-b border-slate-100 dark:border-slate-800/60'
+                            : ''
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="text-sm text-slate-700 dark:text-slate-300">
+                            {row.label}
+                          </span>
+                          {row.hint && (
+                            <span title={row.hint} className="shrink-0 cursor-help">
+                              <HelpCircle className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600" />
+                            </span>
+                          )}
+                        </div>
+                        <FeatureValue value={row.free} />
+                        <FeatureValue value={row.pro} />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
+            <p className="mt-2 text-center text-xs text-slate-400 sm:hidden">
+              Swipe to see Free vs Pro →
+            </p>
           </div>
         </section>
 

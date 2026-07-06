@@ -375,15 +375,15 @@ export default function AnalyzeResults({
           </div>
 
           {/* Save to Portfolio */}
-          <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
-            <div>
+          <div className="flex flex-col items-stretch gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-950">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900 dark:text-white">Save to Portfolio</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Store this analysis so you can review it later without re-running the model.
               </p>
             </div>
             {savedToPortfolio ? (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="h-4 w-4" />
                 Saved
               </div>
@@ -391,7 +391,7 @@ export default function AnalyzeResults({
               <button
                 onClick={onSaveToPortfolio}
                 disabled={isSaving}
-                className="flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
+                className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50 sm:py-2"
               >
                 <BookmarkPlus className="h-4 w-4" />
                 {isSaving ? 'Saving…' : 'Save'}
