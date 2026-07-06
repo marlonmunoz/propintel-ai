@@ -178,6 +178,34 @@ def _check_and_increment(db, user_id: str, limit: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Narrative gating — Free tier sees a short preview of opportunity/risks;
+# summary, recommendation, and confidence are always full quality regardless
+# of tier (see docs/PRICING_STRATEGY.md — "Tier differences are real").
+# ---------------------------------------------------------------------------
+_NARRATIVE_PREVIEW_CHARS: int = 70
+
+
+def _is_free_tier(role: str, auth_method: str) -> bool:
+    """Service/admin keys and paid/admin roles get the full narrative."""
+    if auth_method == "api_key":
+        return False
+    return role not in ("paid", "admin")
+
+
+def _truncate_narrative(text: str, max_chars: int = _NARRATIVE_PREVIEW_CHARS) -> str:
+    """
+    Shorten narrative text to a preview, cutting at the last whole word at or
+    before ``max_chars`` and appending an ellipsis. Text already at or under
+    the limit is returned unchanged (no ellipsis added).
+    """
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    head = text[:max_chars].rsplit(" ", 1)[0].rstrip(".,;: ")
+    return f"{head}…" if head else f"{text[:max_chars].rstrip()}…"
+
+
+# ---------------------------------------------------------------------------
 # Output validation
 # ---------------------------------------------------------------------------
 def _validate_output(raw: dict) -> tuple[dict, bool]:
@@ -218,7 +246,10 @@ def generate_explanation(
       - "quota_exhausted" — daily limit reached (same shape as _QUOTA_FALLBACK)
       - "unavailable" — no API key, LLM error, invalid JSON, or schema failure
 
-    The explanation dict always has the same five keys as _SAFE_FALLBACK.
+    On success, `narrative_locked=True` and `opportunity`/`risks` are shortened
+    to a preview for Free-tier callers (role not in paid/admin, auth_method
+    not api_key). `summary`, `recommendation`, and `confidence` are never
+    shortened — only narrative length is tier-gated.
     """
     # ── 1. Quota gate ────────────────────────────────────────────────────────
     if user_id and db is not None:
@@ -255,4 +286,15 @@ def generate_explanation(
 
     # ── 3. Validate output schema ────────────────────────────────────────────
     out, ok = _validate_output(raw_dict)
-    return out, "ok" if ok else "unavailable"
+    if not ok:
+        return out, "unavailable"
+
+    # ── 4. Gate narrative depth by tier ─────────────────────────────────────
+    if _is_free_tier(role, auth_method):
+        out["opportunity"] = _truncate_narrative(out["opportunity"])
+        out["risks"] = _truncate_narrative(out["risks"])
+        out["narrative_locked"] = True
+    else:
+        out["narrative_locked"] = False
+
+    return out, "ok"

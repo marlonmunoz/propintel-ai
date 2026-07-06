@@ -343,17 +343,31 @@ export default function AnalyzeResults({
             ) : (
               <div className="mt-4 grid gap-4 xl:grid-cols-3">
                 {[
-                  { label: 'Summary',     text: analysisResult.explanation.summary },
-                  { label: 'Opportunity', text: analysisResult.explanation.opportunity },
-                  { label: 'Risks',       text: analysisResult.explanation.risks },
-                ].map(({ label, text }) => (
+                  { label: 'Summary',     text: analysisResult.explanation.summary,     locked: false },
+                  { label: 'Opportunity', text: analysisResult.explanation.opportunity, locked: analysisResult.explanation.narrative_locked },
+                  { label: 'Risks',       text: analysisResult.explanation.risks,       locked: analysisResult.explanation.narrative_locked },
+                ].map(({ label, text, locked }) => (
                   <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      {label}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {label}
+                      </p>
+                      {locked && (
+                        <Crown className="h-3.5 w-3.5 shrink-0 text-cyan-500/70" aria-hidden />
+                      )}
+                    </div>
                     <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
                       {text}
                     </p>
+                    {locked && (
+                      <Link
+                        to="/pricing"
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-100 dark:border-cyan-800/50 dark:bg-cyan-950/30 dark:text-cyan-300 dark:hover:bg-cyan-950/50"
+                      >
+                        <Crown className="h-3 w-3" />
+                        Unlock full analysis with Pro
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>

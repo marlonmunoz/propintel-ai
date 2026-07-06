@@ -275,6 +275,14 @@ class LLMExplanation(BaseModel):
         ...,
         description="Must be exactly 'Low', 'Medium', or 'High'.",
     )
+    narrative_locked: bool = Field(
+        default=False,
+        description=(
+            "True when `opportunity`/`risks` have been shortened to a preview for the "
+            "caller's tier. `summary`, `recommendation`, and `confidence` are always "
+            "full quality regardless of tier — only narrative length is gated."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -284,6 +292,7 @@ class LLMExplanation(BaseModel):
                 "risks": "Current asking price reduces margin for upside and weakens near-term return potential.",
                 "recommendation": "Hold",
                 "confidence": "Medium",
+                "narrative_locked": False,
             }
         }
     }
@@ -543,7 +552,8 @@ class ProductionAnalyzeResponse(BaseModel):
                     "opportunity": "If acquired below asking price, the valuation gap may create a better entry point.",
                     "risks": "Current asking price reduces margin for upside and weakens near-term return potential.",
                     "recommendation": "Approach cautiously and negotiate closer to model-estimated value.",
-                    "confidence": "medium"
+                    "confidence": "medium",
+                    "narrative_locked": False
                 },
                 "explanation_status": "ok",
                 "metadata": {
@@ -657,6 +667,7 @@ class ExplanationResponse(BaseModel):
                     "risks": "Current asking price reduces margin for upside.",
                     "recommendation": "Hold",
                     "confidence": "Medium",
+                    "narrative_locked": False,
                 },
                 "explanation_status": "ok",
             }
