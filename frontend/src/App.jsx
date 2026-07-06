@@ -20,6 +20,7 @@ const ValuationDisclaimer = lazy(() => import('./pages/ValuationDisclaimer'))
 const Contact = lazy(() => import('./pages/Contact'))
 const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
 const BillingCanceled = lazy(() => import('./pages/BillingCanceled'))
+const Pricing = lazy(() => import('./pages/Pricing'))
 
 function PageSpinner() {
   return (
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/disclaimer" element={<ValuationDisclaimer />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/pricing" element={<Pricing />} />
 
           {/* Protected — requires a valid Supabase session */}
           <Route

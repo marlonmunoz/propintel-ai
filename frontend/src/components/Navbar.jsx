@@ -88,6 +88,7 @@ export default function Navbar() {
         {/* Desktop / tablet — horizontal nav */}
         <nav className="hidden items-center gap-6 md:flex">
           {navLink('/', 'Home')}
+          {navLink('/pricing', 'Pricing')}
 
           {user && (
             <>
@@ -245,6 +246,7 @@ export default function Navbar() {
         >
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 sm:px-6">
             {navLink('/', 'Home')}
+            {navLink('/pricing', 'Pricing')}
             {user && (
               <>
                 {navLink('/analyze', 'Analyze')}
