@@ -264,7 +264,7 @@ export default function Portfolio() {
                 <button
                   key={label}
                   onClick={() => setFilterLabel(label)}
-                  className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${filterChipClasses(label, filterLabel === label)}`}
+                  className={`min-h-[36px] rounded-full border px-3 py-1.5 text-sm font-semibold transition ${filterChipClasses(label, filterLabel === label)}`}
                 >
                   {label}
                 </button>
@@ -740,7 +740,7 @@ export default function Portfolio() {
               <button
                 type="button"
                 onClick={() => setCompareOpen(false)}
-                className="rounded-xl border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />

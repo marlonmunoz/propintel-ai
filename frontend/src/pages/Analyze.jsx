@@ -284,7 +284,12 @@ export default function Analyze() {
             </Link>
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+          {/*
+            2-column split starts at lg (1024px) with a narrower sidebar so
+            tablet-landscape/small-laptop widths aren't stuck with a single,
+            very tall column; xl widens the sidebar back to its original size.
+          */}
+          <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)]">
             <AnalyzeForm
               formData={formData}
               formErrors={formErrors}

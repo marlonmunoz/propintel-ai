@@ -140,7 +140,7 @@ function BoroughHint({ reducedMotion }) {
   const borough = reducedMotion ? 'Manhattan · Brooklyn' : BOROUGHS[index]
   return (
     <p
-      className="pointer-events-none absolute bottom-3 right-3 z-[3] font-mono text-[9px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-cyan-500/30"
+      className="pointer-events-none absolute bottom-3 right-3 z-[3] font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-cyan-500/30"
       aria-hidden
     >
       <span key={borough} className={!reducedMotion ? 'hero-borough-fade' : undefined}>
@@ -540,7 +540,7 @@ function ValuationReadout({ sample, readoutKey, visible, reducedMotion, verdictV
       <div className="rounded-xl border border-cyan-500/20 bg-slate-950/90 px-4 pb-4 pt-3 shadow-[0_0_30px_rgba(34,211,238,0.07)] backdrop-blur-md dark:border-cyan-400/15">
         {/* Address + deal badge row */}
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="truncate font-mono text-[9px] uppercase tracking-[0.18em] text-cyan-500/55 dark:text-cyan-400/40">
+          <p className="truncate font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-500/55 dark:text-cyan-400/40">
             {sample.address}
           </p>
           {(verdictVisible || reducedMotion) && (
@@ -548,7 +548,7 @@ function ValuationReadout({ sample, readoutKey, visible, reducedMotion, verdictV
               key={`deal-${readoutKey}`}
               className={[
                 'hero-verdict-in shrink-0 rounded-full border px-2.5 py-0.5',
-                'font-mono text-[9px] font-bold uppercase tracking-wide',
+                'font-mono text-[10px] font-bold uppercase tracking-wide',
                 dealLabelBadgeClasses(sample.deal),
               ].join(' ')}
             >
@@ -567,7 +567,7 @@ function ValuationReadout({ sample, readoutKey, visible, reducedMotion, verdictV
 
         {/* P10–P90 range bar */}
         <div className="mt-3">
-          <div className="mb-1.5 flex items-center justify-between font-mono text-[8px] text-cyan-500/40 dark:text-cyan-400/30">
+          <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] text-cyan-500/40 dark:text-cyan-400/30">
             <span>P10 · ${(sample.p10 / 1000).toFixed(0)}k</span>
             <span className="opacity-70">predicted value</span>
             <span>${(sample.p90 / 1000).toFixed(0)}k · P90</span>
@@ -600,7 +600,7 @@ function ConfidencePill({ sample, visible, reducedMotion }) {
       className={[
         'hero-verdict-in pointer-events-none absolute right-3 top-3 z-[4]',
         'rounded-full border px-3 py-1',
-        'font-mono text-[9px] font-semibold uppercase tracking-wide',
+        'font-mono text-[10px] font-semibold uppercase tracking-wide',
         modelConfidenceBadgeClasses(sample.tier),
       ].join(' ')}
       aria-hidden

@@ -109,7 +109,7 @@ export default function AnalyzeResults({
             <div className="mt-3 h-8 w-56 rounded bg-slate-200 dark:bg-slate-700" />
             <div className="mt-2 h-3 w-72 rounded bg-slate-200 dark:bg-slate-700" />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="grid gap-4 lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
               <div className="h-3 w-28 rounded bg-slate-200 dark:bg-slate-700" />
               <div className="mt-4 h-14 w-16 rounded bg-slate-200 dark:bg-slate-700" />
@@ -186,7 +186,7 @@ export default function AnalyzeResults({
           ) : null}
 
           {/* Investment score + summary */}
-          <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="grid gap-4 lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Investment Score

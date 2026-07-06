@@ -47,7 +47,7 @@ export default function Navbar() {
   const isPaid = (profile?.role || '').toLowerCase() === 'paid'
 
   const navLinkClass = (to) =>
-    `block rounded-lg px-3 py-2.5 text-sm font-medium transition md:inline-block md:rounded-none md:px-0 md:py-0 md:hover:bg-transparent ${
+    `flex min-h-[44px] items-center rounded-lg px-3 py-2.5 text-sm font-medium transition md:inline-block md:min-h-0 md:rounded-none md:px-0 md:py-0 md:hover:bg-transparent ${
       location.pathname === to
         ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white md:bg-transparent dark:md:bg-transparent md:font-semibold md:text-cyan-600 dark:md:text-cyan-400'
         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white md:text-slate-500 md:hover:bg-transparent dark:md:hover:bg-transparent md:hover:text-slate-900 dark:md:text-slate-400 dark:md:hover:text-white'
@@ -220,7 +220,7 @@ export default function Navbar() {
             type="button"
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-white"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-white"
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
@@ -230,7 +230,7 @@ export default function Navbar() {
             aria-expanded={mobileNavOpen}
             aria-controls="mobile-nav-panel"
             aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

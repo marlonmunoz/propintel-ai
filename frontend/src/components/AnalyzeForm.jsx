@@ -70,7 +70,7 @@ export default function AnalyzeForm({
               key={presetName}
               type="button"
               onClick={() => onUsePreset(presetName)}
-              className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-500/20 dark:text-cyan-300"
+              className="min-h-[44px] rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-500/20 dark:text-cyan-300"
             >
               {presetName}
             </button>
@@ -79,7 +79,7 @@ export default function AnalyzeForm({
           <button
             type="button"
             onClick={onReset}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
+            className="min-h-[44px] rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-900"
           >
             Reset Form
           </button>

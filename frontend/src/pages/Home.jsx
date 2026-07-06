@@ -186,12 +186,12 @@ function MobileFeatureCarousel({ items }) {
         <button
           type="button"
           onClick={() => go(-1)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           aria-label="Previous feature"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="flex gap-2" role="tablist" aria-label="Feature slides">
+        <div className="flex gap-1" role="tablist" aria-label="Feature slides">
           {items.map(({ title }, i) => (
             <button
               key={title}
@@ -200,16 +200,20 @@ function MobileFeatureCarousel({ items }) {
               aria-selected={i === index}
               aria-label={`Show feature: ${title}`}
               onClick={() => setIndex(i)}
-              className={`h-2 rounded-full transition-all ${
-                i === index ? 'w-8 bg-cyan-500' : 'w-2 bg-slate-300 dark:bg-slate-600'
-              }`}
-            />
+              className="flex h-8 w-6 items-center justify-center"
+            >
+              <span
+                className={`h-2 rounded-full transition-all ${
+                  i === index ? 'w-8 bg-cyan-500' : 'w-2 bg-slate-300 dark:bg-slate-600'
+                }`}
+              />
+            </button>
           ))}
         </div>
         <button
           type="button"
           onClick={() => go(1)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           aria-label="Next feature"
         >
           <ChevronRight className="h-5 w-5" />
