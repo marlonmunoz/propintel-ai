@@ -9,6 +9,15 @@ Covers three layers without any real Stripe or Resend network calls:
 
 from __future__ import annotations
 
+import os
+
+# Must be set before backend.app.db.database is imported anywhere (including
+# transitively via backend.app.main) — that module binds its engine to
+# DATABASE_URL once, at import time. Also enforced repo-wide by the root
+# conftest.py, but set explicitly here too so this file is safe even when
+# run standalone via a tool that bypasses conftest discovery.
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+
 import asyncio
 import uuid
 
@@ -16,6 +25,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import backend.app.db.models  # noqa: F401 — register all tables on Base before create_all
 from backend.app.db.database import Base, engine, get_db
 
 Base.metadata.create_all(bind=engine)
