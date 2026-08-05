@@ -1,0 +1,28 @@
+name: Keep Supabase Warm
+
+# Supabase's Free tier auto-pauses a project after 7 days with no database
+# activity. This workflow pings the production /ready endpoint — which runs
+# a real `SELECT 1` against the database — every 3 days, well inside that
+# window, so the project never goes to sleep on its own.
+#
+# This is a stopgap for a low-traffic / pre-launch app, not a substitute for
+# upgrading to Supabase Pro once there's real, steady production traffic —
+# Pro removes the auto-pause behavior entirely and adds daily backups.
+#
+# Bonus: since /ready checks both the DB and ML artifacts, a failed run also
+# doubles as a basic production health alert (GitHub emails you on workflow
+# failure by default).
+
+on:
+  schedule:
+    - cron: "0 13 */3 * *" # every 3 days at 13:00 UTC
+  workflow_dispatch: {} # allows manual "Run workflow" from the Actions tab
+
+jobs:
+  ping-ready:
+    name: Ping /ready
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production readiness endpoint
+        run: |
+          curl -sf --max-time 20 https://api.propintel-ai.com/ready
