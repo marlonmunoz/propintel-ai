@@ -263,13 +263,17 @@ cors_origins = [
     if origin.strip()
 ]
 
-# CORS_ORIGIN_REGEX allows a regex pattern to match dynamic preview domains.
-# Default covers all Vercel preview deployments for this project.
-# Set CORS_ORIGIN_REGEX="" in production to disable if not needed.
-_cors_origin_regex = os.getenv(
-    "CORS_ORIGIN_REGEX",
-    r"https://propintel-.*\.vercel\.app",
-)
+# CORS_ORIGIN_REGEX allows a regex pattern to match dynamic preview domains
+# (e.g. per-branch Vercel previews). Defaults to EMPTY/disabled — any pattern
+# is opt-in via env var only.
+#
+# Previously defaulted to r"https://propintel-.*\.vercel\.app", which matches
+# ANY Vercel project whose name starts with "propintel-" — including one an
+# attacker creates themselves (Vercel project names are attacker-choosable).
+# That would let a malicious site call this API with a victim's real JWT via
+# CORS. If you need preview-domain support, set CORS_ORIGIN_REGEX in Railway
+# to a pattern scoped to your own Vercel team/project hash, not a bare prefix.
+_cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", "")
 
 app.add_middleware(
     CORSMiddleware,
@@ -314,7 +318,8 @@ def health():
 
 
 @app.get("/ready", include_in_schema=False)
-def ready():
+@limiter.limit("10/minute")
+def ready(request: Request):
     checks: dict = {}
     failed: list[str] = []
 

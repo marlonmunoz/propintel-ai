@@ -235,30 +235,32 @@ async def get_current_user(
 # Profile lookup — tolerant of UUID string casing and manual SQL edits
 # ---------------------------------------------------------------------------
 def get_profile_for_jwt_user(db: Session, user: UserContext):
-    """Load `profiles` row for a JWT user: match id (case-insensitive), else email."""
+    """Load `profiles` row for a JWT user: match id (case-insensitive) only.
+
+    Deliberately does NOT fall back to matching by email. `profiles.email`
+    is not unique, so an email fallback would let a JWT user inherit the
+    role of a *different* profile row that happens to share their email
+    (e.g. a stale/duplicate row) — a privilege-escalation path. The Supabase
+    Auth UUID (`sub` claim) is the only trustworthy identity key here.
+
+    In the rare case a user's Supabase UUID changes (e.g. account deleted
+    and recreated), this returns None and /auth/me creates a fresh profile
+    at role="user" rather than merging into an old row by email.
+    """
     from backend.app.db.models import Profile  # noqa: PLC0415
 
     if user.auth_method != "jwt":
         return None
 
     uid = (user.user_id or "").strip()
-    if uid:
-        profile = (
-            db.query(Profile)
-            .filter(func.lower(Profile.id) == uid.lower())
-            .first()
-        )
-        if profile is not None:
-            return profile
+    if not uid:
+        return None
 
-    email = (user.email or "").strip().lower()
-    if email:
-        return (
-            db.query(Profile)
-            .filter(func.lower(Profile.email) == email)
-            .first()
-        )
-    return None
+    return (
+        db.query(Profile)
+        .filter(func.lower(Profile.id) == uid.lower())
+        .first()
+    )
 
 
 # Sentinel used by _get_or_cache_profile to distinguish "not cached yet"

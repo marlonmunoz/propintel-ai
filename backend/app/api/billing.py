@@ -115,8 +115,15 @@ def _profile_by_user_id(db: Session, user_id: str) -> Profile | None:
 
 
 def _set_profile_role(db: Session, user_id: str, role: str) -> None:
+    """Set profiles.role from Stripe subscription status.
+
+    Never demotes an existing "admin" — Stripe billing state should only
+    ever toggle a profile between "user" and "paid". Without this guard, an
+    admin who tests checkout and later cancels (or lets a test subscription
+    expire) would be silently demoted to "user" and lose admin access.
+    """
     profile = _profile_by_user_id(db, user_id)
-    if profile is not None:
+    if profile is not None and (profile.role or "").strip().lower() != "admin":
         profile.role = role  # type: ignore[assignment]
 
 
