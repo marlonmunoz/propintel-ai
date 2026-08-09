@@ -3,6 +3,7 @@ import { BookmarkPlus, CheckCircle2, Crown, Sparkles } from 'lucide-react'
 import DealLabelBadge from './DealLabelBadge'
 import ModelConfidenceBadge from './ModelConfidenceBadge'
 import ModelConfidenceCallout from './ModelConfidenceCallout'
+import PropertyRecordsBadge from './PropertyRecordsBadge'
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
@@ -76,6 +77,7 @@ export default function AnalyzeResults({
           <div className="flex flex-wrap items-center gap-3">
             <DealLabelBadge label={dealLabel} />
             <ModelConfidenceBadge metadata={analysisResult.metadata} />
+            <PropertyRecordsBadge metadata={analysisResult.metadata} />
             {score !== undefined && score !== null ? (
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                 Investment score <span className="text-slate-900 dark:text-white">{score}</span>
