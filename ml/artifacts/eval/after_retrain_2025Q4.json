@@ -1,0 +1,202 @@
+{
+  "generated_at": "2026-08-09T03:22:23",
+  "since": "2025-10-31",
+  "limit_per_segment": 400,
+  "seed": 42,
+  "jitter_m": 0.0,
+  "n_rows": 1246,
+  "results": {
+    "production": {
+      "overall": {
+        "n": 1246,
+        "mae": 721435,
+        "rmse": 1551092,
+        "median_ape": 0.2358,
+        "mean_ape": 2.0897,
+        "mean_bias": -201853,
+        "r2": 0.3293,
+        "within_10pct": 0.2119,
+        "within_20pct": 0.4326,
+        "interval_n": 1246,
+        "interval_coverage": 0.7151,
+        "interval_rel_width": 0.9355
+      },
+      "by_segment": {
+        "multi_family": {
+          "n": 400,
+          "mae": 400539,
+          "rmse": 819825,
+          "median_ape": 0.1926,
+          "mean_ape": 0.3943,
+          "mean_bias": -240657,
+          "r2": 0.3059,
+          "within_10pct": 0.24,
+          "within_20pct": 0.5075,
+          "interval_n": 400,
+          "interval_coverage": 0.805,
+          "interval_rel_width": 0.918
+        },
+        "one_family": {
+          "n": 400,
+          "mae": 385771,
+          "rmse": 1004197,
+          "median_ape": 0.1857,
+          "mean_ape": 5.4879,
+          "mean_bias": -264423,
+          "r2": 0.2364,
+          "within_10pct": 0.2725,
+          "within_20pct": 0.51,
+          "interval_n": 400,
+          "interval_coverage": 0.7,
+          "interval_rel_width": 0.7228
+        },
+        "rentals_all": {
+          "n": 446,
+          "mae": 1310278,
+          "rmse": 2283458,
+          "median_ape": 0.3383,
+          "mean_ape": 0.5627,
+          "mean_bias": -110936,
+          "r2": 0.1648,
+          "within_10pct": 0.1323,
+          "within_20pct": 0.296,
+          "interval_n": 446,
+          "interval_coverage": 0.648,
+          "interval_rel_width": 1.1796
+        }
+      },
+      "errors": {},
+      "bbl_feature_status": {
+        "skipped": 1246
+      }
+    },
+    "prod_plus_units": {
+      "overall": {
+        "n": 1246,
+        "mae": 665322,
+        "rmse": 1320472,
+        "median_ape": 0.229,
+        "mean_ape": 2.0704,
+        "mean_bias": -262648,
+        "r2": 0.5139,
+        "within_10pct": 0.2335,
+        "within_20pct": 0.4535,
+        "interval_n": 1246,
+        "interval_coverage": 0.7231,
+        "interval_rel_width": 0.8997
+      },
+      "by_segment": {
+        "multi_family": {
+          "n": 400,
+          "mae": 400552,
+          "rmse": 819735,
+          "median_ape": 0.1925,
+          "mean_ape": 0.3942,
+          "mean_bias": -240792,
+          "r2": 0.306,
+          "within_10pct": 0.2425,
+          "within_20pct": 0.5075,
+          "interval_n": 400,
+          "interval_coverage": 0.8025,
+          "interval_rel_width": 0.9145
+        },
+        "one_family": {
+          "n": 400,
+          "mae": 385771,
+          "rmse": 1004197,
+          "median_ape": 0.1857,
+          "mean_ape": 5.4879,
+          "mean_bias": -264423,
+          "r2": 0.2364,
+          "within_10pct": 0.2725,
+          "within_20pct": 0.51,
+          "interval_n": 400,
+          "interval_coverage": 0.7,
+          "interval_rel_width": 0.7228
+        },
+        "rentals_all": {
+          "n": 446,
+          "mae": 1153503,
+          "rmse": 1834175,
+          "median_ape": 0.3162,
+          "mean_ape": 0.5086,
+          "mean_bias": -280659,
+          "r2": 0.4611,
+          "within_10pct": 0.1906,
+          "within_20pct": 0.3543,
+          "interval_n": 446,
+          "interval_coverage": 0.6726,
+          "interval_rel_width": 1.07
+        }
+      },
+      "errors": {},
+      "bbl_feature_status": {
+        "skipped": 1246
+      }
+    },
+    "with_bbl": {
+      "overall": {
+        "n": 1246,
+        "mae": 533982,
+        "rmse": 1046443,
+        "median_ape": 0.2029,
+        "mean_ape": 1.8244,
+        "mean_bias": -204650,
+        "r2": 0.6947,
+        "within_10pct": 0.2175,
+        "within_20pct": 0.4904,
+        "interval_n": 1246,
+        "interval_coverage": 0.695,
+        "interval_rel_width": 0.6625
+      },
+      "by_segment": {
+        "multi_family": {
+          "n": 400,
+          "mae": 312807,
+          "rmse": 590514,
+          "median_ape": 0.1817,
+          "mean_ape": 0.3475,
+          "mean_bias": -167091,
+          "r2": 0.6399,
+          "within_10pct": 0.2425,
+          "within_20pct": 0.5725,
+          "interval_n": 400,
+          "interval_coverage": 0.78,
+          "interval_rel_width": 0.6288
+        },
+        "one_family": {
+          "n": 400,
+          "mae": 316689,
+          "rmse": 814892,
+          "median_ape": 0.1948,
+          "mean_ape": 4.8502,
+          "mean_bias": -238863,
+          "r2": 0.4971,
+          "within_10pct": 0.2,
+          "within_20pct": 0.52,
+          "interval_n": 400,
+          "interval_coverage": 0.555,
+          "interval_rel_width": 0.5166
+        },
+        "rentals_all": {
+          "n": 446,
+          "mae": 927225,
+          "rmse": 1466610,
+          "median_ape": 0.2548,
+          "mean_ape": 0.4352,
+          "mean_bias": -207651,
+          "r2": 0.6555,
+          "within_10pct": 0.2108,
+          "within_20pct": 0.3901,
+          "interval_n": 446,
+          "interval_coverage": 0.7444,
+          "interval_rel_width": 0.9811
+        }
+      },
+      "errors": {},
+      "bbl_feature_status": {
+        "ok": 1246
+      }
+    }
+  }
+}

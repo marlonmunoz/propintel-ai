@@ -1,187 +1,189 @@
 feature,importance
-num__condo_gross_sqft,0.13208362
-num__neighborhood_median_price,0.11963899
-num__dof_assess_per_unit,0.09737449
-cat__borough_name_Manhattan,0.08999592
-cat__borough_name_Staten Island,0.050657034
-cat__neighborhood_DOWNTOWN-FULTON MALL,0.026184931
-num__acris_last_deed_amt,0.017668834
-cat__neighborhood_MIDTOWN EAST,0.01547623
-cat__neighborhood_COLLEGE POINT,0.015184514
-num__acris_prior_sale_cnt,0.01353015
-cat__neighborhood_MADISON,0.012451301
-cat__neighborhood_WASHINGTON HEIGHTS LOWER,0.011459496
-cat__borough_name_Brooklyn,0.011313417
-cat__neighborhood_OCEAN PARKWAY-NORTH,0.01109705
-cat__neighborhood_FLUSHING-NORTH,0.010541962
-num__acris_last_mtge_amt,0.010224883
-num__dof_yrbuilt,0.00924934
-cat__neighborhood_TRIBECA,0.008905097
-num__dof_bld_story,0.0087999385
-cat__neighborhood_HARLEM-CENTRAL,0.00877639
-cat__dof_bldg_class_R2,0.008147354
-cat__neighborhood_SUNSET PARK,0.007921125
-num__dof_curacttot,0.0077662575
-cat__neighborhood_GREENPOINT,0.0076937713
-cat__neighborhood_BOROUGH PARK,0.007503424
-cat__neighborhood_GREENWICH VILLAGE-WEST,0.0073378105
-cat__borough_name_Bronx,0.0070292912
-cat__neighborhood_WOODSIDE,0.0069101253
-num__property_age,0.0065542925
-cat__neighborhood_UPPER EAST SIDE (59-79),0.0065211453
-cat__neighborhood_MIDTOWN WEST,0.0058719176
-num__acris_days_since_last_deed,0.005562006
-num__dof_curmkttot,0.005473998
-cat__borough_name_Queens,0.0051987795
-cat__neighborhood_MANHATTAN VALLEY,0.005192327
-cat__neighborhood_RED HOOK,0.0045183045
-num__j51_total_abatement,0.004442201
-cat__neighborhood_FINANCIAL,0.004367279
-cat__neighborhood_SHEEPSHEAD BAY,0.004340722
-cat__neighborhood_BRIGHTON BEACH,0.004312165
-cat__neighborhood_WILLIAMSBURG-NORTH,0.0042538084
-cat__neighborhood_WILLIAMSBURG-CENTRAL,0.004119732
-cat__neighborhood_ASTORIA,0.0040881764
-cat__neighborhood_BEDFORD STUYVESANT,0.00404776
-cat__neighborhood_CARROLL GARDENS,0.004025339
-cat__neighborhood_UPPER WEST SIDE (79-96),0.003953333
-cat__neighborhood_UPPER WEST SIDE (96-116),0.0037690776
-cat__neighborhood_MURRAY HILL,0.0036076447
-num__acris_mortgage_cnt,0.0036063162
-cat__dof_tax_class_2C,0.003593033
-cat__neighborhood_RIVERDALE,0.003514284
-cat__neighborhood_MIDWOOD,0.003508175
-cat__dof_bldg_class_R1,0.0034575397
-num__dof_curactland,0.0033911082
-num__condo_comint_bldg,0.0033766595
-cat__neighborhood_CIVIC CENTER,0.0033639458
-cat__neighborhood_SOUTHBRIDGE,0.0033460634
-cat__neighborhood_MORNINGSIDE HEIGHTS,0.0033274607
-num__dof_gross_sqft,0.0031200827
-cat__neighborhood_FLUSHING-SOUTH,0.0031136442
-cat__neighborhood_WILLIAMSBURG-EAST,0.0030280987
-num__condo_comint_land,0.0029927199
-cat__neighborhood_CROWN HEIGHTS,0.0029107386
-cat__neighborhood_MIDTOWN CBD,0.0027346578
-cat__neighborhood_FORT GREENE,0.0027034148
-cat__dof_bldg_class_R4,0.002616053
-cat__neighborhood_GREENWICH VILLAGE-CENTRAL,0.0025977683
-cat__neighborhood_SUNNYSIDE,0.0025021057
-num__j51_last_abate_amt,0.0024305126
-cat__neighborhood_COBBLE HILL,0.002426736
-cat__neighborhood_HARLEM-UPPER,0.0024147085
-cat__neighborhood_ELMHURST,0.002397027
-cat__neighborhood_UPPER EAST SIDE (79-96),0.0023703424
-cat__dof_tax_class_2,0.0023677158
-cat__neighborhood_BOERUM HILL,0.0023431014
-cat__neighborhood_UPPER WEST SIDE (59-79),0.0023013689
-cat__neighborhood_LITTLE ITALY,0.002295662
-cat__neighborhood_GRAMERCY,0.0022291879
-cat__neighborhood_FASHION,0.0022131284
-cat__neighborhood_LOWER EAST SIDE,0.0021855638
-cat__neighborhood_HAMMELS,0.0021391911
-cat__neighborhood_CORONA,0.0021021739
-cat__neighborhood_CHELSEA,0.002077274
-num__dof_units,0.0020712696
-cat__neighborhood_FLATIRON,0.0020273547
-cat__neighborhood_ALPHABET CITY,0.0020197167
-cat__neighborhood_CHINATOWN,0.0018541167
-cat__neighborhood_WINDSOR TERRACE,0.0018534786
-cat__neighborhood_DOWNTOWN-FULTON FERRY,0.001799261
-cat__neighborhood_WILLIAMSBURG-SOUTH,0.0017343124
-cat__neighborhood_MORRISANIA/LONGWOOD,0.0016758378
-cat__neighborhood_MANHATTAN BEACH,0.0016616441
-cat__neighborhood_PROSPECT HEIGHTS,0.0016523805
-cat__neighborhood_THROGS NECK,0.0016516676
-cat__neighborhood_OCEAN PARKWAY-SOUTH,0.0015823033
-cat__neighborhood_ROCKAWAY PARK,0.0015094596
-cat__neighborhood_UPPER EAST SIDE (96-110),0.0014860991
-cat__neighborhood_MARINE PARK,0.0014614993
-cat__neighborhood_LONG ISLAND CITY,0.0014361832
-cat__neighborhood_HARLEM-EAST,0.001419554
-cat__neighborhood_KIPS BAY,0.001414598
-cat__neighborhood_SOHO,0.0013608745
-cat__neighborhood_EAST VILLAGE,0.0013496941
-num__j51_active_flag,0.0013274311
-cat__neighborhood_CLINTON,0.0013271886
-cat__neighborhood_GRAVESEND,0.00126314
-cat__neighborhood_WASHINGTON HEIGHTS UPPER,0.0012200986
-cat__neighborhood_REGO PARK,0.001184846
-cat__neighborhood_HARLEM-WEST,0.0011844647
-cat__neighborhood_COBBLE HILL-WEST,0.0011620991
-cat__neighborhood_GOWANUS,0.0011111709
-cat__neighborhood_SOUNDVIEW,0.0010860786
-cat__neighborhood_BROOKLYN HEIGHTS,0.0010525713
-cat__neighborhood_BAY RIDGE,0.0010030082
-cat__neighborhood_FOREST HILLS,0.0009849623
-cat__neighborhood_HILLCREST,0.0009790557
-cat__neighborhood_DOWNTOWN-METROTECH,0.00096026814
-cat__neighborhood_FLATBUSH-NORTH,0.0009292126
-cat__neighborhood_BUSHWICK,0.00090748316
-cat__neighborhood_OZONE PARK,0.0008727278
-cat__neighborhood_PARK SLOPE SOUTH,0.0008361632
-cat__neighborhood_KENSINGTON,0.00078958576
-cat__neighborhood_BAYSIDE,0.00077938684
-cat__neighborhood_JACKSON HEIGHTS,0.00077081483
-cat__neighborhood_KEW GARDENS,0.00073005934
-cat__neighborhood_PARK SLOPE,0.00070656044
-cat__neighborhood_FLATBUSH-LEFFERTS GARDEN,0.00070192636
-cat__neighborhood_NEW BRIGHTON-ST. GEORGE,0.00067172444
-cat__neighborhood_RICHMOND HILL,0.0006617096
-cat__neighborhood_FLATBUSH-CENTRAL,0.000652268
-cat__neighborhood_WYCKOFF HEIGHTS,0.00064116163
-cat__neighborhood_OCEAN HILL,0.00061826897
-cat__neighborhood_KINGSBRIDGE/JEROME PARK,0.000592624
-cat__neighborhood_JAVITS CENTER,0.00057886774
-cat__neighborhood_CONEY ISLAND,0.0005591214
-cat__neighborhood_CANARSIE,0.00051243335
-cat__neighborhood_WHITESTONE,0.0004994066
-cat__neighborhood_SEAGATE,0.0004955007
-cat__neighborhood_GREAT KILLS,0.00043185815
-cat__neighborhood_TOMPKINSVILLE,0.000414545
-cat__neighborhood_MOTT HAVEN/PORT MORRIS,0.0003965336
-cat__neighborhood_GLENDALE,0.0003954201
-cat__neighborhood_WOODHAVEN,0.00038244907
-cat__neighborhood_WEST NEW BRIGHTON,0.00037158074
-cat__neighborhood_DYKER HEIGHTS,0.00036612136
-cat__neighborhood_CYPRESS HILLS,0.0003434727
-cat__neighborhood_BRIARWOOD,0.00033727297
-cat__neighborhood_NEW SPRINGVILLE,0.00032208857
-cat__neighborhood_PELHAM PARKWAY SOUTH,0.00031870697
-cat__neighborhood_EAST TREMONT,0.00030493908
-cat__dof_bldg_class_RK,0.0
-cat__neighborhood_ARROCHAR-SHORE ACRES,0.0
-cat__neighborhood_BENSONHURST,0.0
+num__condo_gross_sqft,0.13741553
+num__neighborhood_median_price,0.11849955
+cat__borough_name_Manhattan,0.09121821
+cat__borough_name_Staten Island,0.09024101
+num__dof_assess_per_unit,0.045430098
+cat__borough_name_Brooklyn,0.031175867
+cat__neighborhood_DOWNTOWN-FULTON MALL,0.0196545
+cat__neighborhood_COLLEGE POINT,0.017492067
+num__acris_last_deed_amt,0.017395737
+cat__neighborhood_OCEAN PARKWAY-NORTH,0.013538985
+cat__neighborhood_LONG ISLAND CITY,0.013353056
+cat__neighborhood_MIDTOWN EAST,0.013287447
+cat__borough_name_Queens,0.012218057
+cat__neighborhood_WASHINGTON HEIGHTS LOWER,0.0122033665
+cat__neighborhood_GREENPOINT,0.010798385
+cat__neighborhood_MADISON,0.010304275
+cat__neighborhood_DOWNTOWN-FULTON FERRY,0.009978819
+num__acris_prior_sale_cnt,0.009216331
+cat__borough_name_Bronx,0.008899961
+cat__neighborhood_BOROUGH PARK,0.00884405
+num__acris_last_mtge_amt,0.0075691924
+num__property_age,0.0067142257
+cat__neighborhood_TRIBECA,0.0060281865
+cat__neighborhood_HARLEM-CENTRAL,0.0059272274
+cat__neighborhood_UPPER WEST SIDE (79-96),0.005919096
+num__acris_days_since_last_deed,0.00579263
+cat__dof_bldg_class_R2,0.005611826
+num__dof_yrbuilt,0.005575847
+cat__neighborhood_GREENWICH VILLAGE-WEST,0.0053478833
+num__dof_bld_story,0.0049938364
+cat__neighborhood_MIDTOWN WEST,0.004990409
+cat__neighborhood_UPPER EAST SIDE (59-79),0.004935596
+num__dof_curmkttot,0.004928238
+num__dof_gross_sqft,0.004891065
+cat__dof_bldg_class_R1,0.0048355493
+cat__neighborhood_MANHATTAN VALLEY,0.004712755
+cat__neighborhood_GRAMERCY,0.004669891
+cat__neighborhood_SUNSET PARK,0.0046341517
+cat__neighborhood_BROOKLYN HEIGHTS,0.00463217
+cat__neighborhood_BEDFORD STUYVESANT,0.004599146
+num__j51_total_abatement,0.0045799045
+cat__neighborhood_FLUSHING-NORTH,0.004377854
+cat__neighborhood_WOODSIDE,0.004337763
+cat__neighborhood_RED HOOK,0.0042359247
+cat__neighborhood_BRIGHTON BEACH,0.0042216214
+cat__neighborhood_BOERUM HILL,0.004211881
+cat__neighborhood_CROWN HEIGHTS,0.0041480046
+cat__neighborhood_WILLIAMSBURG-SOUTH,0.0037363174
+cat__neighborhood_CARROLL GARDENS,0.0036989588
+cat__neighborhood_SHEEPSHEAD BAY,0.0036256276
+cat__neighborhood_WILLIAMSBURG-NORTH,0.0036117772
+cat__neighborhood_UPPER WEST SIDE (59-79),0.003601853
+num__dof_curacttot,0.0035688772
+cat__neighborhood_HARLEM-UPPER,0.0035587156
+cat__dof_tax_class_2C,0.0035076747
+cat__neighborhood_ASTORIA,0.0035004867
+cat__neighborhood_UPPER EAST SIDE (79-96),0.003487005
+cat__neighborhood_CIVIC CENTER,0.003277758
+cat__neighborhood_RIVERDALE,0.0032682
+cat__neighborhood_FINANCIAL,0.0032624486
+cat__neighborhood_FLUSHING-SOUTH,0.0032435819
+num__acris_mortgage_cnt,0.0032352624
+cat__neighborhood_ALPHABET CITY,0.0032000325
+cat__neighborhood_WILLIAMSBURG-CENTRAL,0.0031272017
+cat__dof_tax_class_2,0.0030171967
+cat__neighborhood_GREENWICH VILLAGE-CENTRAL,0.0029830027
+num__dof_curactland,0.0029311196
+cat__neighborhood_MURRAY HILL,0.0029142655
+cat__neighborhood_MIDWOOD,0.002867641
+cat__neighborhood_UPPER WEST SIDE (96-116),0.0027874417
+cat__neighborhood_LOWER EAST SIDE,0.0027827627
+num__condo_comint_bldg,0.0027540992
+num__condo_comint_land,0.0027504973
+cat__neighborhood_ELMHURST,0.002680819
+cat__neighborhood_SOUTHBRIDGE,0.0026395603
+cat__neighborhood_CHINATOWN,0.002579532
+cat__neighborhood_CHELSEA,0.002503414
+cat__neighborhood_FORT GREENE,0.002455116
+cat__dof_bldg_class_R4,0.00245472
+num__j51_last_abate_amt,0.0024518168
+cat__neighborhood_MORNINGSIDE HEIGHTS,0.002450305
+cat__neighborhood_COBBLE HILL,0.0023544184
+cat__neighborhood_SUNNYSIDE,0.0022488388
+cat__neighborhood_MIDTOWN CBD,0.0020933768
+cat__neighborhood_MORRISANIA/LONGWOOD,0.0019595574
+cat__neighborhood_FASHION,0.0018025268
+cat__neighborhood_WILLIAMSBURG-EAST,0.0017723957
+cat__neighborhood_ROCKAWAY PARK,0.0017006823
+cat__neighborhood_LITTLE ITALY,0.0015115663
+cat__neighborhood_HARLEM-EAST,0.001490064
+cat__neighborhood_HAMMELS,0.0014899912
+cat__neighborhood_BAY RIDGE,0.0014578024
+cat__neighborhood_WHITESTONE,0.0014026262
+cat__neighborhood_FLATIRON,0.0013971035
+num__dof_units,0.0013946696
+cat__neighborhood_EAST VILLAGE,0.0013249074
+cat__neighborhood_CLINTON HILL,0.0013212229
+cat__neighborhood_CORONA,0.0013089867
+cat__neighborhood_FOREST HILLS,0.0013048075
+cat__neighborhood_OCEAN PARKWAY-SOUTH,0.0013008809
+cat__neighborhood_WINDSOR TERRACE,0.0012918327
+cat__neighborhood_COBBLE HILL-WEST,0.0012530158
+cat__neighborhood_GRAVESEND,0.0012368992
+cat__neighborhood_DOWNTOWN-METROTECH,0.0012281776
+cat__neighborhood_CLINTON,0.0012116903
+cat__neighborhood_KIPS BAY,0.001163003
+cat__neighborhood_NEW BRIGHTON-ST. GEORGE,0.0011025763
+cat__neighborhood_UPPER EAST SIDE (96-110),0.0010833011
+cat__neighborhood_WASHINGTON HEIGHTS UPPER,0.0010614396
+cat__neighborhood_PARK SLOPE,0.0010573429
+cat__neighborhood_HARLEM-WEST,0.0010369339
+cat__neighborhood_SOHO,0.0009144142
+cat__neighborhood_MARINE PARK,0.00091221853
+cat__neighborhood_PROSPECT HEIGHTS,0.00090043823
+cat__neighborhood_SOUNDVIEW,0.0008941019
+num__j51_active_flag,0.0008610362
+cat__neighborhood_SEAGATE,0.0008580395
+cat__neighborhood_GOWANUS,0.00084254163
+cat__neighborhood_MANHATTAN BEACH,0.0008346941
+cat__neighborhood_OCEAN HILL,0.00080022286
+cat__neighborhood_BENSONHURST,0.0007789537
+cat__neighborhood_REGO PARK,0.0007602197
+cat__neighborhood_BUSHWICK,0.0007320753
+cat__neighborhood_WOODHAVEN,0.0007284648
+cat__neighborhood_FLATBUSH-CENTRAL,0.0007274285
+cat__neighborhood_FLATBUSH-LEFFERTS GARDEN,0.0007061877
+cat__neighborhood_PARK SLOPE SOUTH,0.0006720731
+cat__neighborhood_MOTT HAVEN/PORT MORRIS,0.00067017134
+cat__neighborhood_JACKSON HEIGHTS,0.0006588113
+cat__neighborhood_CONEY ISLAND,0.00064567593
+cat__neighborhood_KENSINGTON,0.0006152326
+cat__neighborhood_HILLCREST,0.00060190674
+cat__neighborhood_GREAT KILLS,0.00058186136
+cat__neighborhood_TOMPKINSVILLE,0.0005539223
+cat__neighborhood_FAR ROCKAWAY,0.0005275717
+cat__neighborhood_GRANT CITY,0.00049230165
+cat__neighborhood_RICHMOND HILL,0.0004919034
+cat__neighborhood_MIDDLE VILLAGE,0.00047311012
+cat__neighborhood_SCHUYLERVILLE/PELHAM BAY,0.00046795985
+cat__neighborhood_WYCKOFF HEIGHTS,0.00046613254
+cat__neighborhood_RIDGEWOOD,0.00044462935
+cat__neighborhood_BATH BEACH,0.00043792877
+cat__neighborhood_PELHAM PARKWAY SOUTH,0.0004259048
+cat__neighborhood_NEW SPRINGVILLE,0.00035956563
+cat__neighborhood_THROGS NECK,0.00035006163
+cat__neighborhood_NAVY YARD,0.00034317293
+cat__neighborhood_KINGSBRIDGE/JEROME PARK,0.0003431656
+cat__neighborhood_CANARSIE,0.00034174707
+cat__neighborhood_PORT RICHMOND,0.00031914888
+cat__neighborhood_JAVITS CENTER,0.0
 cat__neighborhood_BELLE HARBOR,0.0
-cat__neighborhood_WILLIAMSBRIDGE,0.0
-cat__neighborhood_BATH BEACH,0.0
-cat__dof_bldg_class_RR,0.0
+cat__neighborhood_BRIARWOOD,0.0
 cat__neighborhood_BEDFORD PARK/NORWOOD,0.0
+cat__neighborhood_WILLIAMSBRIDGE,0.0
+cat__neighborhood_KEW GARDENS,0.0
+cat__neighborhood_JAMAICA ESTATES,0.0
+cat__neighborhood_OZONE PARK,0.0
+cat__neighborhood_JAMAICA,0.0
+cat__neighborhood_BAYSIDE,0.0
+cat__neighborhood_WEST NEW BRIGHTON,0.0
+cat__neighborhood_ARROCHAR-SHORE ACRES,0.0
+cat__dof_bldg_class_R9,0.0
+cat__dof_bldg_class_RB,0.0
+cat__dof_bldg_class_RK,0.0
+cat__dof_bldg_class_RR,0.0
+cat__neighborhood_HIGHBRIDGE/MORRIS HEIGHTS,0.0
+cat__neighborhood_HOWARD BEACH,0.0
+cat__neighborhood_CITY ISLAND,0.0
 cat__neighborhood_BRONXDALE,0.0
 cat__neighborhood_BUSH TERMINAL,0.0
-cat__dof_bldg_class_R9,0.0
-cat__neighborhood_JAMAICA,0.0
-cat__neighborhood_ROOSEVELT ISLAND,0.0
-cat__neighborhood_CITY ISLAND,0.0
-cat__neighborhood_FLATBUSH-EAST,0.0
-cat__neighborhood_HOWARD BEACH,0.0
-cat__neighborhood_HIGHBRIDGE/MORRIS HEIGHTS,0.0
-cat__neighborhood_GRYMES HILL,0.0
-cat__neighborhood_MASPETH,0.0
-cat__neighborhood_MIDDLE VILLAGE,0.0
-cat__neighborhood_GRANT CITY,0.0
-cat__neighborhood_FORDHAM,0.0
-cat__neighborhood_NAVY YARD,0.0
 cat__neighborhood_OAKLAND GARDENS,0.0
-cat__neighborhood_PORT RICHMOND,0.0
-cat__neighborhood_CLINTON HILL,0.0
-cat__neighborhood_FAR ROCKAWAY,0.0
-cat__neighborhood_RIDGEWOOD,0.0
-cat__neighborhood_JAMAICA ESTATES,0.0
-cat__neighborhood_ROSEBANK,0.0
-cat__neighborhood_SCHUYLERVILLE/PELHAM BAY,0.0
-cat__neighborhood_EAST ELMHURST,0.0
-cat__neighborhood_SILVER LAKE,0.0
-cat__neighborhood_SOUTH OZONE PARK,0.0
+cat__neighborhood_DYKER HEIGHTS,0.0
+cat__neighborhood_GRYMES HILL,0.0
 cat__neighborhood_DONGAN HILLS,0.0
+cat__neighborhood_ROOSEVELT ISLAND,0.0
+cat__neighborhood_ROSEBANK,0.0
+cat__neighborhood_CYPRESS HILLS,0.0
+cat__neighborhood_SILVER LAKE,0.0
+cat__neighborhood_EAST TREMONT,0.0
+cat__neighborhood_SOUTH OZONE PARK,0.0
+cat__neighborhood_FLATBUSH-EAST,0.0
+cat__neighborhood_FLATBUSH-NORTH,0.0
+cat__neighborhood_MASPETH,0.0
+cat__neighborhood_FLATLANDS,0.0
+cat__neighborhood_EAST ELMHURST,0.0
+cat__neighborhood_FORDHAM,0.0
+cat__neighborhood_GLENDALE,0.0
 cat__dof_tax_class_4,0.0
