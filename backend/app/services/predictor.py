@@ -127,7 +127,19 @@ def lookup_dof_assess_per_unit(model_key: str, neighborhood: str,
 
 
 def lookup_subway_dist_km(lat: float | None, lon: float | None) -> float | None:
-    """Return distance (km) to the nearest NYC subway station via BallTree haversine."""
+    """Return distance (km) to the nearest NYC subway station via BallTree haversine.
+
+    Only nearest-station distance is computed at inference. The rest of the
+    transit pack (n_500m, n_1km, k3_mean, hub_flag, cbd_dist_km, n_lines_05mi)
+    is deliberately left to the pipeline's median imputer on address-only
+    requests: populating it from lat/lon was measured against held-out 2025-26
+    sales (ml/scripts/eval_serving_path.py) and made accuracy *worse* —
+    median APE 26.1% → 27.8%, share within 10% 21.0% → 17.1%. The models were
+    fit with those features present alongside the full Gold feature set, so
+    supplying them while DOF/ACRIS/PLUTO remain imputed yields feature
+    combinations never seen in training. When a BBL is supplied, the Gold join
+    provides the whole pack consistently, which does help.
+    """
     if lat is None or lon is None:
         return None
     try:
@@ -136,8 +148,7 @@ def lookup_subway_dist_km(lat: float | None, lon: float | None) -> float | None:
         return None
     if stations is None:
         return None
-    from sklearn.neighbors import BallTree
-    coords_rad = np.radians([[lat, lon]])
+    coords_rad = np.radians([[float(lat), float(lon)]])
     dist_rad, _ = stations.query(coords_rad, k=1)
     return float(dist_rad[0, 0]) * EARTH_RADIUS_KM
 
@@ -355,6 +366,8 @@ def _build_spine_row(payload: ProductionPredictionRequest,
         "pluto_bldg_footprint": np.nan,
         "pluto_bldgarea":       np.nan,
         "pluto_lotarea":        np.nan,
+        "pluto_far_utilization": np.nan,
+        "rent_stab_units":      np.nan,
 
         # ── Categorical features ──────────────────────────────────────────────
         # borough_name and neighborhood are known from the request.
@@ -456,7 +469,46 @@ def _build_spine_row(payload: ProductionPredictionRequest,
             except (TypeError, ValueError):
                 pass
 
+    _add_derived_features(row)
     return row, join_meta
+
+
+def _num(value: Any) -> float | None:
+    """Coerce to float, treating None/NaN/non-numeric as absent."""
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(out) else out
+
+
+def _add_derived_features(row: dict[str, Any]) -> None:
+    """Compute features that training derives in _engineer(), in place.
+
+    train_spine_models._engineer() builds `far` and `prior_mortgage_ratio` from
+    columns that only arrive via the Gold join, so they must be computed after
+    it. Previously they were never set at all, meaning two features the models
+    were fit on (prior_mortgage_ratio ranks ~19-21 for one/multi-family) were
+    median-imputed on every request.
+
+    Guards and clipping mirror _engineer() exactly — a different formula here
+    would be its own form of train/serve skew.
+    """
+    # Floor Area Ratio: built sqft / lot area. NaN when either side is missing
+    # or the lot area is zero.
+    bldg = _num(row.get("pluto_bldgarea"))
+    lot = _num(row.get("pluto_lotarea"))
+    if bldg is not None and lot is not None and lot > 0:
+        row["far"] = bldg / lot
+
+    # Prior mortgage LTV proxy, capped at 1.5 as in training. Training requires
+    # the prior deed amount to exceed $10k to filter out nominal transfers.
+    mtge = _num(row.get("acris_last_mtge_amt"))
+    deed = _num(row.get("acris_last_deed_amt"))
+    if mtge is not None and deed is not None and deed > 10_000:
+        row["prior_mortgage_ratio"] = min(mtge / deed, 1.5)
 
 
 # ─── PredictionService ────────────────────────────────────────────────────────

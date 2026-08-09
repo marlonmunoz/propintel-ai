@@ -385,16 +385,22 @@ def _pluto_features(bbl: str) -> dict[str, Any]:
     # with training — no separate computation, no drift risk.
     for c in (
         "pluto_latitude", "pluto_longitude",
-        # Transit pack — all five signals
+        # Transit pack — all six distance/density signals plus line diversity
         "subway_dist_km",
         "subway_n_500m",
         "subway_n_1km",
         "subway_k3_mean_dist_km",
         "subway_hub_flag",
         "subway_cbd_dist_km",
+        "subway_n_lines_05mi",
         # Physical / structural
         "pluto_numfloors", "pluto_builtfar", "pluto_bldg_footprint",
         "pluto_bldgarea", "pluto_lotarea",
+        # Zoning + regulatory. pluto_far_utilization ranks top-10 for
+        # multi_family and rent_stab_units is a v7 multi_family feature; both
+        # are present in the Gold parquet but were previously not copied here,
+        # leaving them median-imputed even on requests that did supply a BBL.
+        "pluto_far_utilization", "rent_stab_units",
     ):
         if c in row.index and pd.notna(row[c]):
             out[c] = float(row[c])
