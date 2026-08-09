@@ -49,19 +49,22 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 ## Highlights
 
 - **Full stack:** React 19 + Vite + Tailwind CSS 4 frontend; FastAPI + Pydantic v2 backend; PostgreSQL via Supabase.
-- **Auth:** Supabase Auth (email/password). API accepts **`Authorization: Bearer`** (JWT) or **`X-API-Key`** for scripts — unified `get_current_user` dependency.
-- **Roles & LLM quota:** `user` / `paid` / `admin`; daily LLM limits enforced in the explainer; **`GET /auth/quota`** exposes usage.
-- **Medallion pipeline:** Bronze → Silver normalisers → Gold as-of features → spine training with **strict time splits** and rolling-origin evaluation.
-- **Segment-routed ML:** `ModelRegistry` maps building class → specialist spine models (one-family, multi-family, condo, co-op, rentals); optional **`bbl` + `as_of_date`** enriches from committed Gold parquets at inference time.
-- **Quantile intervals:** P10/P90 quantile models per segment produce **property-specific price ranges**; segments without quantile artifacts fall back to a flat ±MAE band.
-- **Confidence disclosure:** Per-segment **`model_confidence_tier`** (high / directional / fallback) surfaced in API metadata and the Analyze UI so users know when to trust a valuation.
+- **Auth:** Supabase Auth (email/password). API accepts **`Authorization: Bearer`** (JWT) or **`X-API-Key`** for scripts — unified `get_current_user` dependency. Profile lookup is **JWT `sub` only** (no email fallback) to prevent privilege escalation via duplicate emails.
+- **Roles & LLM quota:** `user` / `paid` / `admin`; daily LLM limits enforced in the explainer; **`GET /auth/quota`** exposes usage. Stripe webhooks never demote an existing **`admin`**.
+- **Medallion pipeline:** Bronze → Silver normalisers → Gold as-of features → spine training with **strict time splits** (train ≤ **2025-09-30**, test ≥ **2025-10-31**).
+- **Segment-routed ML:** `ModelRegistry` maps building class → specialist spine models (one-family, multi-family, condo, co-op, rentals). Optional client **`bbl` + `as_of_date`**, or server-side **address → BBL** resolution, enriches from committed Gold parquets at inference.
+- **Address-based BBL resolution:** Free-form address (already geocoded in the UI) is resolved against an offline PLUTO index (`address_bbl_index.parquet`). Condo unit classes abstain; wrong matches are rejected via a coordinate-drift guard. Measured at **94%+ resolve rate / ~100% precision** on out-of-sample sales — closes most of the production vs full-Gold accuracy gap without a new form field.
+- **Residential units:** Optional form field for multi-family and rental classes (models that list `residential_units` as a feature) — shipped independently of BBL work and improves rental accuracy materially.
+- **Quantile intervals:** P10/P90 quantile models for **all five production segments** (one-family, multi-family, condo, co-op, rentals); only the global fallback uses a flat ±MAE band.
+- **Confidence + enrichment disclosure:** Per-segment **`model_confidence_tier`** and **`bbl_enhanced` / `bbl_source`** in analyze metadata; Analyze UI shows confidence badge + **“Enhanced with property records”** when Gold features were used.
 - **Fast analysis UX:** **`POST /analyze-property-v2`** returns valuation + score immediately; LLM explanation fetched separately via **`POST /analyze-property-v2/explanation`** (no double inference).
-- **Analysis:** Deterministic investment score, `deal_label`, OpenAI narrative (quota-aware), Mapbox geocoding (default **streets-v12** style) with org-wide monthly cap via **`POST /geocode/usage`**.
-- **Contact:** Public **`POST /contact`** delivers visitor messages via **Resend** (no Supabase table required); **`/contact`** page + **`SupportLink`** component across legal/error/login flows.
-- **Billing:** **Stripe Live** — hosted Checkout ($29/mo Pro), Customer Portal (cancel / payment method / invoices), webhooks sync **`profiles.role`** and **`billing_customers`**; Profile UI for upgrade and manage subscription.
-- **Ops:** slowapi rate limits, CORS allowlist + optional **`CORS_ORIGIN_REGEX`** (Vercel previews), unified JSON errors with **`request_id`**, optional Sentry with PII scrubbing, **`/health`** + **`/ready`** (three-tier ML probe including a live inference call), JSON logs, security headers, proxy-aware IP when **`TRUST_PROXY_HEADERS=1`**.
-- **Production (June 2026):** Frontend on **Vercel** (`www.propintel-ai.com`), API on **Railway** (`api.propintel-ai.com`), Supabase Auth + Postgres, secrets rotated and verified end-to-end (auth, LLM, email, Live billing).
-- **Quality:** **136** backend pytest tests + **148** frontend Vitest tests (**284** total); CI includes **`test_model_column_parity.py`** (model/metadata feature parity) and **`test_billing_notifications.py`**, and GitHub Actions runs backend pytest, frontend **lint**, tests, and production build.
+- **Analysis:** Deterministic investment score, `deal_label`, OpenAI narrative (quota-aware, freemium narrative preview), Mapbox geocoding (default **streets-v12** style) with org-wide monthly cap via **`POST /geocode/usage`**.
+- **Pricing:** Public **`/pricing`** page for Free vs Pro comparison; Profile hosts Stripe Checkout / Portal.
+- **Contact:** Public **`POST /contact`** delivers visitor messages via **Resend**; **`/contact`** page + **`SupportLink`** across legal/error/login flows.
+- **Billing:** **Stripe Live** — hosted Checkout ($29/mo Pro), Customer Portal, webhooks sync **`profiles.role`** and **`billing_customers`**; founder emails on subscribe / cancel / failed renewal via **`BILLING_NOTIFY_EMAIL`**.
+- **Ops:** slowapi rate limits (including **`/ready`**), CORS allowlist + **opt-in** **`CORS_ORIGIN_REGEX`** (empty by default — no permissive Vercel wildcard), unified JSON errors with **`request_id`**, optional Sentry, **`/health`** + **`/ready`** (DB + ML artifact + live inference probe), GitHub Actions keepalive ping every 3 days to keep Supabase Free warm.
+- **Production (August 2026):** Frontend on **Vercel** (`www.propintel-ai.com`), API on **Railway** (`api.propintel-ai.com`), Supabase Auth + Postgres, Live billing verified end-to-end.
+- **Quality:** **162** backend pytest tests + **154** frontend Vitest tests (**316** total); CI includes model/metadata column parity, address-resolver tests, billing notifications, frontend lint/tests/build.
 
 ---
 
@@ -71,8 +74,9 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 
 | Path | Purpose |
 |------|---------|
-| `/` | Marketing home |
+| `/` | Marketing home (segment model metrics from training metadata) |
 | `/login`, `/register`, `/forgot-password`, `/reset-password` | Supabase Auth flows |
+| **`/pricing`** | Free vs Pro comparison |
 | `/terms`, `/privacy`, `/disclaimer` | Legal & valuation disclaimer |
 | **`/contact`** | Contact form (support vs partnerships topics) — submits to **`POST /contact`** |
 
@@ -80,7 +84,7 @@ PropIntel AI is an end-to-end AI engineering platform for NYC residential real e
 
 | Path | Purpose |
 |------|---------|
-| `/analyze` | Property analysis (Mapbox map, confidence badge, quantile range, quota pill, save to portfolio) |
+| `/analyze` | Property analysis (Mapbox map, address autocomplete, confidence + property-records badges, P10/P90 range, quota pill, save to portfolio) |
 | `/portfolio` | Saved analyses |
 | `/profile` | Account, tier/quota, **Upgrade to Pro** / **Manage subscription** (Stripe) |
 | `/billing/success`, `/billing/canceled` | Post-Checkout redirects |
@@ -169,6 +173,7 @@ Notable billing events trigger a best-effort email to **`BILLING_NOTIFY_EMAIL`**
 | **`BILLING_SUCCESS_URL`** | Recommended | Production success URL (see table above) |
 | **`BILLING_CANCEL_URL`** | Recommended | Production cancel URL |
 | **`BILLING_PORTAL_RETURN_URL`** | Recommended | Usually `/profile` on the live site |
+| **`BILLING_NOTIFY_EMAIL`** | Optional | Founder inbox for subscribe / cancel / failed-renewal alerts (default `marlon@propintel-ai.com`) |
 
 ### Supabase Auth email (Resend SMTP)
 
@@ -210,12 +215,13 @@ Auth emails (signup, password reset) use **Supabase → Authentication → Email
                       │
                       ▼
               Service Layer
-    ┌──────────────────────────────────────┐
-    │  PredictionService                   │
-    │  BblFeatureBuilder (as-of lookup)    │
-    │  ModelRegistry (+ quantile bounds)   │
-    │  Explainer (OpenAI LLM)             │
-    └──────────────────────────────────────┘
+    ┌──────────────────────────────────────────┐
+    │  PredictionService                       │
+    │  AddressResolver (address → BBL)         │
+    │  BblFeatureBuilder (as-of Gold lookup)   │
+    │  ModelRegistry (+ P10/P90 quantile)      │
+    │  Explainer (OpenAI LLM)                  │
+    └──────────────────────────────────────────┘
                       │
               ┌───────┴────────┐
               ▼                ▼
@@ -227,11 +233,12 @@ Auth emails (signup, password reset) use **Supabase → Authentication → Email
                                │
                                ▼
                      Gold Parquets (deploy) · Silver (optional local)
-                     (DOF · ACRIS · J-51 · PLUTO)
+                     (DOF · ACRIS · J-51 · PLUTO · address_bbl_index)
 
         Contact form ──► POST /contact ──► Resend ──► Workspace inboxes
 
         Profile ──► POST /billing/checkout|portal ──► Stripe ──► webhooks ──► profiles + billing_customers
+                     (+ founder notify email on subscribe / cancel / failed renewal)
 ```
 
 ---
@@ -252,9 +259,12 @@ Raw datasets (Bronze)
             ▼
   Gold as-of feature builders  (ml/pipelines/gold_*_asof.py)
   Condo unit features          (ml/pipelines/silver_dof_condo_units.py → gold_dof_condo_units.py)
+  Address → BBL index          (ml/pipelines/build_address_bbl_index.py)
             │
             ▼
   Training / tuning  (ml/models/train_spine_models.py, tune_spine_models.py)
+  Promotion gate      (ml/scripts/promote_models.py)
+  Serving-path eval   (ml/scripts/eval_serving_path.py)
             │
             ▼
   ml/artifacts/spine_models/   — median PKLs + P10/P90 quantile PKLs + stats + importances
@@ -274,7 +284,7 @@ Raw datasets (Bronze)
 | NYC Subway Stations | Transit distance features |
 | DOF PROPMAST (Tax Class 2/3/4) | Condo **unit-lot** sqft, common-interest %, apt no (manual download → Silver) |
 
-Join key: **BBL**. As-of filters prevent future data from leaking into training rows. Condo unit structural features (sqft, ownership share) are time-invariant and joined by BBL only.
+Join key: **BBL**. As-of filters prevent future data from leaking into training rows. Condo unit structural features (sqft, ownership share) are time-invariant and joined by BBL only. Street addresses are normalized (`ml/features/address_normalize.py`) and indexed to BBL for inference when the client does not send a BBL directly.
 
 ---
 
@@ -282,15 +292,21 @@ Join key: **BBL**. As-of filters prevent future data from leaking into training 
 
 `ModelRegistry` maps **building class** → segment model (see `ml/artifacts/metadata/`). When promoted metadata exists, **`condo`** and **`coop`** replace the legacy pooled **`condo_coop`** route. Rental classes **`07`** and **`08`** share **`rentals_all`** with an **`is_elevator`** feature. Feature importances ship as CSV artifacts for explainability and LLM context.
 
-At inference time, **`PredictionService`** derives input columns from the loaded model's preprocessor (`feature_names_in_`) to avoid train/serve skew. **`load_quantile_bounds()`** lazily loads `{segment}_p10_model.pkl` / `{segment}_p90_model.pkl` when present.
+At inference time, **`PredictionService`**:
+
+1. Optionally resolves a **BBL from `address`** via **`AddressResolver`** when the client did not supply `bbl` (client-supplied BBL always wins).
+2. Joins Gold DOF / ACRIS / J-51 / PLUTO / comps / trends for that BBL + as-of date.
+3. Derives input columns from the loaded model's preprocessor (`feature_names_in_`) to avoid train/serve skew.
+4. Loads **`{segment}_p10_model.pkl` / `{segment}_p90_model.pkl`** when present for the valuation range.
 
 ### Valuation intervals & confidence tiers
 
 | Mechanism | What it does |
 |-----------|--------------|
-| **P10/P90 quantile models** | Property-specific price range when quantile artifacts exist (`one_family`, `multi_family`, `rentals_all` as of June 2026) |
-| **±MAE fallback** | Flat band from segment training MAE when quantile models are absent (e.g. `global`, `condo`, `coop`) |
-| **`model_confidence_tier`** | `high` / `directional` / `fallback` — tells the UI how much to trust the segment model |
+| **P10/P90 quantile models** | Property-specific price range for `one_family`, `multi_family`, `condo`, `coop`, `rentals_all` |
+| **±MAE fallback** | Flat band from segment training MAE when quantile models are absent (e.g. `global`) |
+| **`model_confidence_tier`** | `high` / `directional` / `fallback` — how much to trust the segment model |
+| **`bbl_source` / `bbl_enhanced`** | Whether Gold property records were used (`client` or `address` source) |
 
 | Building class (examples) | Model key |
 |---------------------------|-----------|
@@ -303,15 +319,17 @@ At inference time, **`PredictionService`** derives input columns from the loaded
 
 ### Performance snapshot (time-based holdout)
 
-Train ≤ **2024-12-31**, test ≥ **2025-01-31** (30-day reporting gap). Metrics from `ml/artifacts/metadata/*.json` and `ml/artifacts/spine_models/spine_model_metrics.json`:
+Train ≤ **2025-09-30**, test ≥ **2025-10-31** (30-day DOF reporting-lag gap). Metrics from promoted `ml/artifacts/metadata/*.json` (August 2026 retrain):
 
-| Segment | Test R² | Median APE | Quantile range | Notes |
-|---------|---------|------------|----------------|-------|
-| `condo` | **0.825** | **13.9%** | MAE fallback | Split from `condo_coop`; PROPMAST unit sqft + common-interest |
-| `one_family` | **0.715** | **14.5%** | P10/P90 | LightGBM + VotingRegressor + early stopping (v4) |
-| `multi_family` | **0.671** | **16.9%** | P10/P90 | Merged 2+3 family; comp/trend packs |
-| `coop` | **0.501** | **24.4%** | MAE fallback | Co-op shares — no public unit-level data |
-| `rentals_all` | **0.467** | **26.2%** | P10/P90 | Pooled rentals; **price per unit** target |
+| Segment | Version | Test R² | Median APE | Quantile range | Notes |
+|---------|---------|---------|------------|----------------|-------|
+| `condo` | v2 | **0.818** | **13.3%** | P10/P90 | PROPMAST unit sqft + common-interest |
+| `one_family` | v5 | **0.765** | **12.7%** | P10/P90 | Strongest traditional segment after retrain |
+| `multi_family` | v8 | **0.622** | **16.6%** | P10/P90 | Merged 2+3 family; comp/trend packs |
+| `rentals_all` | v6 | **0.681** | **26.5%** | P10/P90 | Pooled rentals; **price per unit** target |
+| `coop` | v2 | **0.511** | **24.8%** | P10/P90 | Co-op shares — no public unit-level data |
+
+**Production serving note:** Without a BBL, Gold features are median-imputed and accuracy is lower than the training-holdout table above. Server-side address resolution (when the index matches) recovers most of that gap — see `ml/scripts/eval_serving_path.py` and `ml/artifacts/eval/resolved_address_2025Q4.json`.
 
 Legacy pooled **`condo_coop`** metadata may remain for older deploys; production routes to **`condo`** / **`coop`** when split metadata is present.
 
@@ -400,18 +418,27 @@ OpenAPI **`/docs`**, **`/redoc`**, **`/openapi.json`** are gated by **`DOCS_ENAB
   "year_built": 1925,
   "gross_sqft": 1800,
   "land_sqft": 2000,
+  "total_units": 2,
+  "residential_units": 2,
   "latitude": 40.6720,
   "longitude": -73.9778,
+  "address": "123 7th Avenue, Brooklyn, NY",
   "bbl": "3012340056",
   "as_of_date": "2025-06-15"
 }
 ```
 
-Optional **`bbl`** + **`as_of_date`** enable roll-aligned enrichment when Gold/Silver data is available.
+Optional fields:
+
+| Field | Effect |
+|-------|--------|
+| **`address`** | When **`bbl`** is omitted, server resolves a BBL from this string (PLUTO address index). Ignored if **`bbl`** is supplied. |
+| **`bbl` + `as_of_date`** | Explicit roll-aligned Gold enrichment (DOF / ACRIS / J-51 / PLUTO). |
+| **`residential_units` / `total_units`** | Used by multi-family and rental models; omitted blanks are imputed rather than treated as zero. |
 
 ### `POST /analyze-property-v2`
 
-Same fields plus optional **`market_price`** for listing comparison.
+Same fields plus required **`market_price`** for listing comparison.
 
 ---
 
@@ -446,12 +473,14 @@ Same fields plus optional **`market_price`** for listing comparison.
   },
   "explanation_status": "pending",
   "metadata": {
-    "model_version": "v4",
+    "model_version": "v8",
     "segment": "multi_family",
     "segment_label": "Multi-family",
     "model_confidence_tier": "high",
     "model_confidence_label": "High confidence",
-    "model_confidence_note": "This segment model is trained on sufficient NYC sales data for this building type. Typical median error for this segment: ~16.9%."
+    "model_confidence_note": "This segment model is trained on sufficient NYC sales data for this building type. Typical median error for this segment: ~16.6%.",
+    "bbl_source": "address",
+    "bbl_enhanced": true
   }
 }
 ```
@@ -464,9 +493,9 @@ Same fields plus optional **`market_price`** for listing comparison.
 propintel-ai/
 ├── frontend/                    # React 19 + Vite + Tailwind CSS 4
 │   ├── src/
-│   │   ├── pages/               # Home, Analyze, Portfolio, Profile, Auth, Legal, Contact, …
-│   │   ├── components/          # Navbar, Footer, SupportLink, ModelConfidence*, …
-│   │   ├── services/            # authApi, contactApi, housingApi, …
+│   │   ├── pages/               # Home, Analyze, Portfolio, Profile, Pricing, Auth, Legal, Contact, …
+│   │   ├── components/          # Navbar, Footer, SupportLink, ModelConfidence*, PropertyRecordsBadge, …
+│   │   ├── services/            # authApi, contactApi, housingApi, billingApi, …
 │   │   └── lib/                 # apiClient, supabase
 │   ├── public/
 │   ├── vercel.json              # SPA rewrites for React Router
@@ -480,21 +509,22 @@ propintel-ai/
 │   │   ├── admin.py
 │   │   ├── geocode_usage.py
 │   │   ├── contact.py           # POST /contact → Resend
-│   │   └── billing.py           # Stripe Checkout, Portal, webhooks
+│   │   └── billing.py           # Stripe Checkout, Portal, webhooks + founder notify
 │   ├── core/                    # auth, limiter, error_handlers, config
 │   ├── db/
 │   ├── schemas/
-│   ├── services/                # predictor, model_registry, model_confidence, explainer, …
+│   ├── services/                # predictor, address_resolver, model_registry, model_confidence, explainer, …
 │   └── main.py
 │
 ├── backend/scripts/run_migrations.py
 ├── backend/migrations/          # SQL migrations + schema_migrations
 ├── backend/tests/               # e.g. test_contact.py
 │
-├── tests/                       # Main pytest suite (API, auth, quota, model parity, …)
+├── tests/                       # Main pytest suite (API, auth, quota, model parity, address resolver, …)
+│   └── conftest.py              # Forces DATABASE_URL=sqlite for all tests (never hit prod Supabase)
 │
 ├── docs/                        # Preview screenshots; internal notes gitignored locally
-├── ml/                          # Pipelines, training, artifacts (see repo)
+├── ml/                          # Pipelines, training, artifacts, eval harness (see repo)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── railway.toml
@@ -525,12 +555,12 @@ Copy **`.env.example`** → **`.env`** at the repo root. Use **`postgresql+psyco
 | `OPENAI_API_KEY` | LLM explanations |
 | `API_KEY` | `X-API-Key` for scripts |
 | `CORS_ORIGINS` | Exact browser origins (include both `localhost` and `127.0.0.1` dev ports if needed) |
-| `CORS_ORIGIN_REGEX` | Optional (e.g. Vercel previews); default in code matches `propintel-*.vercel.app` |
+| `CORS_ORIGIN_REGEX` | Optional regex for preview domains — **empty/disabled by default**; never use a bare `propintel-.*\.vercel\.app` prefix (attacker-choosable) |
 | `SUPABASE_URL` | JWKS host for asymmetric JWTs |
 | `SUPABASE_JWT_SECRET` | HS256 verification |
 | `ADMIN_USER_IDS` | Comma-separated admin UUIDs |
-| **`RESEND_API_KEY`** | **Contact form + can match Supabase SMTP usage operationally** |
-| **`CONTACT_FROM_EMAIL`** | **Verified sender string for `/contact`** |
+| **`RESEND_API_KEY`** | Contact form + billing founder notify + operational match for Supabase SMTP |
+| **`CONTACT_FROM_EMAIL`** | Verified sender string for `/contact` |
 | `LLM_QUOTA_*`, `LLM_TEMPERATURE` | Quotas / sampling |
 | `MAPBOX_MONTHLY_FREE_REQUEST_CAP` | Geocode cap checks |
 | `DOCS_ENABLED` | `1` = expose `/docs` |
@@ -542,6 +572,7 @@ Copy **`.env.example`** → **`.env`** at the repo root. Use **`postgresql+psyco
 | **`STRIPE_WEBHOOK_SECRET`** | Webhook signature verification |
 | **`STRIPE_AUTOMATIC_TAX`** | `0` or `1` — launch used **`0`** |
 | **`BILLING_SUCCESS_URL`**, **`BILLING_CANCEL_URL`**, **`BILLING_PORTAL_RETURN_URL`** | Checkout / Portal redirects |
+| **`BILLING_NOTIFY_EMAIL`** | Founder alerts on subscribe / cancel / failed renewal |
 | `ML_ARTIFACT_ROOT` | Override artifact root |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | Pool tuning |
 | `RUN_MIGRATIONS` | Docker: skip migrations if `0` |
@@ -618,7 +649,7 @@ Contact submissions are **not** persisted in Postgres by default.
 PYTHONPATH=. pytest
 ```
 
-From the repo root this discovers **`tests/`** and **`backend/tests/`** (**136** tests), including **`tests/test_model_column_parity.py`** (model vs metadata feature parity), **`tests/test_model_confidence.py`**, **`tests/test_billing_notifications.py`**, and **`backend/tests/test_contact.py`**.
+From the repo root this discovers **`tests/`** and **`backend/tests/`** (**162** tests). A root **`conftest.py`** forces **`DATABASE_URL=sqlite:///./test.db`** before any import so tests never write to production Supabase. Notable suites: **`test_model_column_parity.py`**, **`test_address_resolver.py`**, **`test_address_resolution_predictor.py`**, **`test_model_confidence.py`**, **`test_billing_notifications.py`**, **`test_building_class_contract.py`**, **`backend/tests/test_contact.py`**.
 
 ### Frontend
 
@@ -626,22 +657,22 @@ From the repo root this discovers **`tests/`** and **`backend/tests/`** (**136**
 cd frontend && npm test
 ```
 
-**148** tests (Vitest + Testing Library). **`npm run lint`** runs ESLint (also executed in CI).
+**154** tests (Vitest + Testing Library). **`npm run lint`** runs ESLint (also executed in CI).
 
 ### Totals
 
 | Suite | Count |
 |-------|------:|
-| Backend (`pytest`) | 136 |
-| Frontend (`npm test`) | 148 |
-| **Total** | **284** |
+| Backend (`pytest`) | 162 |
+| Frontend (`npm test`) | 154 |
+| **Total** | **316** |
 
 ### CI
 
-Workflow: **`.github/workflows/tests.yml`**
+Workflows:
 
-- **Backend:** Python 3.11, install **`requirements.txt`**, init SQLite DB, **`PYTHONPATH=. pytest`**
-- **Frontend:** **`npm ci`**, **`npm run lint`**, **`npm test`**, **`npm run build`**
+- **`.github/workflows/tests.yml`** — Python 3.11 pytest; frontend lint / test / production build
+- **`.github/workflows/keepalive.yml`** — every 3 days, `curl` production **`/ready`** (keeps Supabase Free from auto-pausing; doubles as an uptime ping)
 
 ---
 
@@ -653,7 +684,7 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 # or: docker compose up --build
 ```
 
-**`.dockerignore`** keeps Silver/raw bulk and the training-only **`training_spine_v1.parquet`** out of the image; **`ml/artifacts/spine_models/`** (median + quantile PKLs) and Gold parquets needed for inference are included. The Dockerfile installs **`libgomp1`** (GNU OpenMP) required by XGBoost/LightGBM on `python:*-slim`.
+**`.dockerignore`** keeps Silver/raw bulk and the training-only **`training_spine_v1.parquet`** out of the image; **`ml/artifacts/spine_models/`** (median + quantile PKLs) and Gold parquets needed for inference — including **`address_bbl_index.parquet`** — are included. The Dockerfile installs **`libgomp1`** (GNU OpenMP) required by XGBoost/LightGBM on `python:*-slim`.
 
 - **`PORT`** — Railway / container port.
 - **`DATABASE_URL`** — must use **`postgresql+psycopg://`** inside the container.
@@ -662,14 +693,14 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 
 ## Production & deployment checklist
 
-### Live stack (verified June 2026)
+### Live stack (verified August 2026)
 
 | Layer | Host | URL |
 |-------|------|-----|
 | Frontend | Vercel | `https://www.propintel-ai.com` |
 | API | Railway | `https://api.propintel-ai.com` |
 | Database + Auth | Supabase | Postgres pooler + JWT signing keys (ES256) |
-| Email | Resend | Contact API + Supabase SMTP (`noreply@propintel-ai.com`) |
+| Email | Resend | Contact API + billing founder notify + Supabase SMTP (`noreply@propintel-ai.com`) |
 | Payments | Stripe Live | Checkout, Portal, webhooks → `paid` role |
 
 ### Pre-launch / rotation checklist
@@ -677,7 +708,7 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 | Area | Notes |
 |------|--------|
 | **Database** | Run migrations (`008_add_billing_tables.sql` via `run_migrations` or `RUN_MIGRATIONS` on deploy) |
-| **API (Railway)** | `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET` (HS256 fallback), `OPENAI_API_KEY`, `API_KEY`, `RESEND_API_KEY`, `CONTACT_FROM_EMAIL`, Stripe vars, **`CORS_ORIGINS`** = `https://www.propintel-ai.com,https://propintel-ai.com`, **`TRUST_PROXY_HEADERS=1`** |
+| **API (Railway)** | `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET` (HS256 fallback), `OPENAI_API_KEY`, `API_KEY`, `RESEND_API_KEY`, `CONTACT_FROM_EMAIL`, Stripe vars, **`BILLING_NOTIFY_EMAIL`**, **`CORS_ORIGINS`** = `https://www.propintel-ai.com,https://propintel-ai.com`, leave **`CORS_ORIGIN_REGEX`** unset unless you need scoped preview domains, **`TRUST_PROXY_HEADERS=1`** |
 | **Auth** | Rotate JWT **signing keys** in Supabase (standby → rotate → revoke previous); keep **`SUPABASE_URL`** on Railway for JWKS |
 | **Email** | Resend domain verified; Supabase SMTP password = same `re_...` key as **`RESEND_API_KEY`** |
 | **Frontend (Vercel)** | `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_MAPBOX_TOKEN`, optional `VITE_SITE_URL` — no Stripe secrets on frontend |
@@ -688,21 +719,22 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 
 ### Smoke tests (production)
 
-- Login, **Analyze** (valuation + confidence tier + price range), **Profile** / quota
+- Login, **Analyze** with a geocoded address (valuation + confidence tier + **Enhanced with property records** badge + P10/P90 range), **Profile** / quota
 - **`GET /ready`** returns ok with inference probe passed
 - **`POST /contact`** → Resend delivery
 - Forgot-password email (Supabase SMTP)
-- **Upgrade with Stripe** (Live) → success page → `profiles.role = paid` + `billing_customers` row
-- **Manage subscription** → cancel at period end (portal)
+- **Upgrade with Stripe** (Live) → success page → `profiles.role = paid` + `billing_customers` row + founder notify email
+- **Manage subscription** → cancel at period end (portal) + founder cancel email
 
 ---
 
 ## Performance notes
 
 - Lazy-loaded segment PKLs (median + quantile bounds) cached in memory after first load.
+- Address → BBL index loaded once per process (`@lru_cache`); ~800k lookups are O(1) dict gets.
 - `@lru_cache` on feature-importance loaders and neighborhood stats.
 - Parquet predicate pushdown in **`BblFeatureBuilder`** where applicable.
-- Cached BallTree / subway distance helpers.
+- Cached BallTree / subway distance helpers (nearest-station distance only from lat/lon; full transit pack comes from the Gold join when a BBL is present).
 - Analyze page uses a **two-request pattern** — ML results render before the LLM call completes.
 - Mapbox default style **`streets-v12`** (lighter than `standard`) for faster map load.
 
@@ -711,9 +743,10 @@ docker run --rm -p 8000:8000 --env-file .env propintel-ai:latest
 ## Model limitations
 
 - Trained on **NYC residential** sales — not for generic commercial use.
-- Metrics come from **forward-time** evaluation — not random splits.
+- Metrics in the holdout table come from **forward-time** evaluation on Gold-complete rows — not random splits. Live requests without a resolvable BBL see lower accuracy until address resolution (or an explicit BBL) unlocks Gold features.
+- **Condo unit lots** cannot be resolved from street address alone (PLUTO maps many units to one master lot) — address resolution abstains; valuations stay on the median-imputed path unless a unit BBL is supplied.
 - Segments with thinner or structurally limited data (e.g. **co-op** shares, **rentals_all**) show wider intervals and lower confidence tiers — the API routes to the best available model and discloses this in the UI.
-- Quantile intervals are **property-specific** but not a formal appraisal; out-of-sample coverage on the 2025 holdout is ~67–73% (below the 80% training target due to temporal drift).
+- Quantile intervals are **property-specific** but not a formal appraisal; out-of-sample coverage on recent holdouts sits below the 80% training target due to temporal drift.
 - Macro / cycle features are out of scope for the current spine.
 
 ---
