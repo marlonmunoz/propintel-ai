@@ -11,13 +11,13 @@ const features = [
     icon: BarChart3,
     title: 'ML-Powered Valuation',
     description:
-      'Segment-routed XGBoost and LightGBM models trained on 323k NYC sales (2019–2026). Building class selects the best-fit model — single-family, multi-family (2–3 unit), condo, co-op, or pooled rentals.',
+      'Segment-routed XGBoost and LightGBM models trained on 323k NYC sales (2019–2026). Building class selects the best-fit model — single-family, multi-family (2–3 unit), condo, co-op, or pooled rentals. Your address unlocks DOF / ACRIS / PLUTO property records when a lot can be resolved confidently.',
   },
   {
     icon: Brain,
     title: 'AI Investment Analysis',
     description:
-      'Get a full investment breakdown: ROI estimate, valuation gap, deal label (Buy / Hold / Avoid), and an LLM-generated narrative explanation.',
+      'Get a full investment breakdown: ROI estimate, valuation gap, deal label (Buy / Hold / Avoid), P10/P90 price range, and an LLM-generated narrative explanation.',
   },
   {
     icon: ShieldCheck,
@@ -27,23 +27,24 @@ const features = [
   },
 ]
 
-/** Snapshot from `ml/artifacts/metadata/*.json` — update targets when you retrain. */
+/** Snapshot from `ml/artifacts/metadata/*.json` — update targets when you retrain.
+ *  Current holdout: train ≤ 2025-09-30, test ≥ 2025-10-31 (promoted 2026-08-09). */
 const modelMetrics = [
   {
     label: 'Condo valuations',
     segment: 'Real-property unit lots',
-    target: 0.83,
+    target: 0.82,
     decimals: 2,
     suffix: 'R²',
-    detail: 'Split condo model with DOF unit sqft + ownership share — 13.9% median error on holdout',
+    detail: 'Split condo model with DOF unit sqft + ownership share — 13.3% median error on holdout',
   },
   {
     label: 'Single-family homes',
     segment: 'Owner-occupier baseline',
-    target: 0.72,
+    target: 0.76,
     decimals: 2,
     suffix: 'R²',
-    detail: 'Strongest traditional segment — 14.5% median error, time-based holdout',
+    detail: 'Strongest traditional segment — 12.7% median error, time-based holdout',
   },
   {
     label: 'Segment models',
