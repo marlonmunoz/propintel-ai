@@ -65,6 +65,11 @@ export default function Analyze() {
       latitude:  nextLat.toFixed(6),
       longitude: nextLng.toFixed(6),
     }))
+    // The previously geocoded address no longer matches these coordinates —
+    // clear it so buildPayload() doesn't send a stale address for the pin's
+    // new location. geocoder.reset() only touches its own state setters,
+    // which are stable across renders, so this is safe outside the deps array.
+    geocoder.reset()
   }, [])
 
   function handleFieldChange(event) {
@@ -88,6 +93,9 @@ export default function Analyze() {
     setFormErrors({})
     setError('')
     setAnalysisResult(null)
+    // Presets set their own lat/lon directly — an address left over from an
+    // earlier manual search would no longer match this property.
+    geocoder.reset()
   }
 
   function handleResetForm() {
@@ -151,6 +159,14 @@ export default function Analyze() {
       latitude:      Number(formData.latitude),
       longitude:     Number(formData.longitude),
       market_price:  Number(formData.market_price),
+      // Sent so the backend can resolve a BBL server-side and unlock the
+      // full Gold feature set (DOF/ACRIS/PLUTO) without any new form field.
+      // addressQuery is cleared on preset selection and pin drag (see
+      // handleUsePreset / handleMapPinDragEnd) so it can't outlive the
+      // lat/lon it was originally geocoded for; the backend's resolver also
+      // independently sanity-checks the resolved lot's coordinates against
+      // latitude/longitude before trusting a match.
+      ...(geocoder.addressQuery.trim() ? { address: geocoder.addressQuery.trim() } : {}),
     }
   }
 
