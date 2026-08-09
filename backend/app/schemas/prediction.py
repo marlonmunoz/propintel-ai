@@ -151,11 +151,29 @@ class ProductionPredictionRequest(BaseModel):
             "Required together with bbl to enable roll-aligned Gold features at inference."
         ),
     )
+    address: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description=(
+            "Optional free-form street address (e.g. from the geocoder the client already "
+            "used to obtain latitude/longitude). When bbl is not provided, the API attempts "
+            "to resolve one from this address server-side to enable the same Gold feature "
+            "join as an explicit bbl. Ignored when bbl is supplied directly."
+        ),
+    )
 
     @field_validator("borough", "neighborhood", "building_class")
     @classmethod
     def strip_text(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("address")
+    @classmethod
+    def strip_address(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        return s if s else None
 
     @field_validator("bbl")
     @classmethod

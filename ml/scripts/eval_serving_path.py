@@ -15,27 +15,42 @@ lat/lon and market_price — no `bbl` and no `as_of_date`. Without those two
 fields the entire Gold join in _build_spine_row is skipped, so DOF / ACRIS /
 J-51 / PLUTO / comp / trend features all arrive as NaN and get median-imputed.
 
-This harness therefore measures three payload shapes over the same rows:
+This harness therefore measures five payload shapes over the same rows:
 
-  production    — exactly what the frontend sends today (no bbl / as_of_date)
-  with_bbl      — same rows plus the true bbl + as_of_date, enabling the Gold join
-  resolved_bbl  — bbl resolved server-side from the lat/lon the client already
-                  sends, by nearest tax-lot centroid in Gold PLUTO. Answers
-                  whether we can close the production/with_bbl gap without any
-                  frontend change or external geocoding service. Use --jitter-m
-                  to emulate geocoder error, since the harness would otherwise
-                  feed back PLUTO's own centroid and resolve perfectly.
+  production       — exactly what the frontend sends today (no bbl / as_of_date)
+  prod_plus_units  — production plus residential_units only (already shipped)
+  with_bbl         — same rows plus the true bbl + as_of_date, enabling the Gold join
+  resolved_bbl     — bbl resolved server-side from the lat/lon the client already
+                      sends, by nearest tax-lot centroid in Gold PLUTO. Ruled out:
+                      see resolved_bbl's own history below.
+  resolved_address — bbl resolved server-side from the ADDRESS the client already
+                      sends, via ml/pipelines/build_address_bbl_index.py (an
+                      offline index built from PLUTO raw, scored in Phase 0 at
+                      99.7%+ precision for one_family/multi_family/rentals/coop).
+                      Condo unit classes (12/13/15) are hard-excluded here too,
+                      not just left to the index's own exclusion, because a
+                      condo address resolves unambiguously to PLUTO's condo
+                      MASTER lot — confident-looking and always wrong for the
+                      actual unit sold. Rows the index can't confidently resolve
+                      fall back to prod_plus_units behaviour (abstain, don't
+                      guess), so this mode's blended result is what production
+                      would actually see if shipped as-is.
 
 The gap between production and with_bbl quantifies what the missing BBL
-resolution costs in real accuracy; resolved_bbl measures how much of that gap a
-server-side fix actually recovers. Together they form a stable before/after
-scoreboard for feature-parity work.
+resolution costs in real accuracy; resolved_bbl and resolved_address measure
+how much of that gap each server-side fix actually recovers. resolved_bbl
+(lat/lon → nearest centroid) was measured and rejected: exact-match collapses
+from 100% at 0m geocoder error to 7.3% at 25m, because NYC parcel centroids
+sit closer together than typical geocoding error, and a wrong BBL is worse
+than none (median APE 27.3% -> 31.8%). resolved_address is the replacement
+approach under test.
 
 Usage
 -----
     PYTHONPATH=. python ml/scripts/eval_serving_path.py
     PYTHONPATH=. python ml/scripts/eval_serving_path.py --limit 400 --since 2025-06-01
     PYTHONPATH=. python ml/scripts/eval_serving_path.py --modes production
+    PYTHONPATH=. python ml/scripts/eval_serving_path.py --modes resolved_address
     PYTHONPATH=. python ml/scripts/eval_serving_path.py --modes resolved_bbl --jitter-m 25
     PYTHONPATH=. python ml/scripts/eval_serving_path.py --json-out /tmp/eval.json
 
@@ -67,6 +82,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from backend.app.schemas.prediction import ProductionPredictionRequest  # noqa: E402
+from backend.app.services.address_resolver import resolve_bbl as resolve_bbl_from_address  # noqa: E402
 from backend.app.services.model_registry import ModelRegistry  # noqa: E402
 from backend.app.services.predictor import PredictionService  # noqa: E402
 
@@ -77,7 +93,12 @@ GOLD_PLUTO = REPO_ROOT / "ml" / "data" / "gold" / "gold_pluto_features.parquet"
 # Default to evaluating on the post-cutoff period so every row is out-of-sample.
 DEFAULT_SINCE = date(2025, 1, 31)
 
-MODES = ("production", "prod_plus_units", "with_bbl", "resolved_bbl")
+MODES = ("production", "prod_plus_units", "with_bbl", "resolved_bbl", "resolved_address")
+
+# Modes where build_payload's second return value means "did BBL resolution
+# find the right lot" (True/False) rather than "not applicable" (None).
+# evaluate() reports resolve-rate + precision-among-resolved only for these.
+RESOLUTION_MODES = frozenset({"resolved_bbl", "resolved_address"})
 
 EARTH_RADIUS_M = 6_371_000.0
 
@@ -177,7 +198,7 @@ def load_eval_rows(since: date, limit_per_segment: int, seed: int) -> pd.DataFra
             "bbl", "sale_date", "sales_price", "segment",
             "borough", "borough_label", "neighborhood", "building_class",
             "year_built", "gross_sqft", "land_sqft",
-            "total_units", "residential_units",
+            "total_units", "residential_units", "address",
         ],
     )
 
@@ -301,6 +322,33 @@ def build_payload(
         correct = found is not None and found == str(_cell(row, "bbl")).strip()
         return ProductionPredictionRequest(**kwargs), correct
 
+    if mode == "resolved_address":
+        # residential_units is included regardless of resolution outcome —
+        # it is already shipped independently of BBL work, so this mode
+        # represents the actual next production state, not an isolated
+        # ablation of address resolution alone.
+        kwargs["residential_units"] = _opt_float(row.get("residential_units"))
+
+        borough_num = _num_cell(row, "borough")
+        found = resolve_bbl_from_address(
+            row.get("address"),
+            int(borough_num) if not math.isnan(borough_num) else None,
+            _cell(row, "building_class"),
+            kwargs["latitude"],
+            kwargs["longitude"],
+        )
+        if found is None:
+            # Abstain: no bbl / as_of_date set, same as prod_plus_units. A real
+            # user whose address doesn't confidently resolve gets the same
+            # median-imputed behaviour production gives them today — never a
+            # guessed BBL.
+            return ProductionPredictionRequest(**kwargs), None
+
+        kwargs["bbl"] = found
+        kwargs["as_of_date"] = pd.Timestamp(_cell(row, "sale_date")).date()
+        correct = found == str(_cell(row, "bbl")).strip()
+        return ProductionPredictionRequest(**kwargs), correct
+
     raise ValueError(f"Unknown mode: {mode}")
 
 
@@ -402,9 +450,16 @@ def evaluate(
             "errors": dict(errors),
             "bbl_feature_status": dict(join_status),
         }
-        if bbl_checked:
-            results[mode]["bbl_exact_match_rate"] = round(bbl_hits / bbl_checked, 4)
-            results[mode]["jitter_m"] = jitter_m
+        if mode in RESOLUTION_MODES:
+            # Reported unconditionally (even at 0) for resolution modes, since
+            # a 0% resolve rate is itself meaningful and shouldn't be silently
+            # omitted the way "not applicable" is for with_bbl / production.
+            results[mode]["resolve_rate"] = round(bbl_checked / len(flat), 4) if flat else 0.0
+            results[mode]["bbl_exact_match_rate"] = (
+                round(bbl_hits / bbl_checked, 4) if bbl_checked else None
+            )
+            if mode == "resolved_bbl":
+                results[mode]["jitter_m"] = jitter_m
 
     return results
 
@@ -453,11 +508,17 @@ def print_report(results: dict[str, Any]) -> None:
             "prod_plus_units": "PROD + residential_units (one new form field, no BBL work)",
             "with_bbl": "WITH_BBL payload (true bbl + as_of_date — Gold features enabled)",
             "resolved_bbl": "RESOLVED_BBL payload (bbl resolved server-side from lat/lon)",
+            "resolved_address": "RESOLVED_ADDRESS payload (bbl resolved server-side from address)",
         }.get(mode, mode)
         print_table(f"=== {label} ===", rows)
-        if res.get("bbl_exact_match_rate") is not None:
-            print(f"  bbl exact-match rate: {res['bbl_exact_match_rate'] * 100:.1f}% "
-                  f"(coordinate jitter: {res.get('jitter_m', 0):.0f} m)")
+        if mode in RESOLUTION_MODES:
+            match_str = (
+                f"{res['bbl_exact_match_rate'] * 100:.1f}%"
+                if res.get("bbl_exact_match_rate") is not None else "n/a"
+            )
+            jitter_str = f"  (coordinate jitter: {res.get('jitter_m', 0):.0f} m)" if mode == "resolved_bbl" else ""
+            print(f"  resolve rate: {res.get('resolve_rate', 0) * 100:.1f}%   "
+                  f"precision of resolved: {match_str}{jitter_str}")
         if res["errors"]:
             print(f"  prediction errors: {res['errors']}")
         print(f"  bbl_feature_status: {res['bbl_feature_status']}")
@@ -466,7 +527,7 @@ def print_report(results: dict[str, Any]) -> None:
     if not baseline or not baseline.get("n"):
         return
 
-    for mode in ("prod_plus_units", "with_bbl", "resolved_bbl"):
+    for mode in ("prod_plus_units", "with_bbl", "resolved_bbl", "resolved_address"):
         target = results.get(mode, {}).get("overall")
         if not target or not target.get("n"):
             continue
@@ -496,7 +557,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=250,
                         help="Max rows sampled per segment (default 250).")
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES),
-                        help="Payload shapes to evaluate (default: all three).")
+                        help="Payload shapes to evaluate (default: all).")
     parser.add_argument("--jitter-m", type=float, default=0.0,
                         help=("Metres of random coordinate error applied in resolved_bbl "
                               "mode, emulating geocoder imprecision (default 0)."))

@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import os
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 
 from backend.app.services.explainer import generate_explanation
 from backend.app.schemas.prediction import ProductionPredictionRequest
+from backend.app.services.address_resolver import resolve_bbl as resolve_bbl_from_address
 from backend.app.services.bbl_feature_builder import (
     build_spine_gold_features_from_bbl,
     gold_data_available,
@@ -20,6 +22,13 @@ from backend.app.services.bbl_feature_builder import (
 )
 from backend.app.services.model_confidence import build_model_confidence_metadata
 from backend.app.services.model_registry import ModelRegistry, RegisteredModel
+
+# Borough name (as sent in ProductionPredictionRequest.borough) -> the numeric
+# 1-5 code used by the trend table and the address-BBL index. Mirrors
+# BOROUGH_NAMES in train_spine_models.py.
+BOROUGH_NUM = {
+    "manhattan": 1, "bronx": 2, "brooklyn": 3, "queens": 4, "staten island": 5,
+}
 
 # Must match REFERENCE_YEAR in train_spine_models.py so property_age at
 # inference equals the values seen during training.
@@ -426,13 +435,32 @@ def _build_spine_row(payload: ProductionPredictionRequest,
 
     # ── Optional BBL + as_of_date → Silver / PLUTO as-of features ───────────
     # Resolve borough name → number for trend-table lookup (trend table is
-    # keyed on int borough 1-5).  Mirrors BOROUGH_NAMES in train_spine_models.py.
-    _BOROUGH_NUM = {
-        "manhattan": 1, "bronx": 2, "brooklyn": 3, "queens": 4, "staten island": 5,
-    }
-    borough_num = _BOROUGH_NUM.get((payload.borough or "").strip().lower())
+    # keyed on int borough 1-5) and for address-based BBL resolution below.
+    borough_num = BOROUGH_NUM.get((payload.borough or "").strip().lower())
 
     bbl_raw, as_of_raw = payload.bbl, payload.as_of_date
+    join_meta["bbl_source"] = "client" if bbl_raw else None
+
+    # Fall back to server-side address resolution when the client didn't send
+    # a bbl directly. Same abstain-over-guess resolver measured in
+    # ml/scripts/eval_serving_path.py's resolved_address mode (94.2% resolve
+    # rate, 100% precision on 905 out-of-sample 2025-26 sales). A client-
+    # supplied bbl always wins — this is a fallback, never an override.
+    if not bbl_raw:
+        resolved = resolve_bbl_from_address(
+            getattr(payload, "address", None),
+            borough_num,
+            getattr(payload, "building_class", None),
+            payload.latitude,
+            payload.longitude,
+        )
+        if resolved:
+            bbl_raw = resolved
+            # Valuation as-of "now" — the harness pins this to the historical
+            # sale date only to score fairly against a known outcome.
+            as_of_raw = as_of_raw or date.today()
+            join_meta["bbl_source"] = "address"
+
     if (bbl_raw and not as_of_raw) or (as_of_raw and not bbl_raw):
         join_meta["bbl_join_status"] = "incomplete"
     elif bbl_raw and as_of_raw:
@@ -653,6 +681,10 @@ class PredictionService:
             if join_meta.get("as_of_date"):
                 input_summary["as_of_date"] = join_meta["as_of_date"]
             input_summary["bbl_feature_status"] = join_meta.get("bbl_join_status", "skipped")
+            # Where the bbl came from: a client-supplied value, server-side
+            # address resolution, or omitted entirely when neither applied.
+            if join_meta.get("bbl_source"):
+                input_summary["bbl_source"] = join_meta["bbl_source"]
         if metadata.segment == "rentals_all":
             input_summary["is_elevator"] = int(row.get("is_elevator", 0))
 
