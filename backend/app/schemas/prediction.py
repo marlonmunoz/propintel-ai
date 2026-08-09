@@ -474,6 +474,23 @@ class ResponseMetadata(BaseModel):
         default=None,
         description="Plain-language note on how to interpret this segment's valuation."
     )
+    bbl_source: Optional[Literal["client", "address"]] = Field(
+        default=None,
+        description=(
+            "How the Borough-Block-Lot used for this valuation was obtained: 'client' "
+            "when supplied directly in the request, 'address' when resolved server-side "
+            "from the request's address field. Omitted when neither applied."
+        ),
+    )
+    bbl_enhanced: Optional[bool] = Field(
+        default=None,
+        description=(
+            "True when a resolved BBL (see bbl_source) successfully unlocked additional "
+            "property records (DOF assessment / ACRIS deed history / PLUTO physical data) "
+            "for this valuation. False when a BBL was found but no matching records exist. "
+            "Omitted when no BBL was available at all."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -487,6 +504,8 @@ class ResponseMetadata(BaseModel):
                     "This segment model is trained on sufficient NYC sales data "
                     "for this building type."
                 ),
+                "bbl_source": "address",
+                "bbl_enhanced": True,
             }
         }
     }

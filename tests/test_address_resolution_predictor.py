@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from backend.app.schemas.prediction import ProductionPredictionRequest
+from backend.app.schemas.prediction import ProductionAnalyzeRequest, ProductionPredictionRequest
 from backend.app.services.address_resolver import ADDRESS_INDEX_PATH
 from backend.app.services.model_registry import ModelRegistry
 from backend.app.services.predictor import PredictionService
@@ -142,3 +142,31 @@ def test_predict_without_address_or_bbl_is_unaffected(known_one_family_sale):
 
     assert "bbl_source" not in out["input_summary"]
     assert out["input_summary"]["bbl_feature_status"] == "skipped"
+
+
+def test_analyze_surfaces_bbl_enhancement_in_metadata(known_one_family_sale):
+    """analyze() (used by /analyze-property-v2) must expose bbl_source /
+    bbl_enhanced too — predict() already did, but analyze() previously
+    dropped input_summary entirely, leaving the UI with no way to show
+    whether a valuation actually used resolved property records."""
+    row = known_one_family_sale
+    service = PredictionService(ModelRegistry())
+    kwargs = _payload(row, address=row["address"]).model_dump()
+    payload = ProductionAnalyzeRequest(**kwargs, market_price=500_000.0)
+
+    out = service.analyze(payload, include_explanation=False)
+
+    assert out["metadata"]["bbl_source"] == "address"
+    assert out["metadata"]["bbl_enhanced"] is True
+
+
+def test_analyze_omits_bbl_metadata_when_no_bbl_resolved(known_one_family_sale):
+    row = known_one_family_sale
+    service = PredictionService(ModelRegistry())
+    kwargs = _payload(row).model_dump()
+    payload = ProductionAnalyzeRequest(**kwargs, market_price=500_000.0)
+
+    out = service.analyze(payload, include_explanation=False)
+
+    assert "bbl_source" not in out["metadata"]
+    assert "bbl_enhanced" not in out["metadata"]

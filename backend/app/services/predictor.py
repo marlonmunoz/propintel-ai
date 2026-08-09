@@ -539,6 +539,25 @@ def _add_derived_features(row: dict[str, Any]) -> None:
         row["prior_mortgage_ratio"] = min(mtge / deed, 1.5)
 
 
+def _bbl_enhancement_metadata(input_summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Surface bbl_source/bbl_enhanced for ProductionAnalyzeResponse.metadata.
+
+    predict-price-v2 already exposes bbl_source/bbl_feature_status via
+    input_summary; analyze-property-v2 previously dropped that information on
+    the floor, leaving no way for the UI (or a caller) to tell whether a
+    valuation actually benefited from resolved property records.
+    """
+    summary = input_summary or {}
+    source = summary.get("bbl_source")
+    if not source:
+        return {}
+    status = summary.get("bbl_feature_status")
+    return {
+        "bbl_source": source,
+        "bbl_enhanced": status in ("ok", "partial"),
+    }
+
+
 # ─── PredictionService ────────────────────────────────────────────────────────
 
 class PredictionService:
@@ -848,5 +867,6 @@ class PredictionService:
                     prediction_result.get("segment"),
                     prediction_result.get("model_metrics"),
                 ),
+                **_bbl_enhancement_metadata(prediction_result.get("input_summary")),
             },
         }
