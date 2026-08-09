@@ -99,7 +99,8 @@ export default function Analyze() {
   }
 
   // Calls our backend to find the nearest property in housing_data.
-  // On success: fills year_built, gross_sqft, land_sqft, building_class, neighborhood.
+  // On success: fills year_built, gross_sqft, land_sqft, building_class,
+  // neighborhood and the two unit counts.
   // On failure or no match: silently does nothing — fields stay blank for manual entry.
   async function fetchPropertyDetails(lat, lng, borough) {
     setIsFetchingProperty(true)
@@ -111,6 +112,7 @@ export default function Analyze() {
         ...(data.gross_sqft               && { gross_sqft:     String(Math.round(data.gross_sqft)) }),
         ...(data.land_sqft !== undefined  && { land_sqft:      String(Math.round(data.land_sqft ?? 0)) }),
         ...(data.total_units              && { total_units:    String(Math.round(data.total_units)) }),
+        ...(data.residential_units        && { residential_units: String(Math.round(data.residential_units)) }),
         ...(data.building_class           && { building_class: data.building_class }),
         ...(data.neighborhood             && { neighborhood:   data.neighborhood }),
       }))
@@ -141,6 +143,11 @@ export default function Analyze() {
       // total_units only sent when filled — rental models use it to compute
       // price_per_unit; omit rather than send 0 so the backend can detect absence.
       ...(formData.total_units ? { total_units: Number(formData.total_units) } : {}),
+      // residential_units likewise omitted when blank so the model imputes it
+      // instead of treating an empty field as a genuine zero-unit building.
+      ...(formData.residential_units
+        ? { residential_units: Number(formData.residential_units) }
+        : {}),
       latitude:      Number(formData.latitude),
       longitude:     Number(formData.longitude),
       market_price:  Number(formData.market_price),

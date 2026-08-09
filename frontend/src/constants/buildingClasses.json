@@ -1,11 +1,11 @@
 [
-  { "value": "01 ONE FAMILY DWELLINGS",         "label": "Single Family Home",         "is_rental": false },
-  { "value": "02 TWO FAMILY DWELLINGS",         "label": "Two Family Home",            "is_rental": false },
-  { "value": "03 THREE FAMILY DWELLINGS",       "label": "Three Family Home",          "is_rental": false },
-  { "value": "07 RENTALS - WALKUP APARTMENTS",  "label": "Rental \u2014 Walkup",              "is_rental": true  },
-  { "value": "08 RENTALS - ELEVATOR APARTMENTS","label": "Rental \u2014 Elevator Building",   "is_rental": true  },
-  { "value": "09 COOPS - WALKUP APARTMENTS",    "label": "Co-op \u2014 Walkup",               "is_rental": false },
-  { "value": "10 COOPS - ELEVATOR APARTMENTS",  "label": "Co-op \u2014 Elevator Building",    "is_rental": false },
-  { "value": "12 CONDOS - WALKUP APARTMENTS",   "label": "Condo \u2014 Walkup",               "is_rental": false },
-  { "value": "13 CONDOS - ELEVATOR APARTMENTS", "label": "Condo \u2014 Elevator Building",    "is_rental": false }
+  { "value": "01 ONE FAMILY DWELLINGS",         "label": "Single Family Home",         "is_rental": false, "uses_residential_units": false },
+  { "value": "02 TWO FAMILY DWELLINGS",         "label": "Two Family Home",            "is_rental": false, "uses_residential_units": true  },
+  { "value": "03 THREE FAMILY DWELLINGS",       "label": "Three Family Home",          "is_rental": false, "uses_residential_units": true  },
+  { "value": "07 RENTALS - WALKUP APARTMENTS",  "label": "Rental — Walkup",              "is_rental": true , "uses_residential_units": true  },
+  { "value": "08 RENTALS - ELEVATOR APARTMENTS","label": "Rental — Elevator Building",   "is_rental": true , "uses_residential_units": true  },
+  { "value": "09 COOPS - WALKUP APARTMENTS",    "label": "Co-op — Walkup",               "is_rental": false, "uses_residential_units": false },
+  { "value": "10 COOPS - ELEVATOR APARTMENTS",  "label": "Co-op — Elevator Building",    "is_rental": false, "uses_residential_units": false },
+  { "value": "12 CONDOS - WALKUP APARTMENTS",   "label": "Condo — Walkup",               "is_rental": false, "uses_residential_units": false },
+  { "value": "13 CONDOS - ELEVATOR APARTMENTS", "label": "Condo — Elevator Building",    "is_rental": false, "uses_residential_units": false }
 ]

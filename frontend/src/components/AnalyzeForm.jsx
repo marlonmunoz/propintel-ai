@@ -6,6 +6,7 @@ import {
   buildingClassOptions,
   samplePresets,
   RENTAL_CLASSES,
+  RESIDENTIAL_UNITS_CLASSES,
 } from '../pages/analyzeConstants'
 
 function FieldError({ message }) {
@@ -300,6 +301,30 @@ export default function AnalyzeForm({
               />
               <FieldError message={formErrors.total_units} />
             </div>
+
+            {/* Residential units — only rendered for the segments whose model
+                actually uses it. Optional: left blank it is imputed, but a real
+                value measurably sharpens rental valuations. */}
+            {RESIDENTIAL_UNITS_CLASSES.has(formData.building_class) && (
+              <div>
+                <label htmlFor="residential_units" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Residential Units
+                  <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                    optional — improves accuracy
+                  </span>
+                </label>
+                <input
+                  id="residential_units"
+                  name="residential_units"
+                  type="number"
+                  value={formData.residential_units}
+                  onChange={onFieldChange}
+                  placeholder="e.g. 10"
+                  className={getInputClasses(!!formErrors.residential_units)}
+                />
+                <FieldError message={formErrors.residential_units} />
+              </div>
+            )}
 
             <div>
               <label htmlFor="latitude" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">

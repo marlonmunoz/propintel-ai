@@ -67,3 +67,41 @@ def test_rental_classes_flagged_correctly(building_classes, registry):
             f"Rental class {value!r} routes to {key!r} instead of a rental segment. "
             "Update is_rental in buildingClasses.json or fix the registry routing."
         )
+
+
+def _model_uses_residential_units(registry, building_class: str) -> bool:
+    """Whether the model this class routes to lists residential_units."""
+    meta = registry.get_metadata(registry.get_model_key(building_class))
+    features = (
+        set(meta.numeric_features)
+        | set(meta.categorical_features)
+        | set(meta.feature_columns)
+    )
+    return "residential_units" in features
+
+
+@pytest.mark.parametrize("cls", json.loads(BUILDING_CLASSES_JSON.read_text()))
+def test_residential_units_flag_matches_model_features(cls, registry):
+    """The FE flag must match whether the routed model really uses the feature.
+
+    `uses_residential_units` decides whether the analyze form shows the
+    Residential Units input. If it drifts from the model feature lists the app
+    breaks in one of two silent ways: a hidden field means the value is always
+    median-imputed for a segment that was trained on it (measured at ~19% worse
+    MAE overall and ~24% worse for rentals), or a shown field collects a number
+    the model then throws away, which is worse than not asking.
+
+    Re-promoting or retraining a segment can change its feature list, so this is
+    asserted against the artifacts rather than hardcoded here.
+    """
+    value = cls["value"]
+    flagged = bool(cls.get("uses_residential_units"))
+    actual = _model_uses_residential_units(registry, value)
+    assert flagged == actual, (
+        f"Building class {value!r} has uses_residential_units={flagged} in "
+        f"buildingClasses.json, but its model "
+        f"({registry.get_model_key(value)!r}) "
+        f"{'does' if actual else 'does not'} list residential_units as a feature.\n"
+        "Fix: flip the flag in frontend/src/constants/buildingClasses.json to "
+        f"{actual}."
+    )

@@ -17,6 +17,15 @@ export const RENTAL_CLASSES = new Set(
   buildingClassData.filter((c) => c.is_rental).map((c) => c.value)
 )
 
+// Classes whose segment model was trained with `residential_units` as a real
+// feature (multi-family + both rental segments). For every other class the
+// backend ignores the value, so the field is hidden rather than collected and
+// discarded. Kept honest against the actual model feature lists by
+// tests/test_building_class_contract.py.
+export const RESIDENTIAL_UNITS_CLASSES = new Set(
+  buildingClassData.filter((c) => c.uses_residential_units).map((c) => c.value)
+)
+
 export const initialForm = {
   borough: '',
   neighborhood: '',
@@ -25,6 +34,7 @@ export const initialForm = {
   gross_sqft: '',
   land_sqft: '',
   total_units: '',
+  residential_units: '',
   latitude: '',
   longitude: '',
   market_price: '',
@@ -150,6 +160,22 @@ export function validateForm(formData) {
       errors.total_units = 'Total units is required for rental valuation.'
     } else if (Number.isNaN(totalUnits) || totalUnits < 1 || !Number.isInteger(totalUnits)) {
       errors.total_units = 'Total units must be a whole number of 1 or more.'
+    }
+  }
+
+  // Residential units stays optional — an empty value is imputed by the model
+  // rather than rejected. Only validate what the user actually typed.
+  if (formData.residential_units) {
+    const residentialUnits = Number(formData.residential_units)
+    const totalUnits = Number(formData.total_units)
+    if (
+      Number.isNaN(residentialUnits)
+      || residentialUnits < 0
+      || !Number.isInteger(residentialUnits)
+    ) {
+      errors.residential_units = 'Residential units must be a whole number of 0 or more.'
+    } else if (formData.total_units && !Number.isNaN(totalUnits) && residentialUnits > totalUnits) {
+      errors.residential_units = 'Residential units cannot exceed total units.'
     }
   }
 

@@ -228,10 +228,18 @@ def lookup_housing(
         raise HTTPException(status_code=404, detail="No nearby property found")
 
     return {
-        "year_built":      match.year_built,
-        "gross_sqft":      match.gross_sqft,
-        "land_sqft":       match.land_sqft,
-        "building_class":  match.building_class,
-        "neighborhood":    match.neighborhood,
-        "borough":         match.borough,
+        "year_built":        match.year_built,
+        "gross_sqft":        match.gross_sqft,
+        "land_sqft":         match.land_sqft,
+        "building_class":    match.building_class,
+        "neighborhood":      match.neighborhood,
+        "borough":           match.borough,
+        # Unit counts feed the multi-family and rental models. total_units was
+        # already read by the frontend prefill but never returned here, so that
+        # branch was dead; residential_units is a real feature for those
+        # segments and was previously always median-imputed at inference.
+        # Both come from the NEAREST matching row, so they are a starting point
+        # the user is expected to confirm, not an authoritative value.
+        "total_units":       match.total_units,
+        "residential_units": match.residential_units,
     }
