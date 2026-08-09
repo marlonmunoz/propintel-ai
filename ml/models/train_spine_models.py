@@ -57,9 +57,24 @@ METRICS_FILE = ARTIFACTS / "spine_model_metrics.json"
 
 REFERENCE_YEAR = 2024
 
-# Time-based split boundary (matches eval_protocol.py fold design)
-TRAIN_END   = date(2024, 12, 31)
-TEST_START  = date(2025, 1, 31)   # 30-day reporting-lag gap
+# Time-based split boundary (matches eval_protocol.py fold design).
+#
+# Deliberately NOT derived from today's date: a moving boundary would make every
+# training run irreproducible and silently reshuffle the holdout set between
+# runs. Override per-run with --train-end / --test-start instead.
+#
+# Advanced from 2024-12-31 → 2025-09-30 (Aug 2026): the Gold spine already ran
+# through 2026-02-28, so the old boundary left 42,904 labelled sales — 13.3% of
+# all data, including every 2025 sale — permanently out of training while the
+# models aged. The 30-day gap between the two dates models DOF reporting lag, so
+# a sale recorded just after the cutoff can't leak into training.
+#
+# REFERENCE_YEAR stays at 2024 on purpose. It is an arbitrary epoch for
+# property_age, not "the current year", and it is duplicated in
+# backend/app/services/predictor.py; property_age is a constant offset, so
+# moving it would buy nothing and risk a silent train/serve mismatch.
+TRAIN_END   = date(2025, 9, 30)
+TEST_START  = date(2025, 10, 31)  # 30-day reporting-lag gap
 
 
 # ─── Feature definitions ──────────────────────────────────────────────────────
@@ -549,7 +564,14 @@ RARE_N = 30  # neighbourhoods with fewer train rows are collapsed
 
 # Default segments trained when no --subtypes flag is given.
 # Sprint E: multi_family (merged) replaces the split two_family + three_family.
-DEFAULT_SEGMENTS = {"one_family", "multi_family", "condo_coop", "rentals_all"}
+#
+# Sprint G split condo_coop into separate `condo` and `coop` segments at load
+# time, so `condo_coop` now matches zero spine rows and silently skips the
+# minimum-row check. It stayed in this default set long after that, which meant
+# a bare `python ml/models/train_spine_models.py` quietly trained 3 of the 4
+# intended segments and never refreshed the models actually serving condo and
+# co-op building classes.
+DEFAULT_SEGMENTS = {"one_family", "multi_family", "condo", "coop", "rentals_all"}
 
 # Number of seeds for VotingRegressor ensemble.
 N_ENSEMBLE_SEEDS = 5
@@ -1602,6 +1624,12 @@ def main(only_segments: set[str] | None = None) -> None:
     for entry in results:
         seg = entry.get("segment")
         if seg:
+            # Stamp the split that produced these metrics. Without it a metrics
+            # file mixing segments trained under different cutoffs looks
+            # comparable when it isn't, and the promotion gate would compare a
+            # candidate against a baseline scored on a different holdout set.
+            entry["train_end"] = TRAIN_END.isoformat()
+            entry["test_start"] = TEST_START.isoformat()
             merged[seg] = entry
 
     with open(METRICS_FILE, "w") as f:
@@ -1624,5 +1652,31 @@ if __name__ == "__main__":
             "condo_coop, rentals_all).  Use 'rentals_all' for the pooled rental model."
         ),
     )
+    parser.add_argument(
+        "--train-end", metavar="YYYY-MM-DD",
+        help=f"Last sale_date included in training (default: {TRAIN_END}).",
+    )
+    parser.add_argument(
+        "--test-start", metavar="YYYY-MM-DD",
+        help=(
+            "First sale_date included in the holdout test set "
+            f"(default: {TEST_START}). Keep a gap after --train-end to model "
+            "DOF reporting lag."
+        ),
+    )
     args = parser.parse_args()
+
+    # Rebind the module-level split boundary before main() runs. Assignment here
+    # is at module scope, so the training functions read the overridden values.
+    if args.train_end:
+        TRAIN_END = date.fromisoformat(args.train_end)
+    if args.test_start:
+        TEST_START = date.fromisoformat(args.test_start)
+    if TEST_START <= TRAIN_END:
+        parser.error(
+            f"--test-start ({TEST_START}) must be after --train-end ({TRAIN_END}); "
+            "an overlapping split leaks training rows into the holdout set."
+        )
+
+    print(f"Split: train sale_date <= {TRAIN_END}  |  test sale_date >= {TEST_START}")
     main(only_segments=set(args.subtypes) if args.subtypes else None)
