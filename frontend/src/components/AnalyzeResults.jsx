@@ -237,7 +237,8 @@ export default function AnalyzeResults({
                     {analysisResult.metadata.segment_label || analysisResult.metadata.segment || '—'}
                   </p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    v{analysisResult.metadata.model_version || '—'}
+                    {/* Already prefixed in metadata (e.g. "v6") — don't add another "v". */}
+                    {analysisResult.metadata.model_version || '—'}
                   </p>
                 </div>
               </div>
